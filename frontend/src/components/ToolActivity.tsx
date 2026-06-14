@@ -10,6 +10,25 @@ function parseResult(raw: string): unknown {
   try { return JSON.parse(raw) } catch { return raw }
 }
 
+function formatCurrency(n: number): string {
+  return '$' + Math.round(n).toLocaleString('en-AU')
+}
+
+function formatSalaryRange(min: number | null, max: number | null): string {
+  const fmt = (v: number) => '$' + Math.round(v / 1000) + 'k'
+  if (min && max) return `${fmt(min)}–${fmt(max)}`
+  if (min) return `${fmt(min)}+`
+  if (max) return `up to ${fmt(max)}`
+  return ''
+}
+
+function formatDate(iso: string): string {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+  } catch { return '' }
+}
+
 function InputSummary({ inputs }: { inputs: Record<string, unknown> }) {
   return (
     <span className={styles.inputPills}>
@@ -20,6 +39,58 @@ function InputSummary({ inputs }: { inputs: Record<string, unknown> }) {
         </span>
       ))}
     </span>
+  )
+}
+
+function JobListings({ data }: { data: Record<string, unknown> }) {
+  const listings = data.listings as Array<Record<string, unknown>> | undefined
+  const totalCount = data.total_count as number | undefined
+  const returned = data.returned as number | undefined
+  const meanSalary = data.mean_salary as number | undefined
+
+  if (!listings || listings.length === 0 || returned === 0 || totalCount === 0) {
+    return <p className={styles.noResults}>No listings found.</p>
+  }
+
+  return (
+    <div>
+      <p className={styles.jobsSummary}>
+        {returned?.toLocaleString()} of {totalCount?.toLocaleString()} listings
+        {meanSalary ? ` · Mean salary ${formatCurrency(meanSalary)}` : ''}
+      </p>
+      {listings.map((job, i) => {
+        const salaryLabel = formatSalaryRange(
+          job.salary_min as number | null,
+          job.salary_max as number | null,
+        )
+        const meta = [job.company, job.location, formatDate(job.created as string)]
+          .filter(Boolean)
+          .join(' · ')
+        const snippet = (job.snippet as string | undefined) ?? ''
+
+        return (
+          <div key={i} className={styles.jobCard}>
+            <div className={styles.jobTitleRow}>
+              <a
+                href={job.redirect_url as string}
+                target="_blank"
+                rel="noreferrer"
+                className={styles.jobTitle}
+              >
+                {job.title as string}
+              </a>
+              {salaryLabel && <span className={styles.salaryChip}>{salaryLabel}</span>}
+            </div>
+            {meta && <p className={styles.jobMeta}>{meta}</p>}
+            {snippet && (
+              <p className={styles.jobSnippet}>
+                {snippet.length > 220 ? snippet.slice(0, 220) + '…' : snippet}
+              </p>
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -86,6 +157,7 @@ function ResultRenderer({ raw }: { raw: string }) {
 
   if (typeof data === 'object' && data !== null) {
     const obj = data as Record<string, unknown>
+    if ('listings' in obj) return <JobListings data={obj} />
     if ('results' in obj) return <SearchResults data={obj} />
     if ('status_code' in obj && 'text' in obj) return <FetchResult data={obj} />
     if ('status' in obj) return <StatusResult data={obj} />

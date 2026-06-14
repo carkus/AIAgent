@@ -1,3 +1,4 @@
+import json
 import time
 import anthropic
 from tools import execute_tool
@@ -15,7 +16,13 @@ def run_agent_stream(messages: list, agent_config: dict):
       {"type": "done",        "response": "...", "tool_calls": [...], "duration_seconds": N}
       {"type": "error",       "message": "..."}
     """
-    system_prompt = agent_config["system_prompt"]
+    system_prompt = (
+        agent_config["system_prompt"]
+        + "\n\nAfter completing all tool calls, present your findings directly and in full in your response."
+        " Do not just name the tools you ran or say you have completed the search."
+        " Show the actual results — job listings, data, analysis — structured clearly."
+        " The user should not need to ask a follow-up question to see what you found."
+    )
     tool_definitions = agent_config["tools"]
 
     tools = [
@@ -39,7 +46,7 @@ def run_agent_stream(messages: list, agent_config: dict):
         while True:
             raw = client.messages.with_raw_response.create(
                 model="claude-opus-4-8",
-                max_tokens=4096,
+                max_tokens=16000,
                 thinking={"type": "adaptive"},
                 system=system_prompt,
                 tools=tools,
@@ -62,7 +69,7 @@ def run_agent_stream(messages: list, agent_config: dict):
 
             current_messages.append({"role": "assistant", "content": response.content})
 
-            if response.stop_reason == "end_turn":
+            if response.stop_reason in ("end_turn", "max_tokens"):
                 final_text = next(
                     (block.text for block in response.content if block.type == "text"),
                     "",
@@ -93,7 +100,10 @@ def run_agent_stream(messages: list, agent_config: dict):
 
                 implementation = impl_map.get(block.name, "result = 'Unknown tool'")
                 result = execute_tool(implementation, block.input)
-                result_str = str(result)[:1000]
+                try:
+                    result_str = json.dumps(result, default=str)
+                except Exception:
+                    result_str = str(result)
 
                 tool_calls_log.append({
                     "tool": block.name,
@@ -106,7 +116,7 @@ def run_agent_stream(messages: list, agent_config: dict):
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": str(result),
+                    "content": result_str,
                 })
 
             current_messages.append({"role": "user", "content": tool_results})

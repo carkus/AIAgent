@@ -3,15 +3,26 @@ Local development server with streaming support.
 Replaces `sam local start-api` for the agent endpoint.
 
 Usage:
-    pip install flask
+    pip install flask anthropic requests
     python backend/server.py
 
+Reads credentials from env.json in the project root (same file used by SAM local).
 Listens on http://localhost:3000
 """
 
 import json
 import os
 import sys
+
+# Load env vars from env.json (SAM format) so we reuse the same credentials file
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ENV_JSON = os.path.join(_ROOT, "env.json")
+if os.path.exists(_ENV_JSON):
+    with open(_ENV_JSON) as f:
+        _sections = json.load(f)
+    for _section in _sections.values():
+        for k, v in _section.items():
+            os.environ.setdefault(k, v)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 

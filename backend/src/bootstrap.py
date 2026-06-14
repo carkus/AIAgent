@@ -34,13 +34,13 @@ Execution environment for tool implementations:
 - The following are pre-injected and ready to use WITHOUT importing: `requests`, `json`, `os`
 - Do NOT write `import requests`, `import json`, or `import os` — they are already available
 - You MAY import other standard-library modules (e.g. `import re`, `import urllib.parse`)
-- File writes must go to /tmp/<filename> — use `open('/tmp/filename', 'w')`
+- File writes: use `open(os.path.join(TEMP_DIR, filename), 'w')` — `TEMP_DIR` is pre-injected and resolves to the correct platform temp directory. Never hardcode /tmp/
 - Always assign the final result to a variable named `result`
 
 Rules:
 - Design tools that directly serve the stated purpose
 - Tool implementations must be self-contained Python snippets
-- Always include a `save_output` tool that writes a final result to /tmp/<filename>
+- Always include a `save_output` tool that writes a final result using os.path.join(TEMP_DIR, filename)
 - Return ONLY valid JSON — no markdown fences, no explanation
 """
 

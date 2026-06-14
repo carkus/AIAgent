@@ -117,6 +117,67 @@
   font-style: italic;
 }
 
+/* Job listings */
+
+.jobsSummary {
+  color: #4a4a4a;
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+}
+
+.jobCard {
+  border-left: 2px solid #252525;
+  margin-bottom: 0.65rem;
+  padding-left: 0.6rem;
+}
+
+.jobCard:last-child {
+  margin-bottom: 0;
+}
+
+.jobTitleRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.15rem;
+}
+
+.jobTitle {
+  color: #7dd3fc;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+
+.jobTitle:hover {
+  text-decoration: underline;
+}
+
+.salaryChip {
+  background: #0a1f14;
+  border: 1px solid #163a22;
+  border-radius: 3px;
+  color: #6ee7b7;
+  font-size: 0.68rem;
+  padding: 0.05rem 0.35rem;
+  flex-shrink: 0;
+}
+
+.jobMeta {
+  color: #3f3f3f;
+  margin: 0 0 0.15rem;
+  font-size: 0.7rem;
+}
+
+.jobSnippet {
+  color: #4a4a4a;
+  margin: 0;
+  line-height: 1.45;
+  font-style: italic;
+  font-size: 0.7rem;
+}
+
 .statusBadge {
   background: #1a1a1a;
   border: 1px solid #333;

@@ -49,7 +49,7 @@ export default function App() {
 
 const styles: Record<string, React.CSSProperties> = {
   root: {
-    minHeight: '100vh',
+    height: '100%',
     background: '#0f0f0f',
     color: '#e8e8e8',
     fontFamily: "'Segoe UI', system-ui, sans-serif",

@@ -14,7 +14,7 @@ _SAFE_BUILTINS = {
         "int", "float", "bool", "type", "isinstance", "hasattr", "getattr",
         "min", "max", "sum", "abs", "round", "repr", "format",
         "any", "all", "next", "iter", "hash", "id",
-        "open", "__import__", "dir", "vars", "callable",
+        "open", "__import__", "dir", "vars", "globals", "locals", "callable",
         "Exception", "ValueError", "KeyError", "TypeError", "IOError",
         "StopIteration", "RuntimeError", "IndexError", "AttributeError",
     )
@@ -31,6 +31,7 @@ def execute_tool(implementation: str, inputs: dict) -> object:
     import requests
     import json
     import os
+    import tempfile
 
     namespace = {
         "__builtins__": _SAFE_BUILTINS,
@@ -39,6 +40,7 @@ def execute_tool(implementation: str, inputs: dict) -> object:
         "requests": requests,
         "json": json,
         "os": os,
+        "TEMP_DIR": tempfile.gettempdir(),  # platform-correct temp dir
         "result": None,
     }
 
