@@ -1,0 +1,19 @@
+# Secrets
+env.json
+frontend/.env.local
+.env
+
+# SAM build output
+.aws-sam/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# SAM deploy config (contains account info — commit if you want to share deploy settings)
+samconfig.toml

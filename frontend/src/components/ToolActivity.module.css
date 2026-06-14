@@ -1,0 +1,169 @@
+.container {
+  background: #0d0d0d;
+  border-radius: 8px;
+  border: 1px solid #222;
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.78rem;
+}
+
+.heading {
+  color: #555;
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+}
+
+.entry {
+  border-top: 1px solid #1a1a1a;
+  padding-top: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.entryHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.toolName {
+  color: #a78bfa;
+  font-weight: 700;
+  font-family: monospace;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.inputPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.pill {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.1rem 0.4rem;
+}
+
+.pillKey {
+  color: #555;
+}
+
+.pillVal {
+  color: #aaa;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.resultCount {
+  color: #555;
+  margin: 0 0 0.4rem;
+}
+
+.searchResult {
+  border-left: 2px solid #2a2a2a;
+  margin-bottom: 0.5rem;
+  padding-left: 0.6rem;
+}
+
+.resultTitle {
+  color: #7dd3fc;
+  display: block;
+  text-decoration: none;
+  font-weight: 500;
+  margin-bottom: 0.15rem;
+}
+
+.resultTitle:hover {
+  text-decoration: underline;
+}
+
+.resultSnippet {
+  color: #777;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.noResults {
+  color: #555;
+  margin: 0;
+  font-style: italic;
+}
+
+.statusBadge {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #888;
+  display: inline-block;
+  font-family: monospace;
+  margin-bottom: 0.3rem;
+  padding: 0.1rem 0.4rem;
+}
+
+.fetchPreview {
+  color: #666;
+  margin: 0;
+  line-height: 1.4;
+  font-style: italic;
+}
+
+.statusBox {
+  border-left: 2px solid;
+  padding-left: 0.6rem;
+}
+
+.statusBoxSuccess {
+  border-color: #14532d;
+}
+
+.statusBoxError {
+  border-color: #7f1d1d;
+}
+
+.statusLabel {
+  font-weight: 600;
+}
+
+.statusLabelSuccess {
+  color: #86efac;
+}
+
+.statusLabelError {
+  color: #fca5a5;
+}
+
+.statusMessage {
+  color: #888;
+  margin: 0.2rem 0 0;
+  line-height: 1.4;
+}
+
+.plainResult {
+  color: #6ee7b7;
+  margin: 0;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.errorText {
+  color: #fca5a5;
+  margin: 0;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.4;
+}

@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Self-scaffolding AI Agent
+
+Globals:
+  Function:
+    Timeout: 120
+    MemorySize: 512
+    Runtime: python3.12
+    CodeUri: backend/src/
+    Environment:
+      Variables:
+        ANTHROPIC_API_KEY: !Ref AnthropicApiKey
+
+Parameters:
+  AnthropicApiKey:
+    Type: String
+    NoEcho: true
+    Description: Anthropic API key
+
+Resources:
+  AgentApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'POST,OPTIONS'"
+        AllowHeaders: "'Content-Type'"
+        AllowOrigin: "'*'"
+
+  BootstrapFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handler.bootstrap_handler
+      Description: Generates agent config from user-stated purpose
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AgentApi
+            Path: /bootstrap
+            Method: post
+
+  AgentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handler.agent_handler
+      Description: Runs the agentic loop with dynamically generated tools
+      Timeout: 120
+      Events:
+        Post:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AgentApi
+            Path: /agent
+            Method: post
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint
+    Value: !Sub 'https://${AgentApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
+    Export:
+      Name: AgentApiEndpoint
