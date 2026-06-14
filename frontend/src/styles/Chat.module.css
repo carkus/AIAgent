@@ -412,3 +412,21 @@
   opacity: 0.35;
   cursor: not-allowed;
 }
+
+.stopBtn {
+  background: transparent;
+  border: 1px solid #5a2020;
+  border-radius: 8px;
+  color: #f87171;
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 0.65rem 1.25rem;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.stopBtn:hover {
+  background: #2a0f0f;
+  border-color: #7a2020;
+}

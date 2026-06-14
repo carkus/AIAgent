@@ -35,6 +35,7 @@ export default function Chat({ agentConfig, onReset }: Props) {
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const autoSentRef = useRef(false)
+  const abortRef = useRef<AbortController | null>(null)
 
   // Auto-send initial search when keywords are available
   useEffect(() => {
@@ -65,9 +66,16 @@ export default function Chat({ agentConfig, onReset }: Props) {
     })
   }
 
+  function stopAgent() {
+    abortRef.current?.abort()
+  }
+
   async function sendMessage(text: string, currentMessages: ChatMessage[] = messages) {
     if (!text.trim() || thinking) return
     setError(null)
+
+    const controller = new AbortController()
+    abortRef.current = controller
 
     const userMsg: ChatMessage = { role: 'user', content: text }
     const withUser = [...currentMessages, userMsg]
@@ -119,10 +127,20 @@ export default function Chat({ agentConfig, onReset }: Props) {
             setThinking(false)
             break
         }
-      })
+      }, controller.signal)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Request failed')
-      updateLastMessage(msg => ({ ...msg, content: '' }))
+      if (err instanceof Error && err.name === 'AbortError') {
+        updateLastMessage(msg => ({
+          ...msg,
+          toolCalls: (msg.liveToolCalls ?? [])
+            .filter(tc => tc.result !== undefined)
+            .map(tc => ({ tool: tc.tool, inputs: tc.inputs, result: tc.result! })),
+          liveToolCalls: undefined,
+        }))
+      } else {
+        setError(err instanceof Error ? err.message : 'Request failed')
+        updateLastMessage(msg => ({ ...msg, content: '' }))
+      }
       setThinking(false)
     }
   }
@@ -219,9 +237,15 @@ export default function Chat({ agentConfig, onReset }: Props) {
           placeholder="Message the agent..."
           disabled={thinking}
         />
-        <button type="submit" className={styles.sendBtn} disabled={thinking || !input.trim()}>
-          Send
-        </button>
+        {thinking ? (
+          <button type="button" className={styles.stopBtn} onClick={stopAgent}>
+            Stop
+          </button>
+        ) : (
+          <button type="submit" className={styles.sendBtn} disabled={!input.trim()}>
+            Send
+          </button>
+        )}
       </form>
     </div>
   )

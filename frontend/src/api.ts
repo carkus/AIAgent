@@ -26,11 +26,13 @@ export async function runAgent(
   messages: { role: string; content: string }[],
   agentConfig: AgentConfig,
   onEvent: (event: StreamEvent) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch(`${API_URL}/agent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, agent_config: agentConfig }),
+    signal,
   });
 
   if (!res.ok) {
@@ -44,22 +46,26 @@ export async function runAgent(
   const decoder = new TextDecoder();
   let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      try {
-        onEvent(JSON.parse(trimmed) as StreamEvent);
-      } catch {
-        // ignore malformed lines
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          onEvent(JSON.parse(trimmed) as StreamEvent);
+        } catch {
+          // ignore malformed lines
+        }
       }
     }
+  } finally {
+    reader.cancel().catch(() => {})
   }
 }
