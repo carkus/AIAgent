@@ -1,6 +1,6 @@
-import type { AgentConfig, AgentResponse, Message } from './types';
+import type { AgentConfig, StreamEvent } from './types';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 export async function bootstrap(purpose: string): Promise<AgentConfig> {
   const res = await fetch(`${API_URL}/bootstrap`, {
@@ -16,17 +16,43 @@ export async function bootstrap(purpose: string): Promise<AgentConfig> {
 }
 
 export async function runAgent(
-  messages: Message[],
+  messages: { role: string; content: string }[],
   agentConfig: AgentConfig,
-): Promise<AgentResponse> {
+  onEvent: (event: StreamEvent) => void,
+): Promise<void> {
   const res = await fetch(`${API_URL}/agent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, agent_config: agentConfig }),
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? 'Agent call failed');
   }
-  return res.json();
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        onEvent(JSON.parse(trimmed) as StreamEvent);
+      } catch {
+        // ignore malformed lines
+      }
+    }
+  }
 }

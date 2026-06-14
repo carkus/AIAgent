@@ -3,6 +3,7 @@ import styles from './ToolActivity.module.css'
 
 interface Props {
   toolCalls: ToolCall[]
+  live?: boolean
 }
 
 function parseResult(raw: string): unknown {
@@ -94,13 +95,14 @@ function ResultRenderer({ raw }: { raw: string }) {
   return <pre className={styles.plainResult}>{raw}</pre>
 }
 
-export default function ToolActivity({ toolCalls }: Props) {
+export default function ToolActivity({ toolCalls, live = false }: Props) {
   if (toolCalls.length === 0) return null
 
   return (
     <div className={styles.container}>
       <p className={styles.heading}>
-        Tool activity · {toolCalls.length} call{toolCalls.length !== 1 ? 's' : ''}
+        {live ? 'Running' : 'Tool activity'} · {toolCalls.length} call{toolCalls.length !== 1 ? 's' : ''}
+        {live && <span className={styles.liveDot} />}
       </p>
       {toolCalls.map((tc, i) => (
         <div key={i} className={styles.entry}>

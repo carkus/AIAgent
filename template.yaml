@@ -45,19 +45,28 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: handler.agent_handler
-      Description: Runs the agentic loop with dynamically generated tools
+      Description: Streaming agent loop — invoked via Function URL, not API Gateway
       Timeout: 120
-      Events:
-        Post:
-          Type: Api
-          Properties:
-            RestApiId: !Ref AgentApi
-            Path: /agent
-            Method: post
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowHeaders:
+            - "Content-Type"
+          AllowMethods:
+            - POST
 
 Outputs:
-  ApiEndpoint:
-    Description: API Gateway endpoint
-    Value: !Sub 'https://${AgentApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
+  BootstrapEndpoint:
+    Description: Bootstrap API Gateway endpoint
+    Value: !Sub 'https://${AgentApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/bootstrap'
     Export:
-      Name: AgentApiEndpoint
+      Name: BootstrapEndpoint
+
+  AgentStreamUrl:
+    Description: Agent Function URL (streaming)
+    Value: !GetAtt AgentFunctionUrl.FunctionUrl
+    Export:
+      Name: AgentStreamUrl

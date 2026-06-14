@@ -22,8 +22,22 @@ export interface Message {
   content: string;
 }
 
-export interface AgentResponse {
-  response: string;
-  tool_calls: ToolCall[];
-  duration_seconds: number;
-}
+// Stream events emitted by the agent loop
+export type StreamEvent =
+  | { type: 'tool_start'; tool: string; inputs: Record<string, unknown> }
+  | { type: 'tool_result'; tool: string; result: string }
+  | {
+      type: 'done';
+      response: string;
+      tool_calls: ToolCall[];
+      duration_seconds: number;
+      usage: { input_tokens: number; output_tokens: number };
+      rate_limits: {
+        tokens_limit: string | null;
+        tokens_remaining: string | null;
+        tokens_reset: string | null;
+        requests_limit: string | null;
+        requests_remaining: string | null;
+      };
+    }
+  | { type: 'error'; message: string }

@@ -62,48 +62,34 @@ cd ..
 
 ---
 
-## Step 3 — Build the backend
+## Step 3 — Install backend dev dependencies
 
-From the project root:
+The local dev server uses Flask for streaming support (SAM local cannot stream responses).
 
 ```powershell
-sam build --use-container
+pip install flask anthropic requests
 ```
 
-The `--use-container` flag builds the Lambda packages inside a Docker container with the correct Python 3.12 environment. This avoids issues with local Python version mismatches and is the recommended approach on Windows.
-
-SAM will pull the build image on first run (~1 minute). Subsequent builds are faster.
-
-Expected output:
-
-```
-Build Succeeded
-
-Built Artifacts  : .aws-sam/build
-Built Template   : .aws-sam/build/template.yaml
-```
-
-> **Re-run this whenever you change backend code.** SAM does not hot-reload — a rebuild + restart is always required.
+> These are installed into your local Python environment, not the Lambda package. You do not need Docker or SAM to run the backend locally.
 
 ---
 
 ## Step 4 — Start the backend (Terminal 1)
 
 ```powershell
-sam local start-api --env-vars env.json
+python backend/server.py
 ```
-
-SAM will pull the Lambda Docker image on first run (~1 minute). Subsequent starts are fast.
 
 Expected output:
 
 ```
-Mounting BootstrapFunction at http://127.0.0.1:3000/bootstrap [POST]
-Mounting AgentFunction at http://127.0.0.1:3000/agent [POST]
-You can now browse to the above endpoints to invoke your functions.
+Starting local dev server on http://localhost:3000
+ * Running on http://127.0.0.1:3000
 ```
 
-> Each request spins up a fresh Docker container. The first request after startup takes a few seconds. This is normal — cold start behaviour is expected locally.
+The Flask server hot-reloads on file changes in `backend/src/` — no restart needed when editing Python files.
+
+> **SAM local is only needed for deployment testing.** For day-to-day development, use `backend/server.py`. If you do need SAM local (e.g. to test Lambda-specific behaviour), run `sam build --use-container && sam local start-api --env-vars env.json` — but note SAM local does not support streaming responses.
 
 ---
 
@@ -140,14 +126,7 @@ If step 3 hangs or errors, check the SAM terminal for the Lambda log output.
 
 ## Making Backend Changes
 
-After editing any file in `backend/src/`:
-
-```powershell
-# Terminal 1 — stop SAM (Ctrl+C), then:
-sam build --use-container && sam local start-api --env-vars env.json
-```
-
-SAM local does not hot-reload. A rebuild + restart is required for each backend change.
+The Flask dev server (`backend/server.py`) picks up changes to `backend/src/` automatically — just save the file and the next request will use the updated code. No restart needed.
 
 ---
 

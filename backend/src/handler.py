@@ -1,6 +1,7 @@
 import json
 from bootstrap import generate_agent_config
 from agent import run_agent
+from agent_stream import run_agent_stream
 
 
 def _cors_response(status_code: int, body: dict) -> dict:
@@ -33,18 +34,21 @@ def bootstrap_handler(event, context):
 
 
 def agent_handler(event, context):
-    if event.get("httpMethod") == "OPTIONS":
-        return _cors_response(200, {})
-
+    """
+    Streaming handler — requires a Lambda Function URL with InvokeMode: RESPONSE_STREAM.
+    Emits NDJSON events (one JSON object per line) as the agent loop runs.
+    """
     try:
         body = json.loads(event.get("body", "{}"))
         messages = body.get("messages", [])
         agent_config = body.get("agent_config", {})
 
         if not messages or not agent_config:
-            return _cors_response(400, {"error": "messages and agent_config are required"})
+            yield json.dumps({"type": "error", "message": "messages and agent_config are required"})
+            return
 
-        result = run_agent(messages, agent_config)
-        return _cors_response(200, result)
+        for evt in run_agent_stream(messages, agent_config):
+            yield json.dumps(evt) + "\n"
+
     except Exception as e:
-        return _cors_response(500, {"error": str(e)})
+        yield json.dumps({"type": "error", "message": str(e)}) + "\n"

@@ -7,6 +7,22 @@
   font-size: 0.78rem;
 }
 
+.liveDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a78bfa;
+  margin-left: 6px;
+  vertical-align: middle;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 .heading {
   color: #555;
   margin: 0 0 0.5rem;

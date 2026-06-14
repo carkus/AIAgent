@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { runAgent } from '../api'
 import ToolActivity from './ToolActivity'
-import type { AgentConfig, Message, ToolCall } from '../types'
+import type { AgentConfig, StreamEvent, ToolCall } from '../types'
+import styles from './Chat.module.css'
+
+interface LiveToolCall {
+  tool: string
+  inputs: Record<string, unknown>
+  result?: string
+}
 
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   toolCalls?: ToolCall[]
+  liveToolCalls?: LiveToolCall[]
   durationSeconds?: number
+  usage?: { input_tokens: number; output_tokens: number }
+  rateLimits?: { tokens_remaining: string | null; tokens_limit: string | null; requests_remaining: string | null; tokens_reset: string | null }
 }
 
 interface Props {
@@ -33,6 +43,14 @@ export default function Chat({ agentConfig, onReset }: Props) {
     return () => clearInterval(t)
   }, [thinking])
 
+  function updateLastMessage(updater: (prev: ChatMessage) => ChatMessage) {
+    setMessages(msgs => {
+      const last = msgs[msgs.length - 1]
+      if (!last || last.role !== 'assistant') return msgs
+      return [...msgs.slice(0, -1), updater(last)]
+    })
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
     const text = input.trim()
@@ -42,212 +60,142 @@ export default function Chat({ agentConfig, onReset }: Props) {
     setError(null)
 
     const userMsg: ChatMessage = { role: 'user', content: text }
-    const updatedMessages = [...messages, userMsg]
-    setMessages(updatedMessages)
+    const withUser = [...messages, userMsg]
+    setMessages([...withUser, { role: 'assistant', content: '', liveToolCalls: [] }])
     setThinking(true)
 
+    const apiMessages = withUser.map(m => ({ role: m.role, content: m.content }))
+
     try {
-      const apiMessages: Message[] = updatedMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-      }))
-      const result = await runAgent(apiMessages, agentConfig)
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: result.response,
-          toolCalls: result.tool_calls,
-          durationSeconds: result.duration_seconds,
-        },
-      ])
+      await runAgent(apiMessages, agentConfig, (event: StreamEvent) => {
+        switch (event.type) {
+          case 'tool_start':
+            updateLastMessage(msg => ({
+              ...msg,
+              liveToolCalls: [
+                ...(msg.liveToolCalls ?? []),
+                { tool: event.tool, inputs: event.inputs },
+              ],
+            }))
+            break
+
+          case 'tool_result':
+            updateLastMessage(msg => ({
+              ...msg,
+              liveToolCalls: (msg.liveToolCalls ?? []).map(tc =>
+                tc.tool === event.tool && tc.result === undefined
+                  ? { ...tc, result: event.result }
+                  : tc
+              ),
+            }))
+            break
+
+          case 'done':
+            updateLastMessage(msg => ({
+              ...msg,
+              content: event.response,
+              toolCalls: event.tool_calls,
+              liveToolCalls: undefined,
+              durationSeconds: event.duration_seconds,
+              usage: event.usage,
+              rateLimits: event.rate_limits,
+            }))
+            setThinking(false)
+            break
+
+          case 'error':
+            setError(event.message)
+            updateLastMessage(msg => ({ ...msg, content: '' }))
+            setThinking(false)
+            break
+        }
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed')
-    } finally {
+      updateLastMessage(msg => ({ ...msg, content: '' }))
       setThinking(false)
     }
   }
 
   return (
-    <div style={styles.root}>
-      <header style={styles.header}>
+    <div className={styles.root}>
+      <header className={styles.header}>
         <div>
-          <span style={styles.headerTitle}>Agent</span>
-          <span style={styles.headerPurpose}>{agentConfig.purpose}</span>
+          <span className={styles.headerTitle}>Agent</span>
+          <span className={styles.headerPurpose}>{agentConfig.purpose}</span>
         </div>
-        <button style={styles.resetBtn} onClick={onReset}>New agent</button>
+        <button type="button" className={styles.resetBtn} onClick={onReset}>New agent</button>
       </header>
 
-      <div style={styles.toolsBadges}>
+      <div className={styles.toolsBadges}>
         {agentConfig.tools.map(t => (
-          <span key={t.name} style={styles.badge}>{t.name}</span>
+          <span key={t.name} className={styles.badge}>{t.name}</span>
         ))}
       </div>
 
-      <div style={styles.messageList}>
+      <div className={styles.messageList}>
         {messages.length === 0 && (
-          <p style={styles.emptyHint}>Send a message to start.</p>
+          <p className={styles.emptyHint}>Send a message to start.</p>
         )}
         {messages.map((msg, i) => (
-          <div key={i} style={msg.role === 'user' ? styles.userBubble : styles.assistantBubble}>
-            <p style={styles.bubbleText}>{msg.content}</p>
-            {msg.toolCalls && <ToolActivity toolCalls={msg.toolCalls} />}
+          <div key={i} className={msg.role === 'user' ? styles.userBubble : styles.assistantBubble}>
+            {msg.liveToolCalls && msg.liveToolCalls.length > 0 && (
+              <ToolActivity
+                toolCalls={msg.liveToolCalls.map(tc => ({
+                  tool: tc.tool,
+                  inputs: tc.inputs,
+                  result: tc.result ?? '…',
+                }))}
+                live
+              />
+            )}
+            {msg.content && <p className={styles.bubbleText}>{msg.content}</p>}
+            {msg.toolCalls && <ToolActivity toolCalls={msg.toolCalls} live={false} />}
             {msg.durationSeconds !== undefined && (
-              <p style={styles.duration}>
+              <p className={styles.duration}>
                 {msg.toolCalls?.length
                   ? `${msg.toolCalls.length} tool call${msg.toolCalls.length !== 1 ? 's' : ''} · `
                   : ''}
                 {msg.durationSeconds}s
+                {msg.usage && (
+                  <> · {(msg.usage.input_tokens + msg.usage.output_tokens).toLocaleString()} tokens
+                  <span className={styles.tokenBreakdown}>
+                    ({msg.usage.input_tokens.toLocaleString()} in / {msg.usage.output_tokens.toLocaleString()} out)
+                  </span></>
+                )}
+                {msg.rateLimits?.tokens_remaining && (
+                  <span className={styles.rateLimit}>
+                    {' '}· {Number(msg.rateLimits.tokens_remaining).toLocaleString()} tokens remaining this minute
+                    {msg.rateLimits.tokens_limit && (
+                      <> of {Number(msg.rateLimits.tokens_limit).toLocaleString()}</>
+                    )}
+                  </span>
+                )}
+              </p>
+            )}
+            {thinking && i === messages.length - 1 && msg.role === 'assistant' && !msg.content && (
+              <p className={styles.workingText}>
+                Working{elapsed > 0 ? ` · ${elapsed}s` : '…'}
               </p>
             )}
           </div>
         ))}
-        {thinking && (
-          <div style={styles.assistantBubble}>
-            <p style={{ ...styles.bubbleText, color: '#666' }}>
-              Working{elapsed > 0 ? ` · ${elapsed}s` : '…'}
-            </p>
-          </div>
-        )}
-        {error && <p style={styles.error}>{error}</p>}
+        {error && <p className={styles.error}>{error}</p>}
         <div ref={bottomRef} />
       </div>
 
-      <form style={styles.inputRow} onSubmit={handleSend}>
+      <form className={styles.inputRow} onSubmit={handleSend}>
         <input
-          style={styles.input}
+          className={styles.input}
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder="Message the agent..."
           disabled={thinking}
         />
-        <button style={styles.sendBtn} type="submit" disabled={thinking || !input.trim()}>
+        <button type="submit" className={styles.sendBtn} disabled={thinking || !input.trim()}>
           Send
         </button>
       </form>
     </div>
   )
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100vh',
-    maxWidth: '820px',
-    margin: '0 auto',
-    width: '100%',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '1rem 1.5rem',
-    borderBottom: '1px solid #2a2a2a',
-  },
-  headerTitle: {
-    fontWeight: 700,
-    marginRight: '0.75rem',
-  },
-  headerPurpose: {
-    color: '#888',
-    fontSize: '0.875rem',
-  },
-  resetBtn: {
-    background: 'transparent',
-    border: '1px solid #333',
-    borderRadius: '6px',
-    color: '#888',
-    cursor: 'pointer',
-    fontSize: '0.8rem',
-    padding: '0.375rem 0.75rem',
-  },
-  toolsBadges: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '0.5rem',
-    padding: '0.75rem 1.5rem',
-    borderBottom: '1px solid #1f1f1f',
-  },
-  badge: {
-    background: '#1e1e2e',
-    border: '1px solid #333',
-    borderRadius: '4px',
-    color: '#a78bfa',
-    fontSize: '0.75rem',
-    fontFamily: 'monospace',
-    padding: '0.2rem 0.5rem',
-  },
-  messageList: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '1.5rem',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1rem',
-  },
-  emptyHint: {
-    color: '#444',
-    textAlign: 'center',
-    marginTop: '4rem',
-  },
-  userBubble: {
-    alignSelf: 'flex-end',
-    background: '#1e2a4a',
-    border: '1px solid #2a3a6a',
-    borderRadius: '12px 12px 2px 12px',
-    maxWidth: '75%',
-    padding: '0.75rem 1rem',
-  },
-  assistantBubble: {
-    alignSelf: 'flex-start',
-    background: '#1a1a1a',
-    border: '1px solid #2a2a2a',
-    borderRadius: '12px 12px 12px 2px',
-    maxWidth: '85%',
-    padding: '0.75rem 1rem',
-  },
-  bubbleText: {
-    margin: 0,
-    lineHeight: 1.6,
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-word',
-  },
-  inputRow: {
-    display: 'flex',
-    gap: '0.75rem',
-    padding: '1rem 1.5rem',
-    borderTop: '1px solid #2a2a2a',
-  },
-  input: {
-    flex: 1,
-    background: '#111',
-    border: '1px solid #333',
-    borderRadius: '8px',
-    color: '#e8e8e8',
-    fontSize: '0.95rem',
-    outline: 'none',
-    padding: '0.75rem 1rem',
-    fontFamily: 'inherit',
-  },
-  sendBtn: {
-    background: '#4f6ef7',
-    border: 'none',
-    borderRadius: '8px',
-    color: '#fff',
-    cursor: 'pointer',
-    fontSize: '0.95rem',
-    fontWeight: 600,
-    padding: '0.75rem 1.25rem',
-  },
-  error: {
-    color: '#f87171',
-    fontSize: '0.875rem',
-    textAlign: 'center',
-  },
-  duration: {
-    color: '#555',
-    fontSize: '0.72rem',
-    margin: '0.4rem 0 0',
-  },
 }
