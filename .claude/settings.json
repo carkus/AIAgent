@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Skill(claude-api)",
-      "Skill(claude-api:*)"
+      "Skill(claude-api:*)",
+      "Bash(node -e \"const p = require\\('./node_modules/react-markdown/package.json'\\); console.log\\(p.version, p.type\\)\")"
     ]
   }
 }

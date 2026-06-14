@@ -26,6 +26,7 @@ if os.path.exists(_ENV_JSON):
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
+import tempfile
 from flask import Flask, Response, jsonify, request, stream_with_context
 from bootstrap import generate_agent_config
 from agent_stream import run_agent_stream
@@ -54,6 +55,16 @@ def bootstrap():
         return jsonify(config)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/file/<path:filename>", methods=["GET"])
+def serve_file(filename):
+    path = os.path.join(tempfile.gettempdir(), filename)
+    if not os.path.exists(path):
+        return jsonify({"error": "File not found"}), 404
+    with open(path, encoding="utf-8", errors="replace") as f:
+        content = f.read()
+    return jsonify({"filename": filename, "content": content})
 
 
 @app.route("/agent", methods=["POST", "OPTIONS"])

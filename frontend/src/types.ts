@@ -9,6 +9,8 @@ export interface AgentConfig {
   purpose: string;
   system_prompt: string;
   tools: ToolDefinition[];
+  keywords?: string[];
+  location?: string;
 }
 
 export interface ToolCall {

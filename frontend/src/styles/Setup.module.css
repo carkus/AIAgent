@@ -1,0 +1,282 @@
+.container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.card {
+  background: #1a1a1a;
+  border-radius: 12px;
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 560px;
+  border: 1px solid #2a2a2a;
+}
+
+.title {
+  margin: 0 0 0.5rem;
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  margin: 0 0 2rem;
+  color: #888;
+  font-size: 0.95rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.chipArea {
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 8px;
+  cursor: text;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-height: 52px;
+  padding: 0.6rem 0.75rem;
+  align-items: center;
+  transition: border-color 0.15s;
+}
+
+.chipArea:focus-within {
+  border-color: #4f6ef7;
+}
+
+.chip {
+  align-items: center;
+  background: #1e2a4a;
+  border: 1px solid #2a3a6a;
+  border-radius: 6px;
+  color: #93b4f0;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 500;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem 0.2rem 0.6rem;
+}
+
+.chipX {
+  background: none;
+  border: none;
+  color: #4a6aaa;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.1rem;
+}
+
+.chipX:hover {
+  color: #93b4f0;
+}
+
+.chipInput {
+  background: none;
+  border: none;
+  color: #e8e8e8;
+  flex: 1 1 120px;
+  font-size: 0.95rem;
+  min-width: 120px;
+  outline: none;
+  font-family: inherit;
+  padding: 0.1rem 0;
+}
+
+.hintRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.charHint {
+  color: #444;
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.clearBtn {
+  background: none;
+  border: none;
+  color: #3a3a3a;
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.clearBtn:hover:not(:disabled) {
+  color: #f87171;
+}
+
+.clearBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.locationRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.locationLabel {
+  color: #555;
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+
+.locationInput {
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  color: #aaa;
+  font-family: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  padding: 0.3rem 0.6rem;
+  flex: 1;
+  transition: border-color 0.15s;
+}
+
+.locationInput:focus {
+  border-color: #4f6ef7;
+}
+
+/* Saved searches */
+
+.savedSection {
+  margin-top: 0.25rem;
+}
+
+.savedHeading {
+  color: #555;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  margin: 0 0 0.4rem;
+  text-transform: uppercase;
+}
+
+.savedList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.savedRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem 0.35rem 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.savedRow:hover {
+  border-color: #3a3a3a;
+}
+
+.savedChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.savedChip {
+  background: #161d2e;
+  border: 1px solid #222c44;
+  border-radius: 5px;
+  color: #6a8abf;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+}
+
+.savedDelete {
+  background: none;
+  border: none;
+  color: #3a3a3a;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  flex-shrink: 0;
+}
+
+.savedDelete:hover {
+  color: #f87171;
+}
+
+/* Action row */
+
+.actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+.saveBtn {
+  background: transparent;
+  border: 1px solid #333;
+  border-radius: 8px;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 0.7rem 1rem;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.saveBtn:hover:not(:disabled) {
+  border-color: #555;
+  color: #aaa;
+}
+
+.saveBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.createBtn {
+  background: #4f6ef7;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  flex: 1;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.875rem;
+  transition: opacity 0.15s;
+}
+
+.createBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #f87171;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.loadingHint {
+  color: #666;
+  font-size: 0.85rem;
+  margin-top: 1rem;
+  text-align: center;
+}

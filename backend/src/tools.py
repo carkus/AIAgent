@@ -21,6 +21,75 @@ _SAFE_BUILTINS = {
 }
 
 
+def fetch_page(url: str) -> dict:
+    """Built-in primitive: fetch a URL and return clean text (HTML stripped)."""
+    import requests
+    import re
+    from html.parser import HTMLParser
+
+    # Tags that block ALL their inner content (including nested children).
+    # Uses a stack so nesting is handled correctly.
+    BLOCK = {
+        'script', 'style', 'noscript',   # code / css
+        'head',                            # document metadata
+        'svg', 'canvas',                   # graphics (SVG paths are noise)
+        'nav', 'header', 'footer', 'aside',# page chrome
+        'form', 'select', 'option',        # form controls
+    }
+    # Tags whose start tag we simply ignore (no content to skip, void elements)
+    VOID = {'meta', 'link', 'input', 'br', 'hr', 'img', 'button'}
+
+    class _Extractor(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.parts: list[str] = []
+            self._stack: list[str] = []   # stack of currently-blocked tags
+
+        def handle_starttag(self, tag, attrs):
+            t = tag.lower()
+            if t in BLOCK:
+                self._stack.append(t)
+
+        def handle_endtag(self, tag):
+            t = tag.lower()
+            # Pop only if this tag is on the top of our block stack
+            if self._stack and self._stack[-1] == t:
+                self._stack.pop()
+
+        def handle_data(self, data):
+            if not self._stack:
+                text = data.strip()
+                if text:
+                    self.parts.append(text)
+
+    headers = {
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/124.0.0.0 Safari/537.36'
+        ),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-AU,en;q=0.9',
+    }
+
+    try:
+        r = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
+        ex = _Extractor()
+        ex.feed(r.text)
+        text = '\n'.join(ex.parts)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        limit = 20000
+        return {
+            'status_code': r.status_code,
+            'url': str(r.url),
+            'content': text[:limit],
+            'char_count': len(text),
+            'truncated': len(text) > limit,
+        }
+    except Exception as exc:
+        return {'error': str(exc), 'url': url}
+
+
 def execute_tool(implementation: str, inputs: dict) -> object:
     """Execute a Claude-generated tool implementation in a restricted namespace.
 
@@ -31,6 +100,11 @@ def execute_tool(implementation: str, inputs: dict) -> object:
     import requests
     import json
     import os
+    import re
+    import math
+    import datetime
+    import collections
+    import urllib.parse
     import tempfile
 
     namespace = {
@@ -40,6 +114,11 @@ def execute_tool(implementation: str, inputs: dict) -> object:
         "requests": requests,
         "json": json,
         "os": os,
+        "re": re,
+        "math": math,
+        "datetime": datetime,
+        "collections": collections,
+        "urllib": urllib,
         "TEMP_DIR": tempfile.gettempdir(),  # platform-correct temp dir
         "result": None,
     }

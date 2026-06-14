@@ -1,0 +1,414 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid #1a1a1a;
+  flex-shrink: 0;
+}
+
+.headerTitle {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-right: 0.75rem;
+}
+
+.headerPurpose {
+  color: #555;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 480px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.resetBtn {
+  background: transparent;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  color: #555;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.75rem;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.resetBtn:hover {
+  border-color: #444;
+  color: #888;
+}
+
+.toolsBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.5rem 1.25rem;
+  border-bottom: 1px solid #111;
+  flex-shrink: 0;
+}
+
+.badge {
+  background: #111;
+  border: 1px solid #1f1f1f;
+  border-radius: 4px;
+  color: #3a3a3a;
+  font-family: monospace;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+}
+
+.messageList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.emptyHint {
+  color: #333;
+  font-size: 0.85rem;
+  margin: auto;
+  text-align: center;
+}
+
+.userBubble {
+  align-self: flex-end;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 10px 10px 2px 10px;
+  max-width: 70%;
+  padding: 0.6rem 0.9rem;
+}
+
+.assistantBubble {
+  align-self: flex-start;
+  max-width: 90%;
+  width: 100%;
+}
+
+.bubbleText {
+  color: #d4d4d4;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* Markdown renderer for assistant messages */
+
+.markdown {
+  color: #d4d4d4;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.markdown p {
+  margin: 0 0 0.65rem;
+}
+
+.markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown h1 {
+  color: #e8e8e8;
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 1.2rem 0 0.5rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid #222;
+}
+
+.markdown h2 {
+  background: #0a0a0f;
+  border-left: 3px solid #4f6ef7;
+  border-radius: 0 5px 5px 0;
+  color: #d0d8f0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin: 1.4rem 0 0.6rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.markdown h3 {
+  color: #ccc;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0.9rem 0 0.3rem;
+}
+
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  color: #aaa;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.markdown h1:first-child,
+.markdown h2:first-child,
+.markdown h3:first-child {
+  margin-top: 0;
+}
+
+.markdown ul {
+  margin: 0 0 0.65rem 1.25rem;
+  padding: 0;
+}
+
+.markdown ul li {
+  margin-bottom: 0.25rem;
+}
+
+.markdown ul li:last-child {
+  margin-bottom: 0;
+}
+
+/* Numbered list items → styled cards */
+
+.markdown ol {
+  counter-reset: md-item;
+  list-style: none;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.markdown ol li {
+  background: #0c0c0f;
+  border: 1px solid #1e1e28;
+  border-radius: 8px;
+  counter-increment: md-item;
+  padding: 0.7rem 0.9rem 0.7rem 2.9rem;
+  position: relative;
+}
+
+.markdown ol li::before {
+  content: counter(md-item);
+  position: absolute;
+  left: 0.7rem;
+  top: 0.7rem;
+  background: #111827;
+  border: 1px solid #1e2a40;
+  border-radius: 4px;
+  color: #7dd3fc;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 1.2rem;
+  padding: 0.2rem 0.35rem;
+  text-align: center;
+}
+
+.markdown ol li a {
+  background: #131a28;
+  border: 1px solid #1e2a40;
+  border-radius: 4px;
+  color: #93b4d8;
+  font-size: 0.8rem;
+  padding: 0.05rem 0.4rem;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.markdown ol li a:hover {
+  border-color: #2a3a5a;
+  color: #bdd4ee;
+  text-decoration: none;
+}
+
+.markdown strong {
+  color: #f0f0f0;
+  font-weight: 600;
+}
+
+.markdown em {
+  color: #aaa;
+  font-style: italic;
+}
+
+.markdown code {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+  color: #a78bfa;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.82rem;
+  padding: 0.1rem 0.35rem;
+}
+
+.markdown pre {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 6px;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  padding: 0.75rem 1rem;
+}
+
+.markdown pre code {
+  background: none;
+  border: none;
+  color: #c8c8c8;
+  padding: 0;
+}
+
+.markdown hr {
+  border: none;
+  border-top: 1px solid #222;
+  margin: 0.9rem 0;
+}
+
+/* Source / link-only list items → pill row */
+
+.markdown ul:has(li > a:only-child) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0.75rem;
+}
+
+.markdown ul:has(li > a:only-child) li {
+  display: contents;
+}
+
+.markdown ul:has(li > a:only-child) li > a {
+  background: #0c1220;
+  border: 1px solid #1a2640;
+  border-radius: 5px;
+  color: #7dd3fc;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.6rem;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.markdown ul:has(li > a:only-child) li > a:hover {
+  border-color: #2a3a6a;
+  color: #bae6fd;
+  text-decoration: none;
+}
+
+.markdown blockquote {
+  border-left: 3px solid #333;
+  color: #888;
+  margin: 0.5rem 0;
+  padding: 0 0 0 0.75rem;
+}
+
+/* Tables */
+
+.markdown table {
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin: 0.5rem 0 0.75rem;
+  width: 100%;
+}
+
+.markdown th {
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  color: #aaa;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  text-align: left;
+}
+
+.markdown td {
+  border: 1px solid #1e1e1e;
+  color: #c8c8c8;
+  padding: 0.3rem 0.65rem;
+}
+
+.markdown tr:nth-child(even) td {
+  background: #0d0d0d;
+}
+
+.workingText {
+  color: #3a3a3a;
+  font-size: 0.8rem;
+  font-style: italic;
+  margin: 0.5rem 0 0;
+}
+
+.duration {
+  color: #2a2a2a;
+  font-size: 0.68rem;
+  margin: 0.35rem 0 0;
+}
+
+.tokenBreakdown {
+  color: #222;
+}
+
+.rateLimit {
+  color: #222;
+}
+
+.error {
+  color: #f87171;
+  font-size: 0.82rem;
+  margin: 0;
+  padding: 0.5rem 0;
+}
+
+.inputRow {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid #1a1a1a;
+  flex-shrink: 0;
+}
+
+.input {
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  color: #d4d4d4;
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.92rem;
+  outline: none;
+  padding: 0.65rem 0.9rem;
+  transition: border-color 0.15s;
+}
+
+.input:focus {
+  border-color: #4f6ef7;
+}
+
+.sendBtn {
+  background: #4f6ef7;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 0.65rem 1.25rem;
+  transition: opacity 0.15s;
+}
+
+.sendBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

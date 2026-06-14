@@ -31,16 +31,22 @@ Design and configure this agent. Return a single JSON object with exactly these 
 }}
 
 Execution environment for tool implementations:
-- The following are pre-injected and ready to use WITHOUT importing: `requests`, `json`, `os`
-- Do NOT write `import requests`, `import json`, or `import os` — they are already available
-- You MAY import other standard-library modules (e.g. `import re`, `import urllib.parse`)
+- The following are pre-injected and ready to use WITHOUT importing: `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`
+- Do NOT write import statements for any of the above — they are already available as module objects
+- You MAY import other standard-library modules if needed (e.g. `import csv`, `import hashlib`)
 - File writes: use `open(os.path.join(TEMP_DIR, filename), 'w')` — `TEMP_DIR` is pre-injected and resolves to the correct platform temp directory. Never hardcode /tmp/
 - Always assign the final result to a variable named `result`
+
+A primitive tool `fetch_page` is pre-built and always available to the agent — do NOT include it in the tools array you generate. It takes a `url` (string) and returns `{status_code, url, content, truncated}` where `content` is clean text with all HTML, scripts, and SVG stripped. Instruct the agent to call `fetch_page` directly to retrieve any web page.
 
 Rules:
 - Design tools that directly serve the stated purpose
 - Tool implementations must be self-contained Python snippets
-- Always include a `save_output` tool that writes a final result using os.path.join(TEMP_DIR, filename)
+- Do NOT generate a fetch_url, fetch_page, scrape, or HTTP-request tool — use the built-in `fetch_page` primitive instead
+- Do NOT generate a web_search, search_web, google_search, or any internet-search tool — there is no search engine available; agents must use `fetch_page` with direct URLs
+- Always include a `save_output` tool that writes a final result using os.path.join(TEMP_DIR, filename); the tool must set result = {"status": "saved", "filename": filename, "path": os.path.join(TEMP_DIR, filename)}
+- The system_prompt you generate MUST instruct the agent that after all tool calls are done it must present the actual findings (listings, data, analysis) in its reply — not list tool names, not say "search complete"
+- Search/fetch tools MUST filter results for relevance: only include items where the search keyword appears in the title or description/snippet (case-insensitive). Discard unrelated results returned by the API.
 - Return ONLY valid JSON — no markdown fences, no explanation
 """
 

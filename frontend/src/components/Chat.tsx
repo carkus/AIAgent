@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { runAgent } from '../api'
 import ToolActivity from './ToolActivity'
 import type { AgentConfig, StreamEvent, ToolCall } from '../types'
-import styles from './Chat.module.css'
+import styles from '../styles/Chat.module.css'
 
 interface LiveToolCall {
   tool: string
@@ -32,6 +34,18 @@ export default function Chat({ agentConfig, onReset }: Props) {
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const autoSentRef = useRef(false)
+
+  // Auto-send initial search when keywords are available
+  useEffect(() => {
+    if (autoSentRef.current) return
+    const kws = agentConfig.keywords
+    if (!kws?.length) return
+    autoSentRef.current = true
+    const loc = agentConfig.location ? ` in ${agentConfig.location}` : ''
+    sendMessage(`Search for: ${kws.join(', ')}${loc}`)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -51,16 +65,12 @@ export default function Chat({ agentConfig, onReset }: Props) {
     })
   }
 
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault()
-    const text = input.trim()
-    if (!text || thinking) return
-
-    setInput('')
+  async function sendMessage(text: string, currentMessages: ChatMessage[] = messages) {
+    if (!text.trim() || thinking) return
     setError(null)
 
     const userMsg: ChatMessage = { role: 'user', content: text }
-    const withUser = [...messages, userMsg]
+    const withUser = [...currentMessages, userMsg]
     setMessages([...withUser, { role: 'assistant', content: '', liveToolCalls: [] }])
     setThinking(true)
 
@@ -117,6 +127,14 @@ export default function Chat({ agentConfig, onReset }: Props) {
     }
   }
 
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault()
+    const text = input.trim()
+    if (!text || thinking) return
+    setInput('')
+    await sendMessage(text)
+  }
+
   return (
     <div className={styles.root}>
       <header className={styles.header}>
@@ -134,7 +152,7 @@ export default function Chat({ agentConfig, onReset }: Props) {
       </div>
 
       <div className={styles.messageList}>
-        {messages.length === 0 && (
+        {messages.length === 0 && !thinking && (
           <p className={styles.emptyHint}>Send a message to start.</p>
         )}
         {messages.map((msg, i) => (
@@ -147,10 +165,19 @@ export default function Chat({ agentConfig, onReset }: Props) {
                   result: tc.result ?? '…',
                 }))}
                 live
+                location={agentConfig.location}
               />
             )}
-            {msg.content && <p className={styles.bubbleText}>{msg.content}</p>}
-            {msg.toolCalls && <ToolActivity toolCalls={msg.toolCalls} live={false} />}
+            {msg.content && (
+              msg.role === 'assistant'
+                ? (
+                  <div className={styles.markdown}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                  </div>
+                )
+                : <p className={styles.bubbleText}>{msg.content}</p>
+            )}
+            {msg.toolCalls && <ToolActivity toolCalls={msg.toolCalls} live={false} location={agentConfig.location} />}
             {msg.durationSeconds !== undefined && (
               <p className={styles.duration}>
                 {msg.toolCalls?.length

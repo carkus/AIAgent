@@ -1,9 +1,27 @@
 import json
 import time
 import anthropic
-from tools import execute_tool
+from tools import execute_tool, fetch_page
 
 client = anthropic.Anthropic()
+
+_PRIMITIVE_TOOLS = [
+    {
+        "name": "fetch_page",
+        "description": (
+            "Fetch any public web page and return its clean text content (HTML, scripts, "
+            "and SVG stripped). Use this to read job listings, salary guides, company pages, "
+            "or any web URL. Prefer this over generating your own fetch tool."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Full URL to fetch"}
+            },
+            "required": ["url"],
+        },
+    }
+]
 
 
 def run_agent_stream(messages: list, agent_config: dict):
@@ -16,16 +34,26 @@ def run_agent_stream(messages: list, agent_config: dict):
       {"type": "done",        "response": "...", "tool_calls": [...], "duration_seconds": N}
       {"type": "error",       "message": "..."}
     """
-    system_prompt = (
-        agent_config["system_prompt"]
-        + "\n\nAfter completing all tool calls, present your findings directly and in full in your response."
-        " Do not just name the tools you ran or say you have completed the search."
-        " Show the actual results — job listings, data, analysis — structured clearly."
-        " The user should not need to ask a follow-up question to see what you found."
-    )
+    system_prompt = agent_config["system_prompt"] + """
+
+---
+CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
+
+1. DO NOT call `web_search` or any search tool. There is no search engine connected. Every call returns 0 results and wastes a turn.
+
+2. USE `fetch_page` to get live data directly from job boards and websites:
+   - SEEK (Australia's largest job board) URL pattern:
+     https://www.seek.com.au/{keyword}-jobs/in-{location}
+     e.g. https://www.seek.com.au/flutter-developer-jobs/in-Melbourne-VIC
+          https://www.seek.com.au/software-engineer-jobs/in-Melbourne-VIC
+   - Replace spaces with hyphens in the keyword.
+   - The page text will contain job counts, titles, companies, salaries, and listing descriptions.
+
+3. MANDATORY OUTPUT: When all fetches are done, write the actual findings — listing counts, job titles, salary ranges, company names. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
+---"""
     tool_definitions = agent_config["tools"]
 
-    tools = [
+    tools = _PRIMITIVE_TOOLS + [
         {
             "name": t["name"],
             "description": t["description"],
@@ -41,6 +69,7 @@ def run_agent_stream(messages: list, agent_config: dict):
     total_input_tokens = 0
     total_output_tokens = 0
     rate_limits = {}
+    nudged = False
 
     try:
         while True:
@@ -74,6 +103,23 @@ def run_agent_stream(messages: list, agent_config: dict):
                     (block.text for block in response.content if block.type == "text"),
                     "",
                 )
+                # Auto-nudge: if Claude gave a very short response after running tools,
+                # inject one follow-up so it actually presents the findings.
+                if (
+                    not nudged
+                    and tool_calls_log
+                    and response.stop_reason == "end_turn"
+                    and len(final_text.strip()) < 400
+                ):
+                    nudged = True
+                    current_messages.append({
+                        "role": "user",
+                        "content": (
+                            "Present your complete findings now in full detail. "
+                            "Show the actual data, results, and analysis from your searches."
+                        ),
+                    })
+                    continue
                 yield {
                     "type": "done",
                     "response": final_text,
@@ -98,8 +144,23 @@ def run_agent_stream(messages: list, agent_config: dict):
 
                 yield {"type": "tool_start", "tool": block.name, "inputs": block.input}
 
-                implementation = impl_map.get(block.name, "result = 'Unknown tool'")
-                result = execute_tool(implementation, block.input)
+                _SEARCH_TOOL_NAMES = {
+                    "web_search", "search_web", "google_search", "bing_search",
+                    "search", "search_jobs", "search_internet", "internet_search",
+                }
+                if block.name == "fetch_page":
+                    result = fetch_page(block.input.get("url", ""))
+                elif block.name in _SEARCH_TOOL_NAMES:
+                    result = {
+                        "error": (
+                            "No search engine is connected. Do NOT call this tool again. "
+                            "Use fetch_page with a direct URL instead — "
+                            "e.g. fetch_page('https://www.seek.com.au/software-engineer-jobs/in-Melbourne-VIC')"
+                        )
+                    }
+                else:
+                    implementation = impl_map.get(block.name, "result = 'Unknown tool'")
+                    result = execute_tool(implementation, block.input)
                 try:
                     result_str = json.dumps(result, default=str)
                 except Exception:

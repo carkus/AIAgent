@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { bootstrap } from '../api'
 import type { AgentConfig } from '../types'
+import styles from '../styles/Setup.module.css'
 
 interface Props {
   bootstrapping: boolean
@@ -10,113 +11,209 @@ interface Props {
   onError: (msg: string) => void
 }
 
+const STORAGE_KEY = 'aiagent_saved_searches'
+
+interface SavedSearch {
+  id: string
+  name: string
+  keywords: string[]
+}
+
+function loadSaved(): SavedSearch[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
+  } catch {
+    return []
+  }
+}
+
+function saveToDisk(searches: SavedSearch[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(searches))
+}
+
 export default function Setup({ bootstrapping, error, onStart, onDone, onError }: Props) {
-  const [purpose, setPurpose] = useState('')
+  const [keywords, setKeywords] = useState<string[]>([])
+  const [draft, setDraft] = useState('')
+  const [location, setLocation] = useState('Melbourne, Australia')
+  const [saved, setSaved] = useState<SavedSearch[]>(loadSaved)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function addKeyword() {
+    const kw = draft.trim()
+    if (!kw || keywords.map(k => k.toLowerCase()).includes(kw.toLowerCase())) return
+    setKeywords(prev => [...prev, kw])
+    setDraft('')
+    inputRef.current?.focus()
+  }
+
+  function removeKeyword(kw: string) {
+    setKeywords(prev => prev.filter(k => k !== kw))
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') { e.preventDefault(); addKeyword() }
+    if (e.key === 'Backspace' && !draft && keywords.length > 0) {
+      setKeywords(prev => prev.slice(0, -1))
+    }
+  }
+
+  function saveSearch() {
+    if (keywords.length === 0) return
+    const entry: SavedSearch = {
+      id: Date.now().toString(),
+      name: keywords.join(', '),
+      keywords: [...keywords],
+    }
+    const updated = [entry, ...saved.filter(s => s.name !== entry.name)]
+    setSaved(updated)
+    saveToDisk(updated)
+  }
+
+  function loadSearch(entry: SavedSearch) {
+    setKeywords([...entry.keywords])
+    setDraft('')
+    inputRef.current?.focus()
+  }
+
+  function deleteSearch(id: string) {
+    const updated = saved.filter(s => s.id !== id)
+    setSaved(updated)
+    saveToDisk(updated)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!purpose.trim() || bootstrapping) return
+    if (keywords.length === 0 || bootstrapping) return
+    const loc = location.trim()
+    const purpose =
+      `Research agent for the following keywords: ${keywords.join(', ')}` +
+      `${loc ? ` in ${loc}` : ''}. ` +
+      `Search for relevant information, analyse patterns and trends, ` +
+      `and present clear findings for each keyword.`
     onStart()
     try {
-      const config = await bootstrap(purpose.trim())
-      onDone(config)
+      const config = await bootstrap(purpose)
+      onDone({ ...config, keywords, location: loc })
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unknown error')
     }
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>AI Agent</h1>
-        <p style={styles.subtitle}>Describe what you want your agent to do.</p>
+    <div className={styles.container}>
+      <div className={styles.card}>
+        <h1 className={styles.title}>AI Agent</h1>
+        <p className={styles.subtitle}>Add keywords, then hit Create Agent.</p>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <textarea
-            style={styles.textarea}
-            value={purpose}
-            onChange={e => setPurpose(e.target.value)}
-            placeholder="e.g. Research companies and write competitive analysis reports"
-            rows={5}
-            disabled={bootstrapping}
-          />
-          {error && <p style={styles.error}>{error}</p>}
-          <button style={styles.button} type="submit" disabled={bootstrapping || !purpose.trim()}>
-            {bootstrapping ? 'Configuring agent...' : 'Create Agent'}
-          </button>
+        <form onSubmit={handleSubmit} className={styles.form}>
+          <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
+            {keywords.map(kw => (
+              <span key={kw} className={styles.chip}>
+                {kw}
+                <button
+                  type="button"
+                  className={styles.chipX}
+                  onClick={ev => { ev.stopPropagation(); removeKeyword(kw) }}
+                  aria-label={`Remove ${kw}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <input
+              ref={inputRef}
+              className={styles.chipInput}
+              value={draft}
+              onChange={e => setDraft(e.target.value.slice(0, 50))}
+              onKeyDown={handleKeyDown}
+              onBlur={() => { if (draft.trim()) addKeyword() }}
+              placeholder={keywords.length === 0 ? 'Type a keyword, press Enter…' : 'Add another…'}
+              disabled={bootstrapping}
+              maxLength={50}
+            />
+          </div>
+
+          <div className={styles.locationRow}>
+            <span className={styles.locationLabel}>Location</span>
+            <input
+              className={styles.locationInput}
+              value={location}
+              onChange={e => setLocation(e.target.value)}
+              placeholder="e.g. Melbourne, Australia"
+              disabled={bootstrapping}
+            />
+          </div>
+
+          <div className={styles.hintRow}>
+            <p className={styles.charHint}>
+              {draft.length > 0
+                ? `${50 - draft.length} chars remaining`
+                : `${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} added`}
+            </p>
+            {keywords.length > 0 && (
+              <button
+                type="button"
+                className={styles.clearBtn}
+                onClick={() => { setKeywords([]); setDraft(''); inputRef.current?.focus() }}
+                disabled={bootstrapping}
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
+          {saved.length > 0 && (
+            <div className={styles.savedSection}>
+              <p className={styles.savedHeading}>Saved searches</p>
+              <div className={styles.savedList}>
+                {saved.map(s => (
+                  <div key={s.id} className={styles.savedRow} onClick={() => loadSearch(s)}>
+                    <div className={styles.savedChips}>
+                      {s.keywords.map(kw => (
+                        <span key={kw} className={styles.savedChip}>{kw}</span>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.savedDelete}
+                      onClick={ev => { ev.stopPropagation(); deleteSearch(s.id) }}
+                      aria-label="Delete saved search"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && <p className={styles.error}>{error}</p>}
+
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.saveBtn}
+              onClick={saveSearch}
+              disabled={keywords.length === 0 || bootstrapping}
+            >
+              Save search
+            </button>
+            <button
+              type="submit"
+              className={styles.createBtn}
+              disabled={bootstrapping || keywords.length === 0}
+            >
+              {bootstrapping ? 'Configuring agent…' : 'Create Agent'}
+            </button>
+          </div>
         </form>
 
         {bootstrapping && (
-          <p style={styles.hint}>
+          <p className={styles.loadingHint}>
             Claude is designing your agent's tools and behaviour. This takes ~10 seconds.
           </p>
         )}
       </div>
     </div>
   )
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '2rem',
-  },
-  card: {
-    background: '#1a1a1a',
-    borderRadius: '12px',
-    padding: '2.5rem',
-    width: '100%',
-    maxWidth: '560px',
-    border: '1px solid #2a2a2a',
-  },
-  title: {
-    margin: '0 0 0.5rem',
-    fontSize: '1.8rem',
-    fontWeight: 700,
-  },
-  subtitle: {
-    margin: '0 0 2rem',
-    color: '#888',
-    fontSize: '0.95rem',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1rem',
-  },
-  textarea: {
-    background: '#111',
-    border: '1px solid #333',
-    borderRadius: '8px',
-    color: '#e8e8e8',
-    fontSize: '0.95rem',
-    padding: '0.875rem',
-    resize: 'vertical',
-    outline: 'none',
-    fontFamily: 'inherit',
-  },
-  button: {
-    background: '#4f6ef7',
-    border: 'none',
-    borderRadius: '8px',
-    color: '#fff',
-    cursor: 'pointer',
-    fontSize: '1rem',
-    fontWeight: 600,
-    padding: '0.875rem',
-  },
-  error: {
-    color: '#f87171',
-    fontSize: '0.875rem',
-    margin: 0,
-  },
-  hint: {
-    color: '#666',
-    fontSize: '0.85rem',
-    marginTop: '1rem',
-    textAlign: 'center',
-  },
 }

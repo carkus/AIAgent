@@ -15,6 +15,13 @@ export async function bootstrap(purpose: string): Promise<AgentConfig> {
   return res.json();
 }
 
+export async function fetchFile(filename: string): Promise<string> {
+  const res = await fetch(`${API_URL}/file/${encodeURIComponent(filename)}`);
+  if (!res.ok) throw new Error('File not found');
+  const data = await res.json();
+  return data.content as string;
+}
+
 export async function runAgent(
   messages: { role: string; content: string }[],
   agentConfig: AgentConfig,
