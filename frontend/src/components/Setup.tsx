@@ -206,7 +206,7 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
     <div className={styles.container}>
       <div className={styles.card}>
         <h1 className={styles.title}>AI Agent</h1>
-        <p className={styles.subtitle}>Add keywords, then hit Create Agent.</p>
+        <p className={styles.subtitle}>Add keywords, then deploy Agent.</p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
@@ -363,7 +363,7 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
               className={styles.createBtn}
               disabled={bootstrapping || keywords.length === 0}
             >
-              {bootstrapping ? 'Configuring agent…' : 'Create Agent'}
+              {bootstrapping ? 'Configuring agent…' : 'Commission Agent'}
             </button>
           </div>
         </form>

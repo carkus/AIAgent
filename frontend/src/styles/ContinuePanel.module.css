@@ -1,7 +1,7 @@
 .toggleBtn {
   background: transparent;
   border: none;
-  color: #666;
+  color: #a7acb9;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -14,13 +14,13 @@
 }
 
 .toggleBtn:hover {
-  color: #999;
+  color: #d7dbe2;
 }
 
 .panel {
   width: 300px;
-  background: #0a0a0a;
-  border-left: 1px solid #1a1a1a;
+  background: #171a21;
+  border-left: 1px solid #2a2f3a;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -32,21 +32,21 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid #2a2f3a;
   flex-shrink: 0;
 }
 
 .panelTitle {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #d4d4d4;
+  color: #dfe2e8;
   margin: 0;
 }
 
 .closeBtn {
   background: transparent;
   border: none;
-  color: #666;
+  color: #a7acb9;
   cursor: pointer;
   font-size: 1rem;
   padding: 0;
@@ -59,7 +59,7 @@
 }
 
 .closeBtn:hover {
-  color: #999;
+  color: #d7dbe2;
 }
 
 .panelContent {
@@ -69,7 +69,7 @@
 }
 
 .placeholder {
-  color: #666;
+  color: #a7acb9;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -84,12 +84,12 @@
 }
 
 .placeholder p:first-child {
-  color: #999;
+  color: #d7dbe2;
   font-weight: 500;
 }
 
 .hint {
   font-size: 0.75rem;
-  color: #555;
+  color: #8b90a0;
   max-width: 90%;
 }

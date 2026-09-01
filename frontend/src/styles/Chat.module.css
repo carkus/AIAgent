@@ -10,7 +10,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid #2a2f3a;
   flex-shrink: 0;
   position: relative;
 }
@@ -22,7 +22,7 @@
 }
 
 .headerPurpose {
-  color: #555;
+  color: #9aa0af;
   font-size: 0.8rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -46,21 +46,29 @@
 }
 
 .resetBtn {
-  background: transparent;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
-  color: #555;
+  background: linear-gradient(135deg, #4f6ef7, #6d5ff5);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
   cursor: pointer;
-  font-size: 0.8rem;
-  padding: 0.3rem 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.65rem 1.5rem;
   flex-shrink: 0;
-  transition: border-color 0.15s, color 0.15s;
+  transition: transform 0.12s, box-shadow 0.15s, opacity 0.15s;
   margin-left: auto;
+  box-shadow: 0 3px 10px rgba(79, 110, 247, 0.35);
 }
 
 .resetBtn:hover {
-  border-color: #444;
-  color: #888;
+  opacity: 0.92;
+  box-shadow: 0 4px 14px rgba(79, 110, 247, 0.5);
+  transform: translateY(-1px);
+}
+
+.resetBtn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(79, 110, 247, 0.4);
 }
 
 .container {
@@ -82,15 +90,15 @@
   flex-wrap: wrap;
   gap: 0.4rem;
   padding: 0.5rem 1.25rem;
-  border-bottom: 1px solid #111;
+  border-bottom: 1px solid #2a2f3a;
   flex-shrink: 0;
 }
 
 .badge {
-  background: #111;
-  border: 1px solid #1f1f1f;
+  background: #171a21;
+  border: 1px solid #282c36;
   border-radius: 4px;
-  color: #3a3a3a;
+  color: #8b90a0;
   font-family: monospace;
   font-size: 0.68rem;
   padding: 0.1rem 0.4rem;
@@ -106,7 +114,7 @@
 }
 
 .emptyHint {
-  color: #333;
+  color: #7d8393;
   font-size: 0.85rem;
   margin: auto;
   text-align: center;
@@ -114,8 +122,8 @@
 
 .userBubble {
   align-self: flex-end;
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
+  background: linear-gradient(135deg, #232a4a 0%, #2a2350 100%);
+  border: 1px solid #3a3a6a;
   border-radius: 10px 10px 2px 10px;
   max-width: 70%;
   padding: 0.6rem 0.9rem;
@@ -128,7 +136,7 @@
 }
 
 .bubbleText {
-  color: #d4d4d4;
+  color: #dfe2e8;
   font-size: 0.88rem;
   line-height: 1.55;
   margin: 0;
@@ -138,7 +146,7 @@
 /* Markdown renderer for assistant messages */
 
 .markdown {
-  color: #d4d4d4;
+  color: #dfe2e8;
   font-size: 0.88rem;
   line-height: 1.6;
 }
@@ -152,16 +160,16 @@
 }
 
 .markdown h1 {
-  color: #e8e8e8;
+  color: #eceef2;
   font-size: 1.05rem;
   font-weight: 700;
   margin: 1.2rem 0 0.5rem;
   padding-bottom: 0.3rem;
-  border-bottom: 1px solid #222;
+  border-bottom: 1px solid #2a2f3a;
 }
 
 .markdown h2 {
-  background: #0a0a0f;
+  background: #191d30;
   border-left: 3px solid #4f6ef7;
   border-radius: 0 5px 5px 0;
   color: #d0d8f0;
@@ -173,7 +181,7 @@
 }
 
 .markdown h3 {
-  color: #ccc;
+  color: #d7dbe2;
   font-size: 0.9rem;
   font-weight: 600;
   margin: 0.9rem 0 0.3rem;
@@ -182,7 +190,7 @@
 .markdown h4,
 .markdown h5,
 .markdown h6 {
-  color: #aaa;
+  color: #c9cdd6;
   font-size: 0.85rem;
   font-weight: 600;
   margin: 0.75rem 0 0.25rem;
@@ -220,8 +228,8 @@
 }
 
 .markdown ol li {
-  background: #0c0c0f;
-  border: 1px solid #1e1e28;
+  background: #191c26;
+  border: 1px solid #292d3a;
   border-radius: 8px;
   counter-increment: md-item;
   padding: 0.7rem 0.9rem 0.7rem 2.9rem;
@@ -233,8 +241,8 @@
   position: absolute;
   left: 0.7rem;
   top: 0.7rem;
-  background: #111827;
-  border: 1px solid #1e2a40;
+  background: #182348;
+  border: 1px solid #24345a;
   border-radius: 4px;
   color: #7dd3fc;
   font-size: 0.68rem;
@@ -246,8 +254,8 @@
 }
 
 .markdown ol li a {
-  background: #131a28;
-  border: 1px solid #1e2a40;
+  background: #1a2338;
+  border: 1px solid #24345a;
   border-radius: 4px;
   color: #93b4d8;
   font-size: 0.8rem;
@@ -263,28 +271,28 @@
 }
 
 .markdown strong {
-  color: #f0f0f0;
+  color: #f5f6f8;
   font-weight: 600;
 }
 
 .markdown em {
-  color: #aaa;
+  color: #c9cdd6;
   font-style: italic;
 }
 
 .markdown code {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  background: #232833;
+  border: 1px solid #333846;
   border-radius: 3px;
-  color: #a78bfa;
+  color: #c4a9fa;
   font-family: 'Consolas', 'Courier New', monospace;
   font-size: 0.82rem;
   padding: 0.1rem 0.35rem;
 }
 
 .markdown pre {
-  background: #111;
-  border: 1px solid #222;
+  background: #171a21;
+  border: 1px solid #2a2f3a;
   border-radius: 6px;
   margin: 0.5rem 0;
   overflow-x: auto;
@@ -294,13 +302,13 @@
 .markdown pre code {
   background: none;
   border: none;
-  color: #c8c8c8;
+  color: #d7dbe2;
   padding: 0;
 }
 
 .markdown hr {
   border: none;
-  border-top: 1px solid #222;
+  border-top: 1px solid #2a2f3a;
   margin: 0.9rem 0;
 }
 
@@ -320,8 +328,8 @@
 }
 
 .markdown ul:has(li > a:only-child) li > a {
-  background: #0c1220;
-  border: 1px solid #1a2640;
+  background: #182348;
+  border: 1px solid #24345a;
   border-radius: 5px;
   color: #7dd3fc;
   font-size: 0.78rem;
@@ -338,8 +346,8 @@
 }
 
 .markdown blockquote {
-  border-left: 3px solid #333;
-  color: #888;
+  border-left: 3px solid #4f6ef7;
+  color: #b7bcc7;
   margin: 0.5rem 0;
   padding: 0 0 0 0.75rem;
 }
@@ -354,43 +362,43 @@
 }
 
 .markdown th {
-  background: #161616;
-  border: 1px solid #2a2a2a;
-  color: #aaa;
+  background: #20242f;
+  border: 1px solid #333846;
+  color: #c9cdd6;
   font-weight: 600;
   padding: 0.35rem 0.65rem;
   text-align: left;
 }
 
 .markdown td {
-  border: 1px solid #1e1e1e;
-  color: #c8c8c8;
+  border: 1px solid #292d3a;
+  color: #d7dbe2;
   padding: 0.3rem 0.65rem;
 }
 
 .markdown tr:nth-child(even) td {
-  background: #0d0d0d;
+  background: #191c26;
 }
 
 .workingText {
-  color: #3a3a3a;
+  color: #8b90a0;
   font-size: 0.8rem;
   font-style: italic;
   margin: 0.5rem 0 0;
 }
 
 .duration {
-  color: #555;
+  color: #9aa0af;
   font-size: 0.68rem;
   margin: 0.35rem 0 0;
 }
 
 .tokenBreakdown {
-  color: #444;
+  color: #8b90a0;
 }
 
 .rateLimit {
-  color: #444;
+  color: #8b90a0;
 }
 
 .error {
@@ -404,15 +412,15 @@
   display: flex;
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
-  border-top: 1px solid #1a1a1a;
+  border-top: 1px solid #2a2f3a;
   flex-shrink: 0;
 }
 
 .input {
-  background: #111;
-  border: 1px solid #2a2a2a;
+  background: #171a21;
+  border: 1px solid #2a2f3a;
   border-radius: 8px;
-  color: #d4d4d4;
+  color: #eceef2;
   flex: 1;
   font-family: inherit;
   font-size: 0.92rem;
