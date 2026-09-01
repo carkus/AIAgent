@@ -1,0 +1,26 @@
+[Unit]
+Description=AIAgent backend (gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=aiagent
+WorkingDirectory=/var/www/aiagent/backend
+EnvironmentFile=/var/www/aiagent/.env
+# Single worker PROCESS is required — rate_limit.py's counters are process-local.
+# --threads gives real concurrency for the streaming /agent endpoint without
+# violating that. --timeout must exceed the longest expected agent loop
+# (25 tool-call rounds x LLM latency) — this is the whole point of moving off
+# API Gateway's 29s cap, don't shrink it back down.
+ExecStart=/var/www/aiagent/venv/bin/gunicorn \
+    --workers 1 \
+    --threads 4 \
+    --worker-class gthread \
+    --timeout 300 \
+    --bind 127.0.0.1:8787 \
+    server:app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
