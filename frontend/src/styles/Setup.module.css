@@ -140,6 +140,7 @@
 .clearSmallBtn {
   background: #f87171;
   color: #fff;
+  align-self: flex-end;
 }
 
 .clearSmallBtn:hover:not(:disabled) {

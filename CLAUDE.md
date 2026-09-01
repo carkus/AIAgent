@@ -12,15 +12,26 @@ Two phases:
 
 ## Architecture
 
+Production and local dev both run the **same Flask app** (`backend/server.py`),
+streaming NDJSON to the browser — not the Lambda/API Gateway split this file
+used to describe:
+
 ```
-frontend (React/Vite)  →  API Gateway  →  Lambda (Python)  →  Claude API
-                                              │
-                                         exec() tool impls
-                                         written by Claude
+frontend (React/Vite)  →  nginx (droplet) / Vite proxy (dev)  →  Flask (server.py, gunicorn in prod)  →  Gemini ⟶ Ollama (dev-only fallback)
+                                                                        │
+                                                                  exec() tool impls
+                                                                  written by Gemini
 ```
 
-- **Bootstrap Lambda** (`handler.bootstrap_handler`) — one call, returns `AgentConfig` JSON
-- **Agent Lambda** (`handler.agent_handler`) — runs the full agentic loop, returns final response + tool call log
+An AWS SAM/Lambda path (`template.yaml`, `backend/src/handler.py`) still
+exists in the repo but is **dev-only tooling now** (`sam local`), not what's
+deployed — see [Deployment](#deployment) below. Don't extend `handler.py`
+expecting it to reach production.
+
+- **`server.py`** — Flask entry point for both `sam local`-replacement dev and the deployed gunicorn service; routes: `/bootstrap`, `/agent`, `/models`, `/file/<name>`
+- **`bootstrap.py`** (`generate_agent_config_stream`) — streams bootstrap progress, ends with `AgentConfig` JSON
+- **`agent_stream.py`** (`run_agent_stream`) — the agentic loop actually used in production (streams `tool_start`/`tool_result`/`done` events); `agent.py`'s non-streaming `run_agent` is dead code, unused by any deployed path
+- **`llm_client.py`** — provider cascade: Gemini (cloud) → Ollama (local-only; only reachable from `sam local`/`server.py` dev, never a deployed instance)
 - **Frontend** — three phases managed in `App.tsx`: `setup` → `bootstrapping` → `chat`
 
 ---
@@ -29,24 +40,26 @@ frontend (React/Vite)  →  API Gateway  →  Lambda (Python)  →  Claude API
 
 | File | Role |
 |------|------|
-| `backend/src/handler.py` | Lambda entry point; routes and CORS |
-| `backend/src/bootstrap.py` | Sends bootstrap prompt to Claude; parses `AgentConfig` |
-| `backend/src/agent.py` | Agentic loop: create → tool_use → execute → repeat |
-| `backend/src/tools.py` | `execute_tool()` — runs Claude-generated Python via `exec()` |
+| `backend/server.py` | Flask app — the actual runtime for dev and production (routes, CORS, rate-limit gate) |
+| `backend/src/bootstrap.py` | Streams the bootstrap call to Gemini/Ollama; parses `AgentConfig` |
+| `backend/src/agent_stream.py` | The agentic loop that actually runs in production: create → tool_use → execute → repeat, streamed |
+| `backend/src/llm_client.py` | Gemini → Ollama cascade (`create_chat_completion`), model listing for the Setup screen's picker |
+| `backend/src/rate_limit.py` | Per-IP rate limiting (process-local counters — see gunicorn `--workers 1` note in Deployment) |
+| `backend/src/tools.py` | `execute_tool()` — runs Gemini-generated Python via `exec()`; also the primitive tools (`fetch_page`, `search_jobs`) |
+| `backend/src/handler.py`, `backend/src/agent.py`, `template.yaml` | AWS SAM/Lambda path — dev-only (`sam local`), not deployed |
 | `frontend/src/api.ts` | Typed `fetch` wrappers for `/bootstrap` and `/agent` |
 | `frontend/src/types.ts` | Shared types: `AgentConfig`, `ToolDefinition`, `Message`, etc. |
 | `frontend/src/App.tsx` | Phase state machine |
 | `frontend/src/components/Setup.tsx` | Purpose input form |
 | `frontend/src/components/Chat.tsx` | Chat UI; owns message history and calls `runAgent()` |
 | `frontend/src/components/ToolActivity.tsx` | Renders tool call log inline under each assistant message |
-| `template.yaml` | SAM IaC — two Lambda functions, one API Gateway |
 
 ---
 
 ## Model and API Defaults
 
-- Model: `claude-opus-4-8` with `thinking: {"type": "adaptive"}` on all calls
-- No explicit `temperature` or `top_p` (incompatible with adaptive thinking)
+- Provider cascade (`llm_client.py`): **Gemini** (`gemini-3.6-flash`) → **Ollama** (`qwen2.5` default, local-only). Production is Gemini-only — no Ollama on the droplet for this app (see Deployment).
+- Per-agent `provider`/`ollama_model` choice made once on the Setup screen threads through both bootstrap and every agent-loop turn (`LlmProvider` in `types.ts`)
 - Bootstrap call uses a single user message; agent loop maintains full message history
 - Tool content blocks are passed back as `tool_result` in the next user turn
 
@@ -105,57 +118,66 @@ Controlled by `VITE_API_URL` env var. Defaults to `http://localhost:3000` (SAM l
 
 ## Local Development
 
+No SAM or Docker needed day-to-day — see `RUNNING_LOCALLY.md` for full setup. Short version:
+
 ```bash
-# Backend — in project root
-cp .env.example .env   # fill in ANTHROPIC_API_KEY
-sam build && sam local start-api --env-vars .env
+# Backend — in project root (reads credentials from env.json)
+python backend/server.py
 
 # Frontend — in a second terminal
 cd frontend && npm install && npm run dev
 ```
 
-SAM local listens on `localhost:3000`. Vite dev server on `localhost:5173`.
+`server.py` listens on `localhost:3000`; Vite dev server on `localhost:5173` and proxies `/bootstrap`+`/agent` to it. `sam local start-api` still works as an alternative (exercises `handler.py`/Lambda code instead) but isn't the day-to-day path.
 
 ---
 
 ## Deployment
 
-```bash
-sam build
-sam deploy --guided          # first time — saves config to samconfig.toml
-sam deploy                   # subsequent deploys
+Production is a **systemd + nginx droplet** (`agent.carkus.com` on the
+carkus.com box), not AWS — the AWS SAM/Lambda path (`template.yaml`) is kept
+only for `sam local` dev and is not deployed anywhere. Full first-time setup
+and rationale: [`DEPLOY.md`](./DEPLOY.md).
 
-# After deploy, build frontend with the API Gateway URL from SAM outputs:
-cd frontend
-VITE_API_URL=https://<api-id>.execute-api.<region>.amazonaws.com/Prod npm run build
+- Backend runs as `gunicorn server:app` under the `aiagent` systemd unit (`deploy/aiagent.service`), single worker process + 4 threads (rate-limit counters are process-local — don't raise `--workers`)
+- nginx (`deploy/nginx-aiagent.conf`) serves the built frontend and reverse-proxies `/bootstrap`, `/agent`, `/models`, `/file/` to gunicorn on `127.0.0.1:8787`; one shared HTTP Basic Auth login gates the whole app (frontend + API)
+- Production is **Gemini-only** — the droplet's existing Ollama instance is sized for a different app's tiny fallback model and can't fit this app's bootstrap-quality model
+- Secrets live in `/var/www/aiagent/.env` (`EnvironmentFile=`, mode 600), not inline in the unit file
+
+Ship a code change with:
+
+```bash
+deploy/redeploy.sh backend    # sync backend/src + requirements, restart the service
+deploy/redeploy.sh frontend   # npm run build locally, ship dist/, fix ownership
+deploy/redeploy.sh all        # both
 ```
 
-Host `frontend/dist/` on S3+CloudFront, Amplify, or Netlify.
+Run from the repo root; requires SSH access to the droplet (no git or CI there — code is shipped as a tarball).
 
 ---
 
 ## Current Limitations
 
-### 1. API Gateway 29-second timeout
-Long agent loops (many tool calls) will be cut off. **Next step:** switch the agent endpoint to a Lambda Function URL with response streaming, which has no timeout and enables SSE to the browser.
+### 1. ~~API Gateway 29-second timeout~~ — resolved in production
+Production doesn't go through API Gateway at all (see Deployment) — gunicorn's `--timeout 300` covers the longest expected agent loop. Only the dev-only `sam local` path still has this ceiling.
 
 ### 2. Tool execution security (`exec()` in-process)
-Claude-generated code runs inside the Lambda process. A builtins allowlist is in place but is not a full sandbox. **Next step:** invoke a separate "tool runner" Lambda per tool call for process isolation, or adopt RestrictedPython.
+Gemini-generated code runs in-process (Lambda in dev, the `aiagent` gunicorn worker in prod). A builtins allowlist is in place but is not a full sandbox. **Next step:** process isolation per tool call, or adopt RestrictedPython.
 
-### 3. No conversation persistence
-Full message history lives in React state. A page refresh loses everything. **Next step:** DynamoDB session table; frontend sends a `session_id` cookie; backend loads/stores history server-side.
+### 3. No server-side conversation persistence
+Chat history lives in React state; a "Save chat" button (`chatStorage.ts`) persists finished/in-progress conversations to the browser's `localStorage` so a refresh doesn't lose them, but nothing is stored server-side — saved chats don't follow the user across browsers/devices. **Next step, if needed:** a session table server-side.
 
-### 4. No streaming / progress feedback
-The UI blocks until the entire agent loop completes. **Next step:** Lambda Function URLs + `client.messages.stream()` + SSE to the browser; stream tokens and tool-call events as they happen.
+### 4. ~~No streaming / progress feedback~~ — resolved
+`agent_stream.py`'s `run_agent_stream` streams `tool_start`/`tool_result`/`done` NDJSON events end-to-end (Flask → nginx `proxy_buffering off` → `Chat.tsx`'s `StreamEvent` handling); the UI shows tool calls live as they happen, not just after the loop completes.
 
-### 5. No authentication
-API endpoints are open. **Next step:** API Gateway usage plans for simple key-based auth, or Cognito for full user accounts.
+### 5. Authentication is perimeter-only
+Production sits behind one shared nginx HTTP Basic Auth login (frontend + API alike — see Deployment) rather than per-user accounts; anyone with that one login can use the whole app. Fine for a single-operator/demo deployment, not for multi-user access control.
 
 ### 6. File output is ephemeral
-The `save_output` tool writes to Lambda `/tmp/` which is destroyed after the invocation. **Next step:** write to S3 and return a pre-signed URL; render it as a download link in the chat UI.
+The `save_output` tool writes to the backend process's `/tmp/`, served back via `GET /file/<name>` — lost on restart/redeploy, and (in prod) shared across all users of the one shared login rather than scoped per session. **Next step:** write to S3 (or equivalent) and return a pre-signed URL.
 
-### 7. AgentConfig not persisted
-The bootstrap result is held in React state. Refreshing the page requires re-running the bootstrap call. **Next step:** store `AgentConfig` in DynamoDB alongside the session; restore from `session_id` in `localStorage` on page load.
+### 7. AgentConfig not persisted server-side
+A saved chat's `AgentConfig` round-trips through `localStorage` (see #3) — good enough to reload the same browser's saved chats, but there's no cross-device or server-side store.
 
 ### 8. Bootstrap quality is input-dependent
-Vague purpose descriptions produce generic tools. **Next step:** add a structured form (goal, data sources, output format) and a review/regenerate step before launching the chat.
+Vague purpose descriptions produce generic tools. The Setup screen's Agent Type preset dropdown (`AGENT_TEMPLATES` in `Setup.tsx`) narrows this by giving Gemini a purpose-built prompt template per type rather than a freeform box, but a structured review/regenerate step before launching chat is still a possible next step.

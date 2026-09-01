@@ -346,6 +346,21 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             />
           </div>
 
+          {keywords.length > 0 && (
+            <button
+              type="button"
+              className={styles.clearSmallBtn}
+              onClick={() => {
+                setKeywords([])
+                setDraft('')
+                inputRef.current?.focus()
+              }}
+              disabled={bootstrapping}
+            >
+              Clear keywords
+            </button>
+          )}
+
           <div className={styles.locationRow}>
             <span className={styles.locationLabel}>Location</span>
             <div className={styles.locationInputWrap}>
