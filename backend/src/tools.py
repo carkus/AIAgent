@@ -100,6 +100,82 @@ def fetch_page(url: str) -> dict:
         return {'error': str(exc), 'url': url}
 
 
+def search_jobs(what: str, where: str = "", country: str = "au",
+                 results_per_page: int = 20, page: int = 1) -> dict:
+    """
+    Built-in primitive: real job search via Adzuna's Job Search API
+    (https://developer.adzuna.com/), not scraping. Exists because fetch_page
+    against SEEK/Indeed reliably 403s from the droplet's datacenter IP —
+    real bot-management, not something a spoofed User-Agent gets past.
+
+    Requires ADZUNA_APP_ID / ADZUNA_APP_KEY env vars (free tier at
+    developer.adzuna.com). Returns {"status": "no_credentials", ...} if unset
+    so the agent can tell the user rather than fail silently.
+
+    Response shape matches what ToolActivity.tsx's normaliseJobData/JobCard
+    already render: {listings: [...], total_count, mean_salary}.
+    """
+    import requests
+    import os
+
+    app_id = os.environ.get("ADZUNA_APP_ID")
+    app_key = os.environ.get("ADZUNA_APP_KEY")
+    if not app_id or not app_key:
+        return {
+            "status": "no_credentials",
+            "message": (
+                "ADZUNA_APP_ID/ADZUNA_APP_KEY are not configured, so live job "
+                "search is unavailable. Sign up free at developer.adzuna.com."
+            ),
+        }
+
+    page = max(1, page)
+    url = f"https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
+    params = {
+        "app_id": app_id,
+        "app_key": app_key,
+        "results_per_page": min(max(results_per_page, 1), 50),
+        "what": what,
+        "content-type": "application/json",
+    }
+    if where:
+        params["where"] = where
+
+    try:
+        r = requests.get(url, params=params, timeout=15)
+        if r.status_code != 200:
+            return {"status_code": r.status_code, "error": r.text[:500], "listings": []}
+
+        data = r.json()
+        listings = []
+        for job in data.get("results", []):
+            company = job.get("company") or {}
+            location = job.get("location") or {}
+            category = job.get("category") or {}
+            listings.append({
+                "title": job.get("title"),
+                "company": company.get("display_name"),
+                "location": location.get("display_name"),
+                "salary_min": job.get("salary_min"),
+                "salary_max": job.get("salary_max"),
+                "redirect_url": job.get("redirect_url"),
+                "description": job.get("description"),
+                "created": job.get("created"),
+                "contract_type": job.get("contract_type"),
+                "category": category.get("label"),
+            })
+
+        return {
+            "status_code": r.status_code,
+            "total_count": data.get("count"),
+            "returned": len(listings),
+            "mean_salary": data.get("mean"),
+            "listings": listings,
+        }
+    except Exception as exc:
+        return {"status": "error", "error": str(exc), "listings": []}
+
+
 def execute_tool(implementation: str, inputs: dict) -> object:
     """Execute a Claude-generated tool implementation in a restricted namespace.
 

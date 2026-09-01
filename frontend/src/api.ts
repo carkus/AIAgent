@@ -1,11 +1,18 @@
-import type { AgentConfig, LlmProvider, StreamEvent } from './types';
+import type { AgentConfig, BootstrapStreamEvent, LlmProvider, StreamEvent } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
+/**
+ * Streams /bootstrap's NDJSON events (status/tool/done/error) — same framing
+ * as runAgent() below — so the caller can show live progress instead of a
+ * static "please wait". Resolves with the final AgentConfig on `done`,
+ * rejects on `error` or a non-2xx response.
+ */
 export async function bootstrap(
   purpose: string,
   provider?: LlmProvider,
   ollamaModel?: string | null,
+  onProgress?: (event: BootstrapStreamEvent) => void,
 ): Promise<AgentConfig> {
   const res = await fetch(`${API_URL}/bootstrap`, {
     method: 'POST',
@@ -20,7 +27,45 @@ export async function bootstrap(
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? 'Bootstrap failed');
   }
-  return res.json();
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let config: AgentConfig | null = null;
+  let errorMessage: string | null = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        let event: BootstrapStreamEvent;
+        try {
+          event = JSON.parse(trimmed) as BootstrapStreamEvent;
+        } catch {
+          continue; // ignore malformed lines
+        }
+        onProgress?.(event);
+        if (event.type === 'done') config = event.config;
+        else if (event.type === 'error') errorMessage = event.message;
+      }
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+
+  if (errorMessage) throw new Error(errorMessage);
+  if (!config) throw new Error('Bootstrap stream ended without a result');
+  return config;
 }
 
 /** Names of models currently pulled in the developer's local Ollama install. [] if unreachable. */

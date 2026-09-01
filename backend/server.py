@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 import tempfile
 from flask import Flask, Response, jsonify, request, stream_with_context
-from bootstrap import generate_agent_config
+from bootstrap import generate_agent_config_stream
 from agent_stream import run_agent_stream
 from llm_client import list_ollama_models
 import rate_limit
@@ -60,11 +60,18 @@ def bootstrap():
         rate_limit_error = rate_limit.check(rate_limit.client_ip(request))
         if rate_limit_error:
             return jsonify({"error": rate_limit_error}), 429
-    try:
-        config = generate_agent_config(purpose, provider, model)
-        return jsonify(config)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    def generate():
+        try:
+            for event in generate_agent_config_stream(purpose, provider, model):
+                yield json.dumps(event) + "\n"
+        except Exception as e:
+            yield json.dumps({"type": "error", "message": str(e)}) + "\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},
+    )
 
 
 @app.route("/models", methods=["GET", "OPTIONS"])

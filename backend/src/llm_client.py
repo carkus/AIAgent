@@ -48,7 +48,7 @@ _PROVIDERS = [
 ]
 
 
-def create_chat_completion(provider: str | None = None, model: str | None = None, **kwargs):
+def create_chat_completion(provider: str | None = None, model: str | None = None, _meta: dict | None = None, **kwargs):
     """
     Drop-in replacement for `client.chat.completions.create(...)`. Do not pass
     `model` as a plain kwarg — use the `model` parameter below instead.
@@ -60,6 +60,16 @@ def create_chat_completion(provider: str | None = None, model: str | None = None
     `model` overrides the default model for whichever provider ends up serving
     the call (currently only meaningful for "ollama" — e.g. trying llama3.2 or
     qwen2.5-coder instead of the OLLAMA_MODEL default; Gemini's model is fixed).
+
+    `_meta`, when given, is populated in place with which provider actually
+    served the call (or attempted to) so a caller can report it to the user —
+    e.g. bootstrap.py's streaming progress feed. Optional and backward
+    compatible: existing callers that don't pass it see no change in behaviour.
+      _meta["used"]   = {"provider": ..., "model": ...} on success, None if every
+                        provider failed
+      _meta["failed"] = [{"provider": ..., "model": ...}, ...] for every
+                        provider that was tried and failed before either a
+                        success or total failure
 
     Raises RuntimeError only if every eligible provider fails.
     """
@@ -76,11 +86,17 @@ def create_chat_completion(provider: str | None = None, model: str | None = None
             response = client.chat.completions.create(model=use_model, **kwargs)
             if last_error is not None:
                 logger.warning("LLM provider %s failed (%s); fell back to %s", last_error[0], last_error[1], name)
+            if _meta is not None:
+                _meta["used"] = {"provider": name, "model": use_model}
             return response
         except Exception as e:
             logger.warning("LLM provider %s (%s) failed: %s", name, use_model, e)
+            if _meta is not None:
+                _meta.setdefault("failed", []).append({"provider": name, "model": use_model})
             last_error = (name, e)
 
+    if _meta is not None:
+        _meta["used"] = None
     raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
 
 

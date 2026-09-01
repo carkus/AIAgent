@@ -1,17 +1,41 @@
 import json
 import time
 from llm_client import create_chat_completion
-from tools import execute_tool, fetch_page
+from tools import execute_tool, fetch_page, search_jobs
 
 _PRIMITIVE_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_jobs",
+            "description": (
+                "Search live job listings via the Adzuna Job Search API — a real API, not "
+                "scraping. Use this for ANY job search, salary research, or job-market task. "
+                "Prefer this over fetch_page against SEEK/Indeed/LinkedIn: those block "
+                "datacenter traffic with a 403 regardless of headers, this doesn't."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "what": {"type": "string", "description": "Job title or keywords, e.g. 'software engineer'"},
+                    "where": {"type": "string", "description": "Location, e.g. 'Melbourne'. Optional — omit for nationwide."},
+                    "country": {"type": "string", "description": "Two-letter Adzuna country code, default 'au'."},
+                    "results_per_page": {"type": "integer", "description": "Max 50, default 20."},
+                    "page": {"type": "integer", "description": "Page number for pagination, default 1."},
+                },
+                "required": ["what"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
             "name": "fetch_page",
             "description": (
                 "Fetch any public web page and return its clean text content (HTML, scripts, "
-                "and SVG stripped). Use this to read job listings, salary guides, company pages, "
-                "or any web URL. Prefer this over generating your own fetch tool."
+                "and SVG stripped). Use this for company pages, news, or any general URL. "
+                "For job listings/salary data, use search_jobs instead — job boards block "
+                "scraping from this server's IP."
             ),
             "parameters": {
                 "type": "object",
@@ -26,7 +50,7 @@ _PRIMITIVE_TOOLS = [
 
 _SEARCH_TOOL_NAMES = {
     "web_search", "search_web", "google_search", "bing_search",
-    "search", "search_jobs", "search_internet", "internet_search",
+    "search", "search_internet", "internet_search",
 }
 
 
@@ -45,17 +69,16 @@ def run_agent_stream(messages: list, agent_config: dict):
 ---
 CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
 
-1. DO NOT call `web_search` or any search tool. There is no search engine connected. Every call returns 0 results and wastes a turn.
+1. DO NOT call `web_search` or any generic search tool. There is no search engine connected. Every call returns 0 results and wastes a turn.
 
-2. USE `fetch_page` to get live data directly from job boards and websites:
-   - SEEK (Australia's largest job board) URL pattern:
-     https://www.seek.com.au/{keyword}-jobs/in-{location}
-     e.g. https://www.seek.com.au/flutter-developer-jobs/in-Melbourne-VIC
-          https://www.seek.com.au/software-engineer-jobs/in-Melbourne-VIC
-   - Replace spaces with hyphens in the keyword.
-   - The page text will contain job counts, titles, companies, salaries, and listing descriptions.
+2. For job search, salary research, or job-market questions, USE `search_jobs` — it calls a real
+   job search API and returns structured listings (title, company, location, salary, apply URL).
+   Do NOT use `fetch_page` against SEEK/Indeed/LinkedIn or similar job boards — they block this
+   server's IP with a 403 regardless of headers, so it will not work.
 
-3. MANDATORY OUTPUT: When all fetches are done, write the actual findings — listing counts, job titles, salary ranges, company names. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
+3. USE `fetch_page` for everything else — company pages, news, general URLs.
+
+4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — listing counts, job titles, salary ranges, company names. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
 ---"""
 
     tool_definitions = agent_config["tools"]
@@ -175,12 +198,20 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
 
                 if tool_name == "fetch_page":
                     result = fetch_page(tool_inputs.get("url", ""))
+                elif tool_name == "search_jobs":
+                    result = search_jobs(
+                        what=tool_inputs.get("what", ""),
+                        where=tool_inputs.get("where", ""),
+                        country=tool_inputs.get("country") or "au",
+                        results_per_page=tool_inputs.get("results_per_page") or 20,
+                        page=tool_inputs.get("page") or 1,
+                    )
                 elif tool_name in _SEARCH_TOOL_NAMES:
                     result = {
                         "error": (
-                            "No search engine is connected. Do NOT call this tool again. "
-                            "Use fetch_page with a direct URL instead — "
-                            "e.g. fetch_page('https://www.seek.com.au/software-engineer-jobs/in-Melbourne-VIC')"
+                            "No generic search engine is connected. Do NOT call this tool again. "
+                            "For job listings/salary data, call search_jobs instead. "
+                            "For any other URL, use fetch_page."
                         )
                     }
                 else:

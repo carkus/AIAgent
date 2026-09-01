@@ -50,3 +50,16 @@ export type StreamEvent =
       };
     }
   | { type: 'error'; message: string }
+
+export interface ModelAttempt {
+  provider: string
+  model: string
+}
+
+// Stream events emitted by /bootstrap (backend/src/bootstrap.py:generate_agent_config_stream)
+export type BootstrapStreamEvent =
+  | { type: 'status'; message: string }
+  | { type: 'tool'; name: string }
+  | { type: 'model'; used: ModelAttempt | null; failed: ModelAttempt[] }
+  | { type: 'done'; config: AgentConfig }
+  | { type: 'error'; message: string }

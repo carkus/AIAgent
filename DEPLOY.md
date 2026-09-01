@@ -46,6 +46,8 @@ Create this as the `aiagent` user, mode 600 — **not** inline `Environment=` li
 ```bash
 sudo -u aiagent tee /var/www/aiagent/.env > /dev/null <<'EOF'
 GEMINI_API_KEY=<real key>
+ADZUNA_APP_ID=<real id>
+ADZUNA_APP_KEY=<real key>
 RATE_LIMIT_PER_MINUTE=5
 RATE_LIMIT_PER_DAY=50
 EOF

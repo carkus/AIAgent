@@ -1,7 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { bootstrap, listOllamaModels } from '../api'
-import type { AgentConfig, LlmProvider } from '../types'
+import type { AgentConfig, BootstrapStreamEvent, LlmProvider, ModelAttempt } from '../types'
 import styles from '../styles/Setup.module.css'
+
+interface ModelInfo {
+  used: ModelAttempt | null
+  failed: ModelAttempt[]
+}
+
+function formatModelInfo({ used, failed }: ModelInfo): string {
+  const failedNames = failed.map(f => `${f.provider}:${f.model}`)
+  if (used) {
+    const usedName = `${used.provider}:${used.model}`
+    return failedNames.length > 0
+      ? `Model: ${usedName} (fell back from ${failedNames.join(', ')})`
+      : `Model: ${usedName}`
+  }
+  return failedNames.length > 0
+    ? `Model attempt failed: ${failedNames.join(', ')}`
+    : 'Model: unknown'
+}
 
 interface Props {
   bootstrapping: boolean
@@ -40,7 +58,14 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [saved, setSaved] = useState<SavedSearch[]>(loadSaved)
+  const [progress, setProgress] = useState<string | null>(null)
+  const [toolsSoFar, setToolsSoFar] = useState<string[]>([])
+  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([])
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const locationDebounceRef = useRef<number | undefined>(undefined)
+  const locationAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (provider !== 'ollama' || modelsLoaded) return
@@ -51,6 +76,57 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
     })
   }, [provider, modelsLoaded])
 
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(locationDebounceRef.current)
+      locationAbortRef.current?.abort()
+    }
+  }, [])
+
+  // Free, keyless geocoding via OpenStreetMap Nominatim — matches this
+  // workspace's "no API key for this" pattern (e.g. ChattyPrayers.Api's
+  // Open-Meteo weather context). Debounced to respect Nominatim's ~1 req/sec
+  // usage policy; only fires past 3 characters.
+  async function fetchLocationSuggestions(query: string) {
+    locationAbortRef.current?.abort()
+    const controller = new AbortController()
+    locationAbortRef.current = controller
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=0&limit=5&q=${encodeURIComponent(query)}`,
+        { signal: controller.signal },
+      )
+      if (!res.ok) return
+      const data = await res.json()
+      const names: string[] = Array.isArray(data)
+        ? data.map((d: { display_name?: string }) => d.display_name).filter((n): n is string => Boolean(n))
+        : []
+      setLocationSuggestions(names)
+      setShowLocationSuggestions(true)
+    } catch {
+      // Aborted (superseded by a newer keystroke) or offline — free-text
+      // location still works fine without a suggestion.
+    }
+  }
+
+  function handleLocationChange(value: string) {
+    setLocation(value)
+    window.clearTimeout(locationDebounceRef.current)
+    const query = value.trim()
+    if (query.length < 3) {
+      setLocationSuggestions([])
+      setShowLocationSuggestions(false)
+      return
+    }
+    locationDebounceRef.current = window.setTimeout(() => fetchLocationSuggestions(query), 400)
+  }
+
+  function selectLocation(name: string) {
+    setLocation(name)
+    setLocationSuggestions([])
+    setShowLocationSuggestions(false)
+  }
+
   function addKeyword() {
     const kw = draft.trim()
     if (!kw || keywords.map(k => k.toLowerCase()).includes(kw.toLowerCase())) return
@@ -58,11 +134,6 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
     setKeywords(next)
     setDraft('')
     inputRef.current?.focus()
-    // Auto-save the accumulated keyword set
-    const entry: SavedSearch = { id: Date.now().toString(), name: next.join(', '), keywords: next }
-    const updated = [entry, ...saved.filter(s => s.name !== entry.name)]
-    setSaved(updated)
-    saveToDisk(updated)
   }
 
   function removeKeyword(kw: string) {
@@ -110,8 +181,21 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
       `Search for relevant information, analyse patterns and trends, ` +
       `and present clear findings for each keyword.`
     onStart()
+    setProgress(null)
+    setToolsSoFar([])
+    setModelInfo(null)
+    function handleProgress(event: BootstrapStreamEvent) {
+      if (event.type === 'status') setProgress(event.message)
+      else if (event.type === 'tool') setToolsSoFar(prev => [...prev, event.name])
+      else if (event.type === 'model') setModelInfo({ used: event.used, failed: event.failed })
+    }
     try {
-      const config = await bootstrap(purpose, provider, provider === 'ollama' ? ollamaModel : null)
+      const config = await bootstrap(
+        purpose,
+        provider,
+        provider === 'ollama' ? ollamaModel : null,
+        handleProgress,
+      )
       onDone({ ...config, keywords, location: loc, provider, ollama_model: provider === 'ollama' ? ollamaModel : null })
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unknown error')
@@ -154,13 +238,27 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
 
           <div className={styles.locationRow}>
             <span className={styles.locationLabel}>Location</span>
-            <input
-              className={styles.locationInput}
-              value={location}
-              onChange={e => setLocation(e.target.value)}
-              placeholder="e.g. Melbourne, Australia"
-              disabled={bootstrapping}
-            />
+            <div className={styles.locationInputWrap}>
+              <input
+                className={styles.locationInput}
+                value={location}
+                onChange={e => handleLocationChange(e.target.value)}
+                onFocus={() => { if (locationSuggestions.length > 0) setShowLocationSuggestions(true) }}
+                onBlur={() => window.setTimeout(() => setShowLocationSuggestions(false), 150)}
+                placeholder="e.g. Melbourne, Australia"
+                disabled={bootstrapping}
+                autoComplete="off"
+              />
+              {showLocationSuggestions && locationSuggestions.length > 0 && (
+                <ul className={styles.locationSuggestions}>
+                  {locationSuggestions.map(name => (
+                    <li key={name} onMouseDown={() => selectLocation(name)}>
+                      {name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
           <div className={styles.locationRow}>
@@ -213,14 +311,24 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
                 : `${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} added`}
             </p>
             {keywords.length > 0 && (
-              <button
-                type="button"
-                className={styles.clearBtn}
-                onClick={() => { setKeywords([]); setDraft(''); inputRef.current?.focus() }}
-                disabled={bootstrapping}
-              >
-                Clear all
-              </button>
+              <div className={styles.hintActions}>
+                <button
+                  type="button"
+                  className={styles.saveSmallBtn}
+                  onClick={saveSearch}
+                  disabled={bootstrapping}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className={styles.clearSmallBtn}
+                  onClick={() => { setKeywords([]); setDraft(''); inputRef.current?.focus() }}
+                  disabled={bootstrapping}
+                >
+                  Clear all
+                </button>
+              </div>
             )}
           </div>
 
@@ -249,17 +357,7 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
             </div>
           )}
 
-          {error && <p className={styles.error}>{error}</p>}
-
           <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.saveBtn}
-              onClick={saveSearch}
-              disabled={keywords.length === 0 || bootstrapping}
-            >
-              Save search
-            </button>
             <button
               type="submit"
               className={styles.createBtn}
@@ -270,12 +368,31 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
           </div>
         </form>
 
-        {bootstrapping && (
-          <p className={styles.loadingHint}>
-            {provider === 'ollama'
-              ? `${ollamaModel ?? 'Your local model'} is designing your agent's tools and behaviour. This may take longer than the cloud default.`
-              : 'Designing your agent\'s tools and behaviour. This takes ~10 seconds.'}
-          </p>
+        {(bootstrapping || modelInfo || error) && (
+          <div className={styles.loadingHint}>
+            {modelInfo && (
+              <p className={styles.modelInfoLine}>{formatModelInfo(modelInfo)}</p>
+            )}
+            {bootstrapping ? (
+              <>
+                <p>
+                  {progress ??
+                    (provider === 'ollama'
+                      ? `${ollamaModel ?? 'Your local model'} is designing your agent's tools and behaviour. This may take longer than the cloud default.`
+                      : 'Designing your agent\'s tools and behaviour…')}
+                </p>
+                {toolsSoFar.length > 0 && (
+                  <ul className={styles.loadingTools}>
+                    {toolsSoFar.map(name => (
+                      <li key={name}>✓ {name}</li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            ) : error ? (
+              <p className={styles.error}>{error}</p>
+            ) : null}
+          </div>
         )}
       </div>
     </div>
