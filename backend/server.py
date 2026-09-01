@@ -3,7 +3,7 @@ Local development server with streaming support.
 Replaces `sam local start-api` for the agent endpoint.
 
 Usage:
-    pip install flask anthropic requests
+    pip install flask openai requests
     python backend/server.py
 
 Reads credentials from env.json in the project root (same file used by SAM local).
@@ -30,6 +30,8 @@ import tempfile
 from flask import Flask, Response, jsonify, request, stream_with_context
 from bootstrap import generate_agent_config
 from agent_stream import run_agent_stream
+from llm_client import list_ollama_models
+import rate_limit
 
 app = Flask(__name__)
 
@@ -50,11 +52,26 @@ def bootstrap():
     purpose = (body or {}).get("purpose", "").strip()
     if not purpose:
         return jsonify({"error": "purpose is required"}), 400
+    provider = ((body or {}).get("provider") or "").strip() or None
+    model = ((body or {}).get("ollama_model") or "").strip() or None
+    # Only rate-limit requests that actually spend Gemini quota — a local-only
+    # request costs nothing, so don't burn a caller's rate-limit budget on it.
+    if provider != "ollama":
+        rate_limit_error = rate_limit.check(rate_limit.client_ip(request))
+        if rate_limit_error:
+            return jsonify({"error": rate_limit_error}), 429
     try:
-        config = generate_agent_config(purpose)
+        config = generate_agent_config(purpose, provider, model)
         return jsonify(config)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/models", methods=["GET", "OPTIONS"])
+def models():
+    if request.method == "OPTIONS":
+        return "", 204
+    return jsonify({"models": list_ollama_models()})
 
 
 @app.route("/file/<path:filename>", methods=["GET"])
@@ -74,6 +91,11 @@ def agent():
     body = request.get_json()
     messages = (body or {}).get("messages", [])
     agent_config = (body or {}).get("agent_config", {})
+
+    if agent_config.get("provider") != "ollama":
+        rate_limit_error = rate_limit.check(rate_limit.client_ip(request))
+        if rate_limit_error:
+            return jsonify({"error": rate_limit_error}), 429
 
     def generate():
         try:

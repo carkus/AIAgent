@@ -78,6 +78,15 @@ def fetch_page(url: str) -> dict:
         ex.feed(r.text)
         text = '\n'.join(ex.parts)
         text = re.sub(r'\n{3,}', '\n\n', text)
+
+        # Extract listing count from page text (e.g. "430 software engineer jobs in Melbourne")
+        count_match = re.search(r'\b(\d[\d,]*)\s+(?:\w+\s+){0,5}?jobs?\b', text[:2000], re.IGNORECASE)
+        listing_count = None
+        if count_match:
+            n = int(count_match.group(1).replace(',', ''))
+            if n > 0:
+                listing_count = n
+
         limit = 20000
         return {
             'status_code': r.status_code,
@@ -85,6 +94,7 @@ def fetch_page(url: str) -> dict:
             'content': text[:limit],
             'char_count': len(text),
             'truncated': len(text) > limit,
+            'listing_count': listing_count,
         }
     except Exception as exc:
         return {'error': str(exc), 'url': url}
@@ -110,7 +120,8 @@ def execute_tool(implementation: str, inputs: dict) -> object:
     namespace = {
         "__builtins__": _SAFE_BUILTINS,
         "inputs": inputs,
-        **inputs,           # bare names: query, location, filename, etc.
+        "input_data": inputs,   # alias — Claude sometimes generates this name
+        **inputs,               # bare names: query, location, filename, etc.
         "requests": requests,
         "json": json,
         "os": os,

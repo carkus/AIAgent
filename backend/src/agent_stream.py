@@ -1,27 +1,33 @@
 import json
 import time
-import anthropic
+from llm_client import create_chat_completion
 from tools import execute_tool, fetch_page
-
-client = anthropic.Anthropic()
 
 _PRIMITIVE_TOOLS = [
     {
-        "name": "fetch_page",
-        "description": (
-            "Fetch any public web page and return its clean text content (HTML, scripts, "
-            "and SVG stripped). Use this to read job listings, salary guides, company pages, "
-            "or any web URL. Prefer this over generating your own fetch tool."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "url": {"type": "string", "description": "Full URL to fetch"}
+        "type": "function",
+        "function": {
+            "name": "fetch_page",
+            "description": (
+                "Fetch any public web page and return its clean text content (HTML, scripts, "
+                "and SVG stripped). Use this to read job listings, salary guides, company pages, "
+                "or any web URL. Prefer this over generating your own fetch tool."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Full URL to fetch"}
+                },
+                "required": ["url"],
             },
-            "required": ["url"],
         },
     }
 ]
+
+_SEARCH_TOOL_NAMES = {
+    "web_search", "search_web", "google_search", "bing_search",
+    "search", "search_jobs", "search_internet", "internet_search",
+}
 
 
 def run_agent_stream(messages: list, agent_config: dict):
@@ -51,64 +57,80 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
 
 3. MANDATORY OUTPUT: When all fetches are done, write the actual findings — listing counts, job titles, salary ranges, company names. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
 ---"""
+
     tool_definitions = agent_config["tools"]
 
     tools = _PRIMITIVE_TOOLS + [
         {
-            "name": t["name"],
-            "description": t["description"],
-            "input_schema": t["input_schema"],
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["input_schema"],
+            },
         }
         for t in tool_definitions
     ]
 
     impl_map = {t["name"]: t["implementation"] for t in tool_definitions}
-    current_messages = list(messages)
+    provider = agent_config.get("provider")
+    model = agent_config.get("ollama_model")
+
+    # Build initial message list: system prompt first, then conversation history
+    current_messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    for m in messages:
+        current_messages.append({"role": m["role"], "content": m["content"]})
+
     tool_calls_log = []
     started_at = time.time()
     total_input_tokens = 0
     total_output_tokens = 0
-    rate_limits = {}
     nudged = False
+    # Hard ceiling on LLM calls per request — without this, a model stuck in a
+    # tool-calling loop (or a buggy tool) burns unlimited API quota on one request.
+    max_iterations = 25
 
     try:
-        while True:
-            raw = client.messages.with_raw_response.create(
-                model="claude-opus-4-8",
+        for _ in range(max_iterations):
+            response = create_chat_completion(
+                provider=provider,
+                model=model,
                 max_tokens=16000,
-                thinking={"type": "adaptive"},
-                system=system_prompt,
                 tools=tools,
                 messages=current_messages,
             )
-            response = raw.parse()
 
-            total_input_tokens += response.usage.input_tokens
-            total_output_tokens += response.usage.output_tokens
+            choice = response.choices[0]
+            message = choice.message
+            finish_reason = choice.finish_reason
 
-            # Capture most-recent rate limit headers (reset every minute)
-            h = raw.headers
-            rate_limits = {
-                "tokens_limit":      h.get("anthropic-ratelimit-tokens-limit"),
-                "tokens_remaining":  h.get("anthropic-ratelimit-tokens-remaining"),
-                "tokens_reset":      h.get("anthropic-ratelimit-tokens-reset"),
-                "requests_limit":    h.get("anthropic-ratelimit-requests-limit"),
-                "requests_remaining": h.get("anthropic-ratelimit-requests-remaining"),
-            }
+            if response.usage:
+                total_input_tokens += response.usage.prompt_tokens
+                total_output_tokens += response.usage.completion_tokens
 
-            current_messages.append({"role": "assistant", "content": response.content})
+            # Append assistant turn to history
+            assistant_msg: dict = {"role": "assistant", "content": message.content or ""}
+            if message.tool_calls:
+                assistant_msg["tool_calls"] = [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in message.tool_calls
+                ]
+            current_messages.append(assistant_msg)
 
-            if response.stop_reason in ("end_turn", "max_tokens"):
-                final_text = next(
-                    (block.text for block in response.content if block.type == "text"),
-                    "",
-                )
-                # Auto-nudge: if Claude gave a very short response after running tools,
-                # inject one follow-up so it actually presents the findings.
+            # No tool calls → final response
+            if not message.tool_calls:
+                final_text = message.content or ""
                 if (
                     not nudged
                     and tool_calls_log
-                    and response.stop_reason == "end_turn"
+                    and finish_reason == "stop"
                     and len(final_text.strip()) < 400
                 ):
                     nudged = True
@@ -120,6 +142,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                         ),
                     })
                     continue
+
                 yield {
                     "type": "done",
                     "response": final_text,
@@ -129,28 +152,30 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                         "input_tokens": total_input_tokens,
                         "output_tokens": total_output_tokens,
                     },
-                    "rate_limits": rate_limits,
+                    "rate_limits": {
+                        "tokens_limit": None,
+                        "tokens_remaining": None,
+                        "tokens_reset": None,
+                        "requests_limit": None,
+                        "requests_remaining": None,
+                    },
                 }
                 return
 
-            if response.stop_reason != "tool_use":
-                yield {"type": "error", "message": f"Unexpected stop reason: {response.stop_reason}"}
-                return
+            # Execute each tool call and collect results
+            tool_result_messages = []
+            for tc in message.tool_calls:
+                tool_name = tc.function.name
+                try:
+                    tool_inputs = json.loads(tc.function.arguments)
+                except json.JSONDecodeError:
+                    tool_inputs = {}
 
-            tool_results = []
-            for block in response.content:
-                if block.type != "tool_use":
-                    continue
+                yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs}
 
-                yield {"type": "tool_start", "tool": block.name, "inputs": block.input}
-
-                _SEARCH_TOOL_NAMES = {
-                    "web_search", "search_web", "google_search", "bing_search",
-                    "search", "search_jobs", "search_internet", "internet_search",
-                }
-                if block.name == "fetch_page":
-                    result = fetch_page(block.input.get("url", ""))
-                elif block.name in _SEARCH_TOOL_NAMES:
+                if tool_name == "fetch_page":
+                    result = fetch_page(tool_inputs.get("url", ""))
+                elif tool_name in _SEARCH_TOOL_NAMES:
                     result = {
                         "error": (
                             "No search engine is connected. Do NOT call this tool again. "
@@ -159,28 +184,31 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                         )
                     }
                 else:
-                    implementation = impl_map.get(block.name, "result = 'Unknown tool'")
-                    result = execute_tool(implementation, block.input)
+                    implementation = impl_map.get(tool_name, "result = 'Unknown tool'")
+                    result = execute_tool(implementation, tool_inputs)
+
                 try:
                     result_str = json.dumps(result, default=str)
                 except Exception:
                     result_str = str(result)
 
                 tool_calls_log.append({
-                    "tool": block.name,
-                    "inputs": block.input,
+                    "tool": tool_name,
+                    "inputs": tool_inputs,
                     "result": result_str,
                 })
 
-                yield {"type": "tool_result", "tool": block.name, "result": result_str}
+                yield {"type": "tool_result", "tool": tool_name, "result": result_str}
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
+                tool_result_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
                     "content": result_str,
                 })
 
-            current_messages.append({"role": "user", "content": tool_results})
+            current_messages.extend(tool_result_messages)
+
+        yield {"type": "error", "message": f"Stopped after {max_iterations} tool-call rounds without a final answer."}
 
     except Exception as e:
         yield {"type": "error", "message": str(e)}
