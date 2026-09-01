@@ -216,16 +216,22 @@
 }
 
 .providerSelect {
-  background: #171a21;
+  background-color: #171a21;
   border: 1px solid #2a2f3a;
   border-radius: 6px;
   color: #c9cdd6;
   font-family: inherit;
   font-size: 0.85rem;
   outline: none;
-  padding: 0.3rem 0.6rem;
+  padding: 0.3rem 1.75rem 0.3rem 0.6rem;
   flex: 1;
   transition: border-color 0.15s;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%238b90a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 11px;
 }
 
 .providerSelect:focus {

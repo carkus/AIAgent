@@ -8,6 +8,11 @@ export interface ToolDefinition {
 // undefined/null = default cascade (Gemini, falling back to local Ollama on error)
 export type LlmProvider = 'gemini' | 'ollama' | null;
 
+// Which purpose template Setup.tsx used to build `purpose` — lets the Setup
+// screen restore its "Agent type" dropdown when repopulating from a saved
+// chat. Older saved chats predate this field, so treat missing as 'research'.
+export type AgentTemplateId = 'research' | 'job_search' | 'general';
+
 export interface AgentConfig {
   purpose: string;
   system_prompt: string;
@@ -18,6 +23,7 @@ export interface AgentConfig {
   // Which locally-pulled Ollama model to use; ignored unless provider === 'ollama'.
   // undefined/null = the backend's OLLAMA_MODEL default.
   ollama_model?: string | null;
+  template?: AgentTemplateId;
 }
 
 export interface ToolCall {

@@ -1,11 +1,69 @@
 import { useEffect, useRef, useState } from 'react'
 import { bootstrap, listOllamaModels } from '../api'
 import { deleteSavedChat, loadSavedChats } from '../chatStorage'
-import type { AgentConfig, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
+import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
 import styles from '../styles/Setup.module.css'
+
+// Each template controls both the purpose text sent to bootstrap (which
+// determines what tools/behaviour Claude designs) and what the keyword
+// chips mean in that context. `search_jobs` (live Adzuna listings) and
+// `fetch_page` (general web fetch) are the two built-in primitives every
+// agent gets — see backend/src/agent_stream.py — so "Job search" leans on
+// the former, "Research" the latter, and "General" leaves it up to bootstrap.
+interface AgentTemplate {
+  id: AgentTemplateId
+  label: string
+  keywordPlaceholder: string
+  buildPurpose: (keywords: string[], location: string) => string
+}
+
+const AGENT_TEMPLATES: AgentTemplate[] = [
+  {
+    id: 'research',
+    label: 'Research agent',
+    keywordPlaceholder: 'Type a keyword, press Enter…',
+    buildPurpose: (keywords, loc) =>
+      `Research agent for the following keywords: ${keywords.join(', ')}` +
+      `${loc ? ` in ${loc}` : ''}. ` +
+      `Search for relevant information, analyse patterns and trends, ` +
+      `and present clear findings for each keyword.`,
+  },
+  {
+    id: 'job_search',
+    label: 'Job search agent',
+    keywordPlaceholder: 'Type a job title or skill, press Enter…',
+    buildPurpose: (keywords, loc) =>
+      `Job search agent for the following roles or skills: ${keywords.join(', ')}` +
+      `${loc ? ` in ${loc}` : ''}. ` +
+      `Search live job listings, compare requirements and salary across postings, ` +
+      `and present clear, ranked findings for each role or skill.`,
+  },
+  {
+    id: 'general',
+    label: 'General assistant',
+    keywordPlaceholder: 'Type a topic, press Enter…',
+    buildPurpose: (keywords, loc) =>
+      `General-purpose assistant covering the following topics: ${keywords.join(', ')}` +
+      `${loc ? ` (relevant to ${loc})` : ''}. ` +
+      `Decide what information or tools each topic needs and present clear, ` +
+      `well-organised findings.`,
+  },
+]
+
+function getTemplate(id: AgentTemplateId | undefined): AgentTemplate {
+  return AGENT_TEMPLATES.find(t => t.id === id) ?? AGENT_TEMPLATES[0]
+}
 
 function formatSavedAt(ts: number): string {
   return new Date(ts).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function formatModelLabel(config: AgentConfig): string {
+  if (config.provider === 'ollama') {
+    return `Local (Ollama${config.ollama_model ? `: ${config.ollama_model}` : ''})`
+  }
+  if (config.provider === 'gemini') return 'Cloud (Gemini)'
+  return 'Auto (cloud → local)'
 }
 
 interface ModelInfo {
@@ -28,12 +86,13 @@ function formatModelInfo({ used, failed }: ModelInfo): string {
 
 interface Props {
   agentName: string
+  onAgentNameChange: (name: string) => void
+  onNewAgent: () => void
   bootstrapping: boolean
   error: string | null
   onStart: () => void
   onDone: (config: AgentConfig) => void
   onError: (msg: string) => void
-  onLoadChat: (chat: SavedChat) => void
 }
 
 const STORAGE_KEY = 'aiagent_saved_searches'
@@ -42,6 +101,9 @@ interface SavedSearch {
   id: string
   name: string
   keywords: string[]
+  // Optional because searches saved before agent types existed predate this
+  // field; getTemplate() treats a missing/unknown id as 'research'.
+  agentType?: AgentTemplateId
 }
 
 function loadSaved(): SavedSearch[] {
@@ -56,7 +118,8 @@ function saveToDisk(searches: SavedSearch[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(searches))
 }
 
-export default function Setup({ agentName, bootstrapping, error, onStart, onDone, onError, onLoadChat }: Props) {
+export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError }: Props) {
+  const [agentType, setAgentType] = useState<AgentTemplateId>('research')
   const [keywords, setKeywords] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [location, setLocation] = useState('Melbourne, Australia')
@@ -65,7 +128,13 @@ export default function Setup({ agentName, bootstrapping, error, onStart, onDone
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [saved, setSaved] = useState<SavedSearch[]>(loadSaved)
+  // Only show saved searches that match the currently selected agent type —
+  // a "Job search agent" list of keywords isn't a useful preset when you're
+  // building a "Research agent". Pre-existing saves have no agentType and
+  // are treated as 'research'.
+  const visibleSaved = saved.filter(s => (s.agentType ?? 'research') === agentType)
   const [savedChats, setSavedChats] = useState<SavedChat[]>(loadSavedChats)
+  const visibleSavedChats = savedChats.filter(c => (c.agentConfig.template ?? 'research') === agentType)
   const [progress, setProgress] = useState<string | null>(null)
   const [toolsSoFar, setToolsSoFar] = useState<string[]>([])
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
@@ -161,13 +230,17 @@ export default function Setup({ agentName, bootstrapping, error, onStart, onDone
       id: Date.now().toString(),
       name: keywords.join(', '),
       keywords: [...keywords],
+      agentType,
     }
-    const updated = [entry, ...saved.filter(s => s.name !== entry.name)]
+    // Same keywords saved under a different agent type is a distinct entry;
+    // only collapse an exact (keywords, type) repeat.
+    const updated = [entry, ...saved.filter(s => !(s.name === entry.name && s.agentType === entry.agentType))]
     setSaved(updated)
     saveToDisk(updated)
   }
 
   function loadSearch(entry: SavedSearch) {
+    setAgentType(entry.agentType ?? 'research')
     setKeywords([...entry.keywords])
     setDraft('')
     inputRef.current?.focus()
@@ -179,6 +252,21 @@ export default function Setup({ agentName, bootstrapping, error, onStart, onDone
     saveToDisk(updated)
   }
 
+  // Tapping a saved chat repopulates the query form with the settings that
+  // produced it — same idea as "Saved searches" — rather than jumping back
+  // into that old conversation.
+  function loadSavedChatQuery(chat: SavedChat) {
+    const { keywords: kws, location: loc, provider: prov, ollama_model: model, template } = chat.agentConfig
+    setAgentType(template ?? 'research')
+    setKeywords(kws ? [...kws] : [])
+    setDraft('')
+    if (loc) setLocation(loc)
+    setProvider(prov ?? null)
+    setOllamaModel(model ?? null)
+    onAgentNameChange(chat.agentName)
+    inputRef.current?.focus()
+  }
+
   function removeSavedChat(id: string) {
     setSavedChats(deleteSavedChat(id))
   }
@@ -187,11 +275,7 @@ export default function Setup({ agentName, bootstrapping, error, onStart, onDone
     e.preventDefault()
     if (keywords.length === 0 || bootstrapping) return
     const loc = location.trim()
-    const purpose =
-      `Research agent for the following keywords: ${keywords.join(', ')}` +
-      `${loc ? ` in ${loc}` : ''}. ` +
-      `Search for relevant information, analyse patterns and trends, ` +
-      `and present clear findings for each keyword.`
+    const purpose = getTemplate(agentType).buildPurpose(keywords, loc)
     onStart()
     setProgress(null)
     setToolsSoFar([])
@@ -208,7 +292,7 @@ export default function Setup({ agentName, bootstrapping, error, onStart, onDone
         provider === 'ollama' ? ollamaModel : null,
         handleProgress,
       )
-      onDone({ ...config, keywords, location: loc, provider, ollama_model: provider === 'ollama' ? ollamaModel : null })
+      onDone({ ...config, keywords, location: loc, provider, ollama_model: provider === 'ollama' ? ollamaModel : null, template: agentType })
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unknown error')
     }
@@ -221,6 +305,20 @@ export default function Setup({ agentName, bootstrapping, error, onStart, onDone
         <p className={styles.subtitle}>Add keywords, then deploy Agent {agentName}.</p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
+          <div className={styles.locationRow}>
+            <span className={styles.locationLabel}>Agent type</span>
+            <select
+              className={styles.providerSelect}
+              value={agentType}
+              onChange={e => setAgentType(e.target.value as AgentTemplateId)}
+              disabled={bootstrapping}
+            >
+              {AGENT_TEMPLATES.map(t => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+
           <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
             {keywords.map(kw => (
               <span key={kw} className={styles.chip}>
@@ -242,7 +340,7 @@ export default function Setup({ agentName, bootstrapping, error, onStart, onDone
               onChange={e => setDraft(e.target.value.slice(0, 50))}
               onKeyDown={handleKeyDown}
               onBlur={() => { if (draft.trim()) addKeyword() }}
-              placeholder={keywords.length === 0 ? 'Type a keyword, press Enter…' : 'Add another…'}
+              placeholder={keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : 'Add another…'}
               disabled={bootstrapping}
               maxLength={50}
             />
@@ -335,20 +433,25 @@ export default function Setup({ agentName, bootstrapping, error, onStart, onDone
                 <button
                   type="button"
                   className={styles.clearSmallBtn}
-                  onClick={() => { setKeywords([]); setDraft(''); inputRef.current?.focus() }}
+                  onClick={() => {
+                    setKeywords([])
+                    setDraft('')
+                    onNewAgent()
+                    inputRef.current?.focus()
+                  }}
                   disabled={bootstrapping}
                 >
-                  Clear all
+                  New Agent
                 </button>
               </div>
             )}
           </div>
 
-          {saved.length > 0 && (
+          {visibleSaved.length > 0 && (
             <div className={styles.savedSection}>
-              <p className={styles.savedHeading}>Saved searches</p>
+              <p className={styles.savedHeading}>Saved searches - {getTemplate(agentType).label}</p>
               <div className={styles.savedList}>
-                {saved.map(s => (
+                {visibleSaved.map(s => (
                   <div key={s.id} className={styles.savedRow} onClick={() => loadSearch(s)}>
                     <div className={styles.savedChips}>
                       {s.keywords.map(kw => (
@@ -369,19 +472,31 @@ export default function Setup({ agentName, bootstrapping, error, onStart, onDone
             </div>
           )}
 
-          {savedChats.length > 0 && (
+          {visibleSavedChats.length > 0 && (
             <div className={styles.savedSection}>
-              <p className={styles.savedHeading}>Saved chats</p>
+              <p className={styles.savedHeading}>Saved chats - {getTemplate(agentType).label}</p>
               <div className={styles.savedList}>
-                {savedChats.map(c => (
+                {visibleSavedChats.map(c => (
                   <div
                     key={c.id}
                     className={styles.savedRow}
-                    onClick={() => onLoadChat(c)}
+                    onClick={() => loadSavedChatQuery(c)}
                     title={c.agentConfig.purpose}
                   >
                     <div className={styles.savedChatInfo}>
                       <span className={styles.savedChatName}>Agent {c.agentName}</span>
+                      {c.agentConfig.keywords?.length ? (
+                        <div className={styles.savedChips}>
+                          {c.agentConfig.keywords.map(kw => (
+                            <span key={kw} className={styles.savedChip}>{kw}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className={styles.savedChatMeta}>No keywords saved</span>
+                      )}
+                      <span className={styles.savedChatMeta}>
+                        {c.agentConfig.location || 'No location'} · {formatModelLabel(c.agentConfig)}
+                      </span>
                       <span className={styles.savedChatMeta}>
                         {c.messages.length} message{c.messages.length !== 1 ? 's' : ''} · {formatSavedAt(c.savedAt)}
                       </span>

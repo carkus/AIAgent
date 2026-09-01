@@ -27,12 +27,11 @@ interface ChatMessage {
 interface Props {
   agentConfig: AgentConfig
   agentName: string
-  savedChat?: SavedChat | null
   onReset: () => void
 }
 
-export default function Chat({ agentConfig, agentName, savedChat, onReset }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>(() => savedChat?.messages ?? [])
+export default function Chat({ agentConfig, agentName, onReset }: Props) {
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -42,10 +41,8 @@ export default function Chat({ agentConfig, agentName, savedChat, onReset }: Pro
   const bottomRef = useRef<HTMLDivElement>(null)
   // Stable identity for this conversation so re-saving it (after more
   // messages) updates the same localStorage entry instead of duplicating it.
-  const chatIdRef = useRef(savedChat?.id ?? crypto.randomUUID())
-  // A resumed chat already has its history — don't re-fire the
-  // auto-search-on-load effect below.
-  const autoSentRef = useRef(Boolean(savedChat?.messages?.length))
+  const chatIdRef = useRef(crypto.randomUUID())
+  const autoSentRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
 
   // Auto-send initial search when keywords are available
