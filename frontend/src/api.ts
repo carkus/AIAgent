@@ -1,18 +1,38 @@
-import type { AgentConfig, StreamEvent } from './types';
+import type { AgentConfig, LlmProvider, StreamEvent } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
-export async function bootstrap(purpose: string): Promise<AgentConfig> {
+export async function bootstrap(
+  purpose: string,
+  provider?: LlmProvider,
+  ollamaModel?: string | null,
+): Promise<AgentConfig> {
   const res = await fetch(`${API_URL}/bootstrap`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ purpose }),
+    body: JSON.stringify({
+      purpose,
+      provider: provider ?? undefined,
+      ollama_model: ollamaModel ?? undefined,
+    }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? 'Bootstrap failed');
   }
   return res.json();
+}
+
+/** Names of models currently pulled in the developer's local Ollama install. [] if unreachable. */
+export async function listOllamaModels(): Promise<string[]> {
+  try {
+    const res = await fetch(`${API_URL}/models`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.models) ? data.models : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchFile(filename: string): Promise<string> {
