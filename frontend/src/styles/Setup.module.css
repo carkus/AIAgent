@@ -292,6 +292,25 @@
   padding: 0.15rem 0.5rem;
 }
 
+.savedChatInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.savedChatName {
+  color: #d7dbe2;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.savedChatMeta {
+  color: #7d8393;
+  font-size: 0.72rem;
+}
+
 .savedDelete {
   background: none;
   border: none;

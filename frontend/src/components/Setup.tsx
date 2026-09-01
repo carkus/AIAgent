@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { bootstrap, listOllamaModels } from '../api'
-import type { AgentConfig, BootstrapStreamEvent, LlmProvider, ModelAttempt } from '../types'
+import { deleteSavedChat, loadSavedChats } from '../chatStorage'
+import type { AgentConfig, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
 import styles from '../styles/Setup.module.css'
+
+function formatSavedAt(ts: number): string {
+  return new Date(ts).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+}
 
 interface ModelInfo {
   used: ModelAttempt | null
@@ -22,11 +27,13 @@ function formatModelInfo({ used, failed }: ModelInfo): string {
 }
 
 interface Props {
+  agentName: string
   bootstrapping: boolean
   error: string | null
   onStart: () => void
   onDone: (config: AgentConfig) => void
   onError: (msg: string) => void
+  onLoadChat: (chat: SavedChat) => void
 }
 
 const STORAGE_KEY = 'aiagent_saved_searches'
@@ -49,7 +56,7 @@ function saveToDisk(searches: SavedSearch[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(searches))
 }
 
-export default function Setup({ bootstrapping, error, onStart, onDone, onError }: Props) {
+export default function Setup({ agentName, bootstrapping, error, onStart, onDone, onError, onLoadChat }: Props) {
   const [keywords, setKeywords] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [location, setLocation] = useState('Melbourne, Australia')
@@ -58,6 +65,7 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [saved, setSaved] = useState<SavedSearch[]>(loadSaved)
+  const [savedChats, setSavedChats] = useState<SavedChat[]>(loadSavedChats)
   const [progress, setProgress] = useState<string | null>(null)
   const [toolsSoFar, setToolsSoFar] = useState<string[]>([])
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
@@ -171,6 +179,10 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
     saveToDisk(updated)
   }
 
+  function removeSavedChat(id: string) {
+    setSavedChats(deleteSavedChat(id))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (keywords.length === 0 || bootstrapping) return
@@ -205,8 +217,8 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
   return (
     <div className={styles.container}>
       <div className={styles.card}>
-        <h1 className={styles.title}>AI Agent</h1>
-        <p className={styles.subtitle}>Add keywords, then deploy Agent.</p>
+        <h1 className={styles.title}>Agent {agentName}</h1>
+        <p className={styles.subtitle}>Add keywords, then deploy Agent {agentName}.</p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
@@ -348,6 +360,37 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
                       className={styles.savedDelete}
                       onClick={ev => { ev.stopPropagation(); deleteSearch(s.id) }}
                       aria-label="Delete saved search"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {savedChats.length > 0 && (
+            <div className={styles.savedSection}>
+              <p className={styles.savedHeading}>Saved chats</p>
+              <div className={styles.savedList}>
+                {savedChats.map(c => (
+                  <div
+                    key={c.id}
+                    className={styles.savedRow}
+                    onClick={() => onLoadChat(c)}
+                    title={c.agentConfig.purpose}
+                  >
+                    <div className={styles.savedChatInfo}>
+                      <span className={styles.savedChatName}>Agent {c.agentName}</span>
+                      <span className={styles.savedChatMeta}>
+                        {c.messages.length} message{c.messages.length !== 1 ? 's' : ''} · {formatSavedAt(c.savedAt)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.savedDelete}
+                      onClick={ev => { ev.stopPropagation(); removeSavedChat(c.id) }}
+                      aria-label="Delete saved chat"
                     >
                       ×
                     </button>

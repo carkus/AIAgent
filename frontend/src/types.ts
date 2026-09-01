@@ -63,3 +63,31 @@ export type BootstrapStreamEvent =
   | { type: 'model'; used: ModelAttempt | null; failed: ModelAttempt[] }
   | { type: 'done'; config: AgentConfig }
   | { type: 'error'; message: string }
+
+// A persisted snapshot of one finished/in-progress turn, for saved chats.
+// Mirrors Chat.tsx's local ChatMessage minus the transient `liveToolCalls`
+// field (only meaningful while a response is still streaming in).
+export interface SavedChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  toolCalls?: ToolCall[];
+  durationSeconds?: number;
+  usage?: { input_tokens: number; output_tokens: number };
+  rateLimits?: {
+    tokens_remaining: string | null;
+    tokens_limit: string | null;
+    requests_remaining: string | null;
+    tokens_reset: string | null;
+  };
+}
+
+// A whole saved conversation: everything needed to drop straight back into
+// Chat.tsx without re-running bootstrap. Persisted client-side (localStorage)
+// since the backend is stateless — see chatStorage.ts.
+export interface SavedChat {
+  id: string;
+  agentName: string;
+  agentConfig: AgentConfig;
+  messages: SavedChatMessage[];
+  savedAt: number;
+}

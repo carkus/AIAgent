@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { runAgent } from '../api'
+import { saveChat } from '../chatStorage'
 import ToolActivity from './ToolActivity'
 import ContinuePanel from './ContinuePanel'
-import type { AgentConfig, StreamEvent, ToolCall } from '../types'
+import type { AgentConfig, SavedChat, StreamEvent, ToolCall } from '../types'
 import styles from '../styles/Chat.module.css'
 
 interface LiveToolCall {
@@ -25,18 +26,26 @@ interface ChatMessage {
 
 interface Props {
   agentConfig: AgentConfig
+  agentName: string
+  savedChat?: SavedChat | null
   onReset: () => void
 }
 
-export default function Chat({ agentConfig, onReset }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+export default function Chat({ agentConfig, agentName, savedChat, onReset }: Props) {
+  const [messages, setMessages] = useState<ChatMessage[]>(() => savedChat?.messages ?? [])
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [continueOpen, setContinueOpen] = useState(false)
+  const [saveFeedback, setSaveFeedback] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const autoSentRef = useRef(false)
+  // Stable identity for this conversation so re-saving it (after more
+  // messages) updates the same localStorage entry instead of duplicating it.
+  const chatIdRef = useRef(savedChat?.id ?? crypto.randomUUID())
+  // A resumed chat already has its history — don't re-fire the
+  // auto-search-on-load effect below.
+  const autoSentRef = useRef(Boolean(savedChat?.messages?.length))
   const abortRef = useRef<AbortController | null>(null)
 
   // Auto-send initial search when keywords are available
@@ -49,6 +58,21 @@ export default function Chat({ agentConfig, onReset }: Props) {
     sendMessage(`Search for: ${kws.join(', ')}${loc}`)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  function handleSaveChat() {
+    const chat: SavedChat = {
+      id: chatIdRef.current,
+      agentName,
+      agentConfig,
+      messages: messages.map(({ role, content, toolCalls, durationSeconds, usage, rateLimits }) => ({
+        role, content, toolCalls, durationSeconds, usage, rateLimits,
+      })),
+      savedAt: Date.now(),
+    }
+    saveChat(chat)
+    setSaveFeedback(true)
+    window.setTimeout(() => setSaveFeedback(false), 1500)
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -159,7 +183,7 @@ export default function Chat({ agentConfig, onReset }: Props) {
     <div className={styles.root}>
       <header className={styles.header}>
         <div>
-          <span className={styles.headerTitle}>Agent</span>
+          <span className={styles.headerTitle}>Agent {agentName}</span>
           <span className={styles.headerPurpose}>{agentConfig.purpose}</span>
           {agentConfig.provider === 'ollama' && (
             <span className={styles.localBadge}>
@@ -167,7 +191,17 @@ export default function Chat({ agentConfig, onReset }: Props) {
             </span>
           )}
         </div>
-        <button type="button" className={styles.resetBtn} onClick={onReset}>New agent</button>
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={styles.saveBtn}
+            onClick={handleSaveChat}
+            disabled={messages.length === 0}
+          >
+            {saveFeedback ? 'Saved ✓' : 'Save chat'}
+          </button>
+          <button type="button" className={styles.resetBtn} onClick={onReset}>New agent</button>
+        </div>
         <ContinuePanel isOpen={continueOpen} onToggle={() => setContinueOpen(!continueOpen)} />
       </header>
 
