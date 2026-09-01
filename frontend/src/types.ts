@@ -5,12 +5,19 @@ export interface ToolDefinition {
   implementation: string;
 }
 
+// undefined/null = default cascade (Gemini, falling back to local Ollama on error)
+export type LlmProvider = 'gemini' | 'ollama' | null;
+
 export interface AgentConfig {
   purpose: string;
   system_prompt: string;
   tools: ToolDefinition[];
   keywords?: string[];
   location?: string;
+  provider?: LlmProvider;
+  // Which locally-pulled Ollama model to use; ignored unless provider === 'ollama'.
+  // undefined/null = the backend's OLLAMA_MODEL default.
+  ollama_model?: string | null;
 }
 
 export interface ToolCall {

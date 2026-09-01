@@ -15,10 +15,6 @@ function parseResult(raw: string): unknown {
   try { return JSON.parse(raw) } catch { return raw }
 }
 
-function formatCurrency(n: number): string {
-  return '$' + Math.round(n).toLocaleString('en-AU')
-}
-
 function formatSalaryRange(min: number | null, max: number | null): string {
   const fmt = (v: number) => '$' + Math.round(v / 1000) + 'k'
   if (min && max) return `${fmt(min)}–${fmt(max)}`
@@ -135,6 +131,15 @@ function isEmptyResult(raw: string): boolean {
 
 function isErrorResult(raw: string): boolean {
   return typeof raw === 'string' && raw.startsWith('Tool execution error')
+}
+
+function isBlockedResult(raw: string): boolean {
+  const data = parseResult(raw)
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return false
+  const obj = data as Record<string, unknown>
+  const code = typeof obj.status_code === 'number' ? obj.status_code
+    : typeof obj.status === 'number' ? obj.status : null
+  return code !== null && (code === 401 || code === 403 || code === 404 || code === 429)
 }
 
 function extractSavedFile(raw: string): string | null {
@@ -360,7 +365,7 @@ function KeywordSection({
     .filter(Boolean) as string[]
 
   const hasStructured = filtered.length > 0 || marketResults.length > 0 || savedFiles.length > 0
-  const allEmpty = !hasStructured && toolCalls.every(tc => isEmptyResult(tc.result) || isErrorResult(tc.result))
+  const allEmpty = !hasStructured && toolCalls.every(tc => isEmptyResult(tc.result) || isErrorResult(tc.result) || isBlockedResult(tc.result))
   if (allEmpty) return null
 
   return (
@@ -450,7 +455,7 @@ function RawResult({ result }: { result: string }) {
             ) : (
               <span className={styles.resultTitle}>{r.title as string}</span>
             )}
-            {r.snippet && <p className={styles.resultSnippet}>{r.snippet as string}</p>}
+            {Boolean(r.snippet) && <p className={styles.resultSnippet}>{r.snippet as string}</p>}
           </div>
         ))}
       </div>
@@ -498,7 +503,7 @@ function RawResult({ result }: { result: string }) {
         <span className={`${styles.statusLabel} ${isError ? styles.statusLabelError : styles.statusLabelSuccess}`}>
           {obj.status}
         </span>
-        {obj.message && <p className={styles.statusMessage}>{String(obj.message)}</p>}
+        {Boolean(obj.message) && <p className={styles.statusMessage}>{String(obj.message)}</p>}
       </div>
     )
   }
@@ -509,15 +514,19 @@ function RawResult({ result }: { result: string }) {
   if (httpCode !== null && typeof obj.url === 'string') {
     const ok = httpCode >= 200 && httpCode < 300
     const displayUrl = obj.url.replace(/^https?:\/\//, '')
+    const listingCount = typeof obj.listing_count === 'number' ? obj.listing_count : null
     return (
       <div className={styles.fetchResult}>
         <span className={ok ? styles.httpOk : styles.httpErr}>{httpCode}</span>
         <a href={obj.url} target="_blank" rel="noreferrer" className={styles.fetchUrl}>
-          {displayUrl.length > 80 ? displayUrl.slice(0, 80) + '…' : displayUrl}
+          {displayUrl}
         </a>
-        {(obj.truncated || obj.length) && (
+        {ok && listingCount !== null && (
+          <span className={styles.listingCount}>{listingCount.toLocaleString()} listings</span>
+        )}
+        {Boolean(obj.truncated || obj.char_count) && (
           <span className={styles.truncatedNote}>
-            {typeof obj.length === 'number' ? `${obj.length.toLocaleString()} chars` : 'truncated'}
+            {typeof obj.char_count === 'number' ? `${obj.char_count.toLocaleString()} chars` : 'truncated'}
           </span>
         )}
       </div>
@@ -637,7 +646,7 @@ export default function ToolActivity({ toolCalls, live = false, location }: Prop
   const savedFromOther = other
     .map(tc => extractSavedFile(tc.result))
     .filter(Boolean) as string[]
-  const unsavedOther = other.filter(tc => !extractSavedFile(tc.result) && !isEmptyResult(tc.result) && !isErrorResult(tc.result))
+  const unsavedOther = other.filter(tc => !extractSavedFile(tc.result) && !isEmptyResult(tc.result) && !isErrorResult(tc.result) && !isBlockedResult(tc.result))
 
   return (
     <div className={styles.container}>

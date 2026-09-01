@@ -8,6 +8,8 @@ export default defineConfig({
     proxy: {
       '/bootstrap': 'http://localhost:3000',
       '/agent': 'http://localhost:3000',
+      '/file': 'http://localhost:3000',
+      '/models': 'http://localhost:3000',
     },
   },
 })

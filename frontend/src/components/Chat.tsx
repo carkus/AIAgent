@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { runAgent } from '../api'
 import ToolActivity from './ToolActivity'
+import ContinuePanel from './ContinuePanel'
 import type { AgentConfig, StreamEvent, ToolCall } from '../types'
 import styles from '../styles/Chat.module.css'
 
@@ -33,6 +34,7 @@ export default function Chat({ agentConfig, onReset }: Props) {
   const [thinking, setThinking] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [continueOpen, setContinueOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const autoSentRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -159,11 +161,19 @@ export default function Chat({ agentConfig, onReset }: Props) {
         <div>
           <span className={styles.headerTitle}>Agent</span>
           <span className={styles.headerPurpose}>{agentConfig.purpose}</span>
+          {agentConfig.provider === 'ollama' && (
+            <span className={styles.localBadge}>
+              Local (Ollama{agentConfig.ollama_model ? `: ${agentConfig.ollama_model}` : ''})
+            </span>
+          )}
         </div>
         <button type="button" className={styles.resetBtn} onClick={onReset}>New agent</button>
+        <ContinuePanel isOpen={continueOpen} onToggle={() => setContinueOpen(!continueOpen)} />
       </header>
 
-      <div className={styles.toolsBadges}>
+      <div className={styles.container}>
+        <div className={styles.mainContent}>
+          <div className={styles.toolsBadges}>
         {agentConfig.tools.map(t => (
           <span key={t.name} className={styles.badge}>{t.name}</span>
         ))}
@@ -247,6 +257,8 @@ export default function Chat({ agentConfig, onReset }: Props) {
           </button>
         )}
       </form>
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
-import { bootstrap } from '../api'
-import type { AgentConfig } from '../types'
+import { useEffect, useRef, useState } from 'react'
+import { bootstrap, listOllamaModels } from '../api'
+import type { AgentConfig, LlmProvider } from '../types'
 import styles from '../styles/Setup.module.css'
 
 interface Props {
@@ -35,15 +35,34 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
   const [keywords, setKeywords] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [location, setLocation] = useState('Melbourne, Australia')
+  const [provider, setProvider] = useState<LlmProvider>(null)
+  const [ollamaModel, setOllamaModel] = useState<string | null>(null)
+  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [modelsLoaded, setModelsLoaded] = useState(false)
   const [saved, setSaved] = useState<SavedSearch[]>(loadSaved)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (provider !== 'ollama' || modelsLoaded) return
+    listOllamaModels().then(models => {
+      setAvailableModels(models)
+      setModelsLoaded(true)
+      if (models.length > 0) setOllamaModel(prev => prev ?? models[0])
+    })
+  }, [provider, modelsLoaded])
 
   function addKeyword() {
     const kw = draft.trim()
     if (!kw || keywords.map(k => k.toLowerCase()).includes(kw.toLowerCase())) return
-    setKeywords(prev => [...prev, kw])
+    const next = [...keywords, kw]
+    setKeywords(next)
     setDraft('')
     inputRef.current?.focus()
+    // Auto-save the accumulated keyword set
+    const entry: SavedSearch = { id: Date.now().toString(), name: next.join(', '), keywords: next }
+    const updated = [entry, ...saved.filter(s => s.name !== entry.name)]
+    setSaved(updated)
+    saveToDisk(updated)
   }
 
   function removeKeyword(kw: string) {
@@ -92,8 +111,8 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
       `and present clear findings for each keyword.`
     onStart()
     try {
-      const config = await bootstrap(purpose)
-      onDone({ ...config, keywords, location: loc })
+      const config = await bootstrap(purpose, provider, provider === 'ollama' ? ollamaModel : null)
+      onDone({ ...config, keywords, location: loc, provider, ollama_model: provider === 'ollama' ? ollamaModel : null })
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unknown error')
     }
@@ -143,6 +162,49 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
               disabled={bootstrapping}
             />
           </div>
+
+          <div className={styles.locationRow}>
+            <span className={styles.locationLabel}>Model</span>
+            <select
+              className={styles.providerSelect}
+              value={provider ?? ''}
+              onChange={e => setProvider((e.target.value || null) as LlmProvider)}
+              disabled={bootstrapping}
+            >
+              <option value="">Auto (cloud, falls back to local)</option>
+              <option value="gemini">Cloud only (Gemini)</option>
+              <option value="ollama">Local only (Ollama) — free, needs `ollama serve` running</option>
+            </select>
+          </div>
+          {provider === 'ollama' && (
+            <>
+              <div className={styles.locationRow}>
+                <span className={styles.locationLabel}>Local model</span>
+                {availableModels.length > 0 ? (
+                  <select
+                    className={styles.providerSelect}
+                    value={ollamaModel ?? ''}
+                    onChange={e => setOllamaModel(e.target.value || null)}
+                    disabled={bootstrapping}
+                  >
+                    {availableModels.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <select className={styles.providerSelect} disabled>
+                    <option>{modelsLoaded ? 'No local models found' : 'Loading…'}</option>
+                  </select>
+                )}
+              </div>
+              <p className={styles.providerHint}>
+                {availableModels.length > 0
+                  ? 'Different local models vary a lot in tool-calling/JSON reliability — worth trying a few.'
+                  : 'No pulled models detected — is `ollama serve` running? Try `ollama pull qwen2.5:7b`.'}
+                {' '}Only works with `sam local` / the local dev server, not a deployed agent.
+              </p>
+            </>
+          )}
 
           <div className={styles.hintRow}>
             <p className={styles.charHint}>
@@ -210,7 +272,9 @@ export default function Setup({ bootstrapping, error, onStart, onDone, onError }
 
         {bootstrapping && (
           <p className={styles.loadingHint}>
-            Claude is designing your agent's tools and behaviour. This takes ~10 seconds.
+            {provider === 'ollama'
+              ? `${ollamaModel ?? 'Your local model'} is designing your agent's tools and behaviour. This may take longer than the cloud default.`
+              : 'Designing your agent\'s tools and behaviour. This takes ~10 seconds.'}
           </p>
         )}
       </div>
