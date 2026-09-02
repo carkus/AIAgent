@@ -101,6 +101,29 @@
   cursor: default;
 }
 
+.exportBtn {
+  background: rgba(125, 211, 252, 0.12);
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  border-radius: 10px;
+  color: #7dd3fc;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.12s, opacity 0.15s;
+}
+
+.exportBtn:hover:not(:disabled) {
+  background: rgba(125, 211, 252, 0.22);
+  transform: translateY(-1px);
+}
+
+.exportBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .container {
   display: flex;
   flex: 1;

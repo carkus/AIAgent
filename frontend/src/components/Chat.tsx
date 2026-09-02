@@ -3,8 +3,10 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { runAgent } from '../api'
 import { saveChat } from '../chatStorage'
+import { buildChatPdf, type PdfMessage } from '../chatPdf'
 import ToolActivity from './ToolActivity'
 import ContinuePanel from './ContinuePanel'
+import PdfPreviewModal from './PdfPreviewModal'
 import type { AgentConfig, SavedChat, StreamEvent, ToolCall } from '../types'
 import styles from '../styles/Chat.module.css'
 
@@ -38,7 +40,13 @@ export default function Chat({ agentConfig, agentName, onReset }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [continueOpen, setContinueOpen] = useState(false)
   const [saveFeedback, setSaveFeedback] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [pdfPreview, setPdfPreview] = useState<{ blobUrl: string; filename: string; doc: ReturnType<typeof buildChatPdf> } | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  // Rendered markdown DOM per assistant message index, so PDF export can
+  // walk react-markdown's actual output (link hrefs, list/heading structure)
+  // instead of re-parsing the raw markdown string itself.
+  const markdownRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   // Stable identity for this conversation so re-saving it (after more
   // messages) updates the same localStorage entry instead of duplicating it.
   const chatIdRef = useRef(crypto.randomUUID())
@@ -69,6 +77,43 @@ export default function Chat({ agentConfig, agentName, onReset }: Props) {
     saveChat(chat)
     setSaveFeedback(true)
     window.setTimeout(() => setSaveFeedback(false), 1500)
+  }
+
+  function handleExportPdf() {
+    if (messages.length === 0 || exporting) return
+    setExporting(true)
+    try {
+      const pdfMessages: PdfMessage[] = messages
+        .map((m, i) => ({
+          role: m.role,
+          content: m.content,
+          contentEl: m.role === 'assistant' ? markdownRefs.current.get(i) ?? null : null,
+          toolCallCount: m.toolCalls?.length,
+          durationSeconds: m.durationSeconds,
+          usage: m.usage,
+        }))
+        .filter(m => m.content || m.toolCallCount)
+      const doc = buildChatPdf(`Agent ${agentName}`, pdfMessages)
+      const safeName = agentName.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'agent'
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+      const filename = `chat-${safeName}-${stamp}.pdf`
+      const blobUrl = doc.output('bloburl').toString()
+      setPdfPreview({ blobUrl, filename, doc })
+    } catch (err) {
+      setError(err instanceof Error ? `PDF export failed: ${err.message}` : 'PDF export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  function handleDownloadPdf() {
+    if (!pdfPreview) return
+    pdfPreview.doc.save(pdfPreview.filename)
+  }
+
+  function handleClosePdfPreview() {
+    if (pdfPreview) URL.revokeObjectURL(pdfPreview.blobUrl)
+    setPdfPreview(null)
   }
 
   useEffect(() => {
@@ -197,6 +242,14 @@ export default function Chat({ agentConfig, agentName, onReset }: Props) {
           >
             {saveFeedback ? 'Saved ✓' : 'Save chat'}
           </button>
+          <button
+            type="button"
+            className={styles.exportBtn}
+            onClick={handleExportPdf}
+            disabled={messages.length === 0 || exporting}
+          >
+            {exporting ? 'Exporting…' : 'Export PDF'}
+          </button>
           <button type="button" className={styles.resetBtn} onClick={onReset}>New agent</button>
         </div>
         <ContinuePanel isOpen={continueOpen} onToggle={() => setContinueOpen(!continueOpen)} />
@@ -230,7 +283,13 @@ export default function Chat({ agentConfig, agentName, onReset }: Props) {
             {msg.content && (
               msg.role === 'assistant'
                 ? (
-                  <div className={styles.markdown}>
+                  <div
+                    className={styles.markdown}
+                    ref={el => {
+                      if (el) markdownRefs.current.set(i, el)
+                      else markdownRefs.current.delete(i)
+                    }}
+                  >
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                   </div>
                 )
@@ -290,6 +349,14 @@ export default function Chat({ agentConfig, agentName, onReset }: Props) {
       </form>
         </div>
       </div>
+      {pdfPreview && (
+        <PdfPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          filename={pdfPreview.filename}
+          onDownload={handleDownloadPdf}
+          onClose={handleClosePdfPreview}
+        />
+      )}
     </div>
   )
 }

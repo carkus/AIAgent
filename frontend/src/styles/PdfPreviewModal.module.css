@@ -1,0 +1,104 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 2rem;
+}
+
+.modal {
+  background: #171a21;
+  border: 1px solid #2a2f3a;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  width: min(820px, 100%);
+  height: min(90vh, 1000px);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #2a2f3a;
+  flex-shrink: 0;
+}
+
+.title {
+  color: #dfe2e8;
+  font-size: 0.85rem;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: #9aa0af;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.closeBtn:hover {
+  background: #232833;
+  color: #eceef2;
+}
+
+.frame {
+  flex: 1;
+  border: none;
+  background: #3a3d44;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #2a2f3a;
+  flex-shrink: 0;
+}
+
+.cancelBtn {
+  background: transparent;
+  border: 1px solid #2a2f3a;
+  border-radius: 8px;
+  color: #9aa0af;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.55rem 1.1rem;
+}
+
+.cancelBtn:hover {
+  background: #1f232c;
+  color: #dfe2e8;
+}
+
+.downloadBtn {
+  background: #4f6ef7;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.55rem 1.3rem;
+  transition: opacity 0.15s;
+}
+
+.downloadBtn:hover {
+  opacity: 0.9;
+}
