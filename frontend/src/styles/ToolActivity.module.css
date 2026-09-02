@@ -1,7 +1,7 @@
-.container {
-  background: #15181f;
+﻿.container {
+  background: #0a0d13;
   border-radius: 8px;
-  border: 1px solid #2a2f3a;
+  border: 1px solid rgba(34, 211, 238, 0.2);
   padding: 0.75rem 1rem;
   margin-top: 0.75rem;
   font-size: 0.78rem;
@@ -12,7 +12,8 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #a78bfa;
+  background: #ff2fd6;
+  box-shadow: 0 0 6px #ff2fd6;
   margin-left: 6px;
   vertical-align: middle;
   animation: pulse 1.2s ease-in-out infinite;
@@ -47,10 +48,11 @@
 }
 
 .toolName {
-  color: #a78bfa;
+  color: #ff6ec7;
   font-weight: 700;
-  font-family: monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 0.8rem;
+  text-shadow: 0 0 8px rgba(255, 47, 214, 0.5);
   flex-shrink: 0;
 }
 
@@ -94,7 +96,7 @@
 }
 
 .resultTitle {
-  color: #7dd3fc;
+  color: #22d3ee;
   display: block;
   text-decoration: none;
   font-weight: 500;
@@ -126,8 +128,8 @@
 }
 
 .kwHeading {
-  color: #a78bfa;
-  font-family: monospace;
+  color: #ff2fd6;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 0.82rem;
   font-weight: 700;
   margin: 0 0 0.5rem;
@@ -215,12 +217,12 @@
 .barMeter::-webkit-meter-optimum-value,
 .barMeter::-webkit-meter-suboptimum-value,
 .barMeter::-webkit-meter-even-less-good-value {
-  background: #4f6ef7;
+  background: #22d3ee;
   border-radius: 2px;
 }
 
 .barMeter::-moz-meter-bar {
-  background: #4f6ef7;
+  background: #22d3ee;
   border-radius: 2px;
 }
 
@@ -301,7 +303,7 @@
   border-radius: 4px;
   color: #6ee7b7;
   display: inline-block;
-  font-family: monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 0.75rem;
   padding: 0.1rem 0.45rem;
 }
@@ -312,7 +314,7 @@
   border-radius: 4px;
   color: #fca5a5;
   display: inline-block;
-  font-family: monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 0.75rem;
   padding: 0.1rem 0.45rem;
 }
@@ -332,7 +334,7 @@
   background: #182348;
   border: 1px solid #24345a;
   border-radius: 4px;
-  color: #7dd3fc;
+  color: #22d3ee;
   display: inline-flex;
   font-size: 0.72rem;
   gap: 0.3rem;
@@ -342,7 +344,7 @@
 .termCount {
   background: #1f4d78;
   border-radius: 3px;
-  color: #93c5fd;
+  color: #67e8f9;
   font-size: 0.65rem;
   font-weight: 700;
   padding: 0 0.3rem;
@@ -397,7 +399,7 @@
 }
 
 .kvValLink {
-  color: #7dd3fc;
+  color: #22d3ee;
   padding: 0.15rem 0.4rem;
   max-width: 240px;
   overflow: hidden;
@@ -407,20 +409,20 @@
 }
 
 .kvValLink:hover {
-  color: #bae6fd;
+  color: #67e8f9;
   text-decoration: underline;
 }
 
 .kwLink {
-  color: #7dd3fc;
+  color: #22d3ee;
   text-decoration: none;
-  font-family: monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 0.78rem;
   font-weight: 400;
 }
 
 .kwLink:hover {
-  color: #bae6fd;
+  color: #67e8f9;
   text-decoration: underline;
 }
 
@@ -433,7 +435,7 @@
 
 .fetchUrl {
   color: #9aa0af;
-  font-family: monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 0.72rem;
   text-decoration: none;
   word-break: break-all;
@@ -511,7 +513,7 @@
 }
 
 .jobTitle {
-  color: #7dd3fc;
+  color: #22d3ee;
   text-decoration: none;
   font-weight: 500;
   font-size: 0.8rem;
@@ -560,9 +562,9 @@
 .savedFileBtn {
   background: none;
   border: none;
-  color: #7dd3fc;
+  color: #22d3ee;
   cursor: pointer;
-  font-family: monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 0.78rem;
   padding: 0;
   text-decoration: underline;
@@ -570,7 +572,7 @@
 }
 
 .savedFileBtn:hover:not(:disabled) {
-  color: #bae6fd;
+  color: #67e8f9;
 }
 
 .savedFileBtn:disabled {
@@ -598,9 +600,10 @@
 }
 
 .fileModalInner {
-  background: #1a1d24;
-  border: 1px solid #333846;
+  background: #0d1015;
+  border: 1px solid rgba(34, 211, 238, 0.3);
   border-radius: 10px;
+  box-shadow: 0 0 40px rgba(34, 211, 238, 0.12);
   display: flex;
   flex-direction: column;
   max-height: 80vh;
@@ -614,13 +617,13 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #2a2f3a;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.2);
   flex-shrink: 0;
 }
 
 .fileModalName {
   color: #c9cdd6;
-  font-family: monospace;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 0.82rem;
 }
 
@@ -656,7 +659,7 @@
   border-radius: 4px;
   color: #c3c8d1;
   display: inline-block;
-  font-family: monospace;
+  font-family: 'Share Tech Mono', monospace;
   margin-bottom: 0.3rem;
   padding: 0.1rem 0.4rem;
 }
@@ -702,7 +705,7 @@
 .plainResult {
   color: #6ee7b7;
   margin: 0;
-  font-family: monospace;
+  font-family: 'Share Tech Mono', monospace;
   white-space: pre-wrap;
   word-break: break-all;
   line-height: 1.4;
@@ -711,7 +714,7 @@
 .errorText {
   color: #fca5a5;
   margin: 0;
-  font-family: monospace;
+  font-family: 'Share Tech Mono', monospace;
   white-space: pre-wrap;
   word-break: break-all;
   line-height: 1.4;

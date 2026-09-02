@@ -1,4 +1,4 @@
-.container {
+﻿.container {
   flex: 1;
   display: flex;
   align-items: center;
@@ -7,23 +7,24 @@
 }
 
 .card {
-  background: linear-gradient(165deg, #1e222e 0%, #191c26 100%);
+  background: linear-gradient(165deg, #10141c 0%, #0b0e14 100%);
   border-radius: 14px;
   padding: 2.5rem;
   width: 100%;
   max-width: 560px;
-  border: 1px solid #333a4d;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(79, 110, 247, 0.06);
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 0 40px rgba(34, 211, 238, 0.08), 0 0 0 1px rgba(34, 211, 238, 0.06);
 }
 
 .title {
   margin: 0 0 0.5rem;
-  font-size: 1.8rem;
+  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-size: 1.6rem;
   font-weight: 700;
-  background: linear-gradient(100deg, #93b4f0 0%, #c9a9f5 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #22d3ee;
+  text-shadow: 0 0 16px rgba(34, 211, 238, 0.4);
 }
 
 .subtitle {
@@ -53,7 +54,7 @@
 }
 
 .chipArea:focus-within {
-  border-color: #4f6ef7;
+  border-color: #22d3ee;
 }
 
 .chip {
@@ -61,7 +62,7 @@
   background: #1e2a4a;
   border: 1px solid #2a3a6a;
   border-radius: 6px;
-  color: #93b4f0;
+  color: #22d3ee;
   display: inline-flex;
   font-size: 0.82rem;
   font-weight: 500;
@@ -80,7 +81,7 @@
 }
 
 .chipX:hover {
-  color: #93b4f0;
+  color: #22d3ee;
 }
 
 .chipInput {
@@ -124,7 +125,7 @@
 }
 
 .saveSmallBtn {
-  background: #4f6ef7;
+  background: #22d3ee;
   color: #fff;
 }
 
@@ -192,7 +193,7 @@
 }
 
 .agentTypePill:hover:not(:disabled) {
-  border-color: #4f6ef7;
+  border-color: #22d3ee;
   color: #c9cdd6;
 }
 
@@ -203,9 +204,10 @@
 
 .agentTypePillActive,
 .agentTypePillActive:hover:not(:disabled) {
-  background: #1e2a4a;
-  border-color: #4f6ef7;
-  color: #93b4f0;
+  background: rgba(34, 211, 238, 0.12);
+  border-color: #22d3ee;
+  color: #67e8f9;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.3);
 }
 
 .locationInputWrap {
@@ -228,7 +230,7 @@
 }
 
 .locationInput:focus {
-  border-color: #4f6ef7;
+  border-color: #22d3ee;
 }
 
 .locationSuggestions {
@@ -280,7 +282,7 @@
 }
 
 .providerSelect:focus {
-  border-color: #4f6ef7;
+  border-color: #22d3ee;
 }
 
 .providerHint {
@@ -323,7 +325,7 @@
 }
 
 .savedRow:hover {
-  border-color: #4f6ef7;
+  border-color: #22d3ee;
 }
 
 .savedChips {
@@ -338,7 +340,7 @@
   background: #161d2e;
   border: 1px solid #222c44;
   border-radius: 5px;
-  color: #6a8abf;
+  color: #22d3ee;
   font-size: 0.75rem;
   padding: 0.15rem 0.5rem;
 }
@@ -386,21 +388,30 @@
 }
 
 .createBtn {
-  background: #4f6ef7;
+  background: #22d3ee;
   border: none;
   border-radius: 8px;
-  color: #fff;
+  color: #05070a;
   cursor: pointer;
   flex: 1;
-  font-size: 1rem;
-  font-weight: 600;
+  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   padding: 0.875rem;
-  transition: opacity 0.15s;
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
+  transition: opacity 0.15s, box-shadow 0.15s;
+}
+
+.createBtn:hover:not(:disabled) {
+  box-shadow: 0 0 26px rgba(34, 211, 238, 0.5);
 }
 
 .createBtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .error {
@@ -421,7 +432,7 @@
 }
 
 .modelInfoLine {
-  color: #4f6ef7 !important;
+  color: #22d3ee !important;
   font-weight: 600;
   margin-bottom: 0.5rem !important;
 }

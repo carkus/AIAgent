@@ -66,8 +66,8 @@ export default function App() {
 const styles: Record<string, React.CSSProperties> = {
   root: {
     height: '100%',
-    background: 'radial-gradient(ellipse 1200px 800px at 15% -10%, #22264a 0%, transparent 55%), radial-gradient(ellipse 1000px 700px at 100% 110%, #1a3a3a 0%, transparent 55%), #14161d',
-    color: '#eceef2',
+    background: 'radial-gradient(ellipse 1200px 800px at 15% -10%, rgba(34, 211, 238, 0.14) 0%, transparent 55%), radial-gradient(ellipse 1000px 700px at 100% 110%, rgba(255, 47, 214, 0.10) 0%, transparent 55%), repeating-linear-gradient(180deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 3px), #090b10',
+    color: '#e4faff',
     fontFamily: "'Segoe UI', system-ui, sans-serif",
     display: 'flex',
     flexDirection: 'column',

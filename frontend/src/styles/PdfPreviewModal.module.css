@@ -1,4 +1,4 @@
-.overlay {
+﻿.overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
@@ -10,15 +10,15 @@
 }
 
 .modal {
-  background: #171a21;
-  border: 1px solid #2a2f3a;
+  background: #0d1015;
+  border: 1px solid rgba(34, 211, 238, 0.3);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   width: min(820px, 100%);
   height: min(90vh, 1000px);
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 0 50px rgba(34, 211, 238, 0.12);
 }
 
 .header {
@@ -26,14 +26,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #2a2f3a;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.2);
   flex-shrink: 0;
 }
 
 .title {
-  color: #dfe2e8;
+  color: #67e8f9;
   font-size: 0.85rem;
-  font-family: monospace;
+  font-family: 'Share Tech Mono', monospace;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -67,7 +67,7 @@
   justify-content: flex-end;
   gap: 0.6rem;
   padding: 0.75rem 1rem;
-  border-top: 1px solid #2a2f3a;
+  border-top: 1px solid rgba(34, 211, 238, 0.2);
   flex-shrink: 0;
 }
 
@@ -88,17 +88,21 @@
 }
 
 .downloadBtn {
-  background: #4f6ef7;
+  background: #22d3ee;
   border: none;
   border-radius: 8px;
-  color: #fff;
+  color: #05070a;
   cursor: pointer;
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
   padding: 0.55rem 1.3rem;
-  transition: opacity 0.15s;
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.4);
+  transition: box-shadow 0.15s;
 }
 
 .downloadBtn:hover {
-  opacity: 0.9;
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.6);
 }
