@@ -12,7 +12,8 @@ Two terminals required — one for the backend (Flask), one for the frontend (Vi
 |------|---------|---------|--------|
 | Python | 3.12+ | [python.org](https://www.python.org/downloads/) | `python --version` |
 | Node.js | 18+ | [nodejs.org](https://nodejs.org/) | `node --version` |
-| Anthropic API key | — | [console.anthropic.com](https://console.anthropic.com/) | — |
+| Gemini API key | — | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | — |
+| Ollama (optional, local-only fallback) | — | [ollama.com](https://ollama.com/) | `ollama list` |
 
 ---
 
@@ -23,16 +24,18 @@ Create `env.json` in the project root. The backend server reads credentials from
 ```json
 {
   "BootstrapFunction": {
-    "ANTHROPIC_API_KEY": "sk-ant-your-key-here"
+    "GEMINI_API_KEY": "your-gemini-key-here"
   },
   "AgentFunction": {
-    "ANTHROPIC_API_KEY": "sk-ant-your-key-here",
+    "GEMINI_API_KEY": "your-gemini-key-here",
     "ADZUNA_APP_ID": "your-app-id",
     "ADZUNA_APP_KEY": "your-app-key"
   }
 }
 ```
 
+> To use the local-only Ollama fallback instead of/alongside Gemini, no key is needed — just have `ollama serve` running with a model pulled (`ollama pull qwen2.5-coder`). Set `OLLAMA_MODEL`/`OLLAMA_BASE_URL` env vars to override the defaults, or `LLM_PROVIDER=ollama` to force it. See [CLAUDE.md](./CLAUDE.md) for the full cascade behaviour.
+>
 > **Keep `env.json` out of source control.** It is already listed in `.gitignore`.
 
 Create `frontend/.env.local`:
@@ -41,14 +44,14 @@ Create `frontend/.env.local`:
 VITE_API_URL=
 ```
 
-> Leave `VITE_API_URL` empty. The Vite dev server proxies `/bootstrap` and `/agent` to `localhost:3000` automatically — no value needed.
+> Leave `VITE_API_URL` empty. The Vite dev server proxies `/bootstrap` and `/agent` to `localhost:4891` automatically — no value needed.
 
 ---
 
 ## Step 2 — Install backend dependencies
 
 ```powershell
-pip install anthropic requests flask
+pip install -r backend/requirements.txt
 ```
 
 ---
@@ -72,8 +75,8 @@ python backend/server.py
 Expected output:
 
 ```
-Starting local dev server on http://localhost:3000
- * Running on http://127.0.0.1:3000
+Starting local dev server on http://localhost:4891
+ * Running on http://127.0.0.1:4891
 ```
 
 The server reads `env.json` on startup and hot-reloads when you edit files in `backend/src/`.
@@ -92,10 +95,10 @@ Expected output:
 ```
   VITE v5.x.x  ready in xxx ms
 
-  ➜  Local:   http://localhost:5173/
+  ➜  Local:   http://localhost:19173/
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+Open [http://localhost:19173](http://localhost:19173) in your browser.
 
 ---
 
@@ -125,19 +128,22 @@ Vite hot-reloads automatically. Edit any file in `frontend/src/` and the browser
 
 ## Changing the Port
 
-If port 3000 is in use, start the backend on a different port:
+The backend defaults to port `4891` (deliberately not `3000`/`5000`/`8000`, which tend to collide with other projects' dev servers). If `4891` is also taken, override it:
 
 ```powershell
-$env:PORT=3001
+$env:PORT=3987
 python backend/server.py
 ```
 
-Then update `vite.config.ts` to proxy to the new port:
+Then update `frontend/vite.config.ts` to proxy to the new port — it has five routes to change (`/bootstrap`, `/agent`, `/file`, `/models`, `/saved-searches`):
 
 ```ts
 proxy: {
-  '/bootstrap': 'http://localhost:3001',
-  '/agent': 'http://localhost:3001',
+  '/bootstrap': 'http://localhost:3987',
+  '/agent': 'http://localhost:3987',
+  '/file': 'http://localhost:3987',
+  '/models': 'http://localhost:3987',
+  '/saved-searches': 'http://localhost:3987',
 }
 ```
 
@@ -145,12 +151,12 @@ proxy: {
 
 ## Troubleshooting
 
-**`ModuleNotFoundError: No module named 'anthropic'` (or `flask`, `requests`)**
+**`ModuleNotFoundError: No module named 'openai'` (or `flask`, `requests`)**
 
 The Python packages aren't installed in your local environment. Run:
 
 ```powershell
-pip install anthropic requests flask
+pip install -r backend/requirements.txt
 ```
 
 ---
@@ -166,7 +172,7 @@ Open browser DevTools → Network tab and check the `/bootstrap` request:
 
 **Browser console shows CORS error**
 
-The Flask server handles CORS directly, so this should not occur. If it does, confirm `frontend/.env.local` has `VITE_API_URL=` (empty, not `http://localhost:3000`) and that the Vite dev server was restarted after the change.
+The Flask server handles CORS directly, so this should not occur. If it does, confirm `frontend/.env.local` has `VITE_API_URL=` (empty, not `http://localhost:4891`) and that the Vite dev server was restarted after the change.
 
 ---
 
@@ -189,7 +195,7 @@ SAM and Docker are only needed for deployment:
 ```powershell
 # Install SAM CLI: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html
 sam build --use-container
-sam deploy --guided   # first time — prompts for ANTHROPIC_API_KEY and other params
+sam deploy --guided   # first time — prompts for GeminiApiKey and other params
 sam deploy            # subsequent deploys
 ```
 

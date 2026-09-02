@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { bootstrap, listOllamaModels } from '../api'
+import { bootstrap, createSavedSearch, deleteSavedSearch, listOllamaModels, listSavedSearches } from '../api'
+import type { SavedSearch } from '../api'
 import { deleteSavedChat, loadSavedChats } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
 import styles from '../styles/Setup.module.css'
@@ -95,29 +96,6 @@ interface Props {
   onError: (msg: string) => void
 }
 
-const STORAGE_KEY = 'aiagent_saved_searches'
-
-interface SavedSearch {
-  id: string
-  name: string
-  keywords: string[]
-  // Optional because searches saved before agent types existed predate this
-  // field; getTemplate() treats a missing/unknown id as 'research'.
-  agentType?: AgentTemplateId
-}
-
-function loadSaved(): SavedSearch[] {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
-  } catch {
-    return []
-  }
-}
-
-function saveToDisk(searches: SavedSearch[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(searches))
-}
-
 export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError }: Props) {
   const [agentType, setAgentType] = useState<AgentTemplateId>('research')
   const [keywords, setKeywords] = useState<string[]>([])
@@ -127,7 +105,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [ollamaModel, setOllamaModel] = useState<string | null>(null)
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
-  const [saved, setSaved] = useState<SavedSearch[]>(loadSaved)
+  const [saved, setSaved] = useState<SavedSearch[]>([])
+  // Saved searches live server-side now (see backend/src/saved_searches.py) —
+  // fetch once on mount rather than reading localStorage synchronously.
+  useEffect(() => {
+    listSavedSearches().then(setSaved)
+  }, [])
   // Only show saved searches that match the currently selected agent type —
   // a "Job search agent" list of keywords isn't a useful preset when you're
   // building a "Research agent". Pre-existing saves have no agentType and
@@ -224,19 +207,18 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }
   }
 
-  function saveSearch() {
+  async function saveSearch() {
     if (keywords.length === 0) return
-    const entry: SavedSearch = {
-      id: Date.now().toString(),
-      name: keywords.join(', '),
-      keywords: [...keywords],
-      agentType,
+    const name = keywords.join(', ')
+    try {
+      const entry = await createSavedSearch(name, [...keywords], agentType)
+      // Same keywords saved under a different agent type is a distinct entry;
+      // only collapse an exact (keywords, type) repeat — the backend does the
+      // same collapse, this just keeps local state in sync with it.
+      setSaved(prev => [entry, ...prev.filter(s => !(s.name === entry.name && s.agentType === entry.agentType))])
+    } catch {
+      // Backend unreachable — the search just isn't saved; nothing else to do here.
     }
-    // Same keywords saved under a different agent type is a distinct entry;
-    // only collapse an exact (keywords, type) repeat.
-    const updated = [entry, ...saved.filter(s => !(s.name === entry.name && s.agentType === entry.agentType))]
-    setSaved(updated)
-    saveToDisk(updated)
   }
 
   function loadSearch(entry: SavedSearch) {
@@ -247,9 +229,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   }
 
   function deleteSearch(id: string) {
-    const updated = saved.filter(s => s.id !== id)
-    setSaved(updated)
-    saveToDisk(updated)
+    setSaved(prev => prev.filter(s => s.id !== id))
+    deleteSavedSearch(id).catch(() => {})
   }
 
   // Tapping a saved chat repopulates the query form with the settings that
@@ -305,18 +286,23 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         <p className={styles.subtitle}>Add keywords, then deploy Agent {agentName}.</p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
-          <div className={styles.locationRow}>
+          <div className={styles.agentTypeRow}>
             <span className={styles.locationLabel}>Agent type</span>
-            <select
-              className={styles.providerSelect}
-              value={agentType}
-              onChange={e => setAgentType(e.target.value as AgentTemplateId)}
-              disabled={bootstrapping}
-            >
+            <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
               {AGENT_TEMPLATES.map(t => (
-                <option key={t.id} value={t.id}>{t.label}</option>
+                <button
+                  key={t.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={agentType === t.id}
+                  className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
+                  onClick={() => setAgentType(t.id)}
+                  disabled={bootstrapping}
+                >
+                  {t.label}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
 
           <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>

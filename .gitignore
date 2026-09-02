@@ -21,3 +21,6 @@ samconfig.toml
 # Local dev run logs
 .backend-run.log
 .frontend-run.log
+
+# Server-side saved-search storage (live user data, not source)
+/data/

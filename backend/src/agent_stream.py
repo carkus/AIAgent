@@ -131,20 +131,18 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                 total_input_tokens += response.usage.prompt_tokens
                 total_output_tokens += response.usage.completion_tokens
 
-            # Append assistant turn to history
-            assistant_msg: dict = {"role": "assistant", "content": message.content or ""}
-            if message.tool_calls:
-                assistant_msg["tool_calls"] = [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in message.tool_calls
-                ]
+            # Append assistant turn to history. Dump the full raw message rather
+            # than hand-picking fields (id/type/function) — Gemini's "thinking"
+            # models attach a thought_signature to each function-call part and
+            # require it echoed back verbatim on the next turn, or the next call
+            # 400s with "Function call is missing a thought_signature"
+            # (https://ai.google.dev/gemini-api/docs/thinking#signatures). The
+            # openai SDK's models are extra="allow", so model_dump() preserves
+            # whatever provider-specific extras came back instead of silently
+            # dropping them.
+            assistant_msg = message.model_dump(exclude_none=True)
+            assistant_msg["role"] = "assistant"
+            assistant_msg["content"] = assistant_msg.get("content") or ""
             current_messages.append(assistant_msg)
 
             # No tool calls → final response

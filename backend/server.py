@@ -24,6 +24,11 @@ if os.path.exists(_ENV_JSON):
         for k, v in _section.items():
             os.environ.setdefault(k, v)
 
+# Saved-search storage lives outside backend/ deliberately — deploy/redeploy.sh's
+# deploy_backend() tars and overwrites the entire backend/ directory on every
+# deploy, which would silently clobber accumulated data if it lived in there.
+os.environ.setdefault("DATA_DIR", os.path.join(_ROOT, "data"))
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 import tempfile
@@ -32,6 +37,7 @@ from bootstrap import generate_agent_config_stream
 from agent_stream import run_agent_stream
 from llm_client import list_ollama_models
 import rate_limit
+import saved_searches
 
 app = Flask(__name__)
 
@@ -40,7 +46,7 @@ app = Flask(__name__)
 def add_cors(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
     return response
 
 
@@ -91,6 +97,30 @@ def serve_file(filename):
     return jsonify({"filename": filename, "content": content})
 
 
+@app.route("/saved-searches", methods=["GET", "POST", "OPTIONS"])
+def saved_searches_collection():
+    if request.method == "OPTIONS":
+        return "", 204
+    if request.method == "GET":
+        return jsonify({"searches": saved_searches.list_searches()})
+    body = request.get_json() or {}
+    name = (body.get("name") or "").strip()
+    keywords = body.get("keywords") or []
+    if not name or not isinstance(keywords, list):
+        return jsonify({"error": "name and keywords are required"}), 400
+    agent_type = body.get("agentType") or None
+    entry = saved_searches.add_search(name, keywords, agent_type)
+    return jsonify(entry), 201
+
+
+@app.route("/saved-searches/<search_id>", methods=["DELETE", "OPTIONS"])
+def saved_searches_item(search_id):
+    if request.method == "OPTIONS":
+        return "", 204
+    saved_searches.delete_search(search_id)
+    return "", 204
+
+
 @app.route("/agent", methods=["POST", "OPTIONS"])
 def agent():
     if request.method == "OPTIONS":
@@ -119,6 +149,6 @@ def agent():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
+    port = int(os.environ.get("PORT", 4891))
     print(f"Starting local dev server on http://localhost:{port}")
     app.run(port=port, debug=False, threaded=True)

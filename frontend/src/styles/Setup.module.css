@@ -164,6 +164,50 @@
   flex-shrink: 0;
 }
 
+.agentTypeRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.agentTypePills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.agentTypePill {
+  background: #171a21;
+  border: 1px solid #2a2f3a;
+  border-radius: 999px;
+  color: #9aa0af;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.35rem 0.85rem;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.agentTypePill:hover:not(:disabled) {
+  border-color: #4f6ef7;
+  color: #c9cdd6;
+}
+
+.agentTypePill:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.agentTypePillActive,
+.agentTypePillActive:hover:not(:disabled) {
+  background: #1e2a4a;
+  border-color: #4f6ef7;
+  color: #93b4f0;
+}
+
 .locationInputWrap {
   position: relative;
   flex: 1;

@@ -1,4 +1,4 @@
-import type { AgentConfig, BootstrapStreamEvent, LlmProvider, StreamEvent } from './types';
+import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, StreamEvent } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -85,6 +85,46 @@ export async function fetchFile(filename: string): Promise<string> {
   if (!res.ok) throw new Error('File not found');
   const data = await res.json();
   return data.content as string;
+}
+
+export interface SavedSearch {
+  id: string;
+  name: string;
+  keywords: string[];
+  agentType?: AgentTemplateId | null;
+}
+
+/** Saved searches now live server-side (see backend/src/saved_searches.py) —
+ * localStorage was scoped per dev-server port/origin, so a port change made
+ * every prior save silently vanish. [] on any failure so a backend hiccup
+ * degrades to "no saved searches" rather than breaking the Setup screen. */
+export async function listSavedSearches(): Promise<SavedSearch[]> {
+  try {
+    const res = await fetch(`${API_URL}/saved-searches`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.searches) ? data.searches : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function createSavedSearch(
+  name: string,
+  keywords: string[],
+  agentType: AgentTemplateId | null,
+): Promise<SavedSearch> {
+  const res = await fetch(`${API_URL}/saved-searches`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, keywords, agentType }),
+  });
+  if (!res.ok) throw new Error('Failed to save search');
+  return res.json();
+}
+
+export async function deleteSavedSearch(id: string): Promise<void> {
+  await fetch(`${API_URL}/saved-searches/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export async function runAgent(

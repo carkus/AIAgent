@@ -37,6 +37,12 @@ sudo -u aiagent ln -s /var/www/aiagent/src/frontend /var/www/aiagent/frontend
 cd /var/www/aiagent
 sudo -u aiagent python3 -m venv /var/www/aiagent/venv
 sudo -u aiagent /var/www/aiagent/venv/bin/pip install -r backend/requirements.txt
+
+# Saved-search storage (backend/src/saved_searches.py). Deliberately outside
+# src/backend — deploy/redeploy.sh's deploy_backend() tars over the whole
+# backend/ directory on every deploy, which would otherwise clobber this.
+# server.py resolves it to $WorkingDirectory/../data, i.e. /var/www/aiagent/data.
+sudo -u aiagent mkdir -p /var/www/aiagent/data
 ```
 
 ## 3. Secrets — `/var/www/aiagent/.env`
