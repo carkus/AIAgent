@@ -12,3 +12,30 @@ html, body {
 #root {
   height: 100%;
 }
+
+/* App-wide scrollbar — thin, dark-track, neon-cyan thumb to match the
+   overall dark/neon aesthetic (see Setup/Chat/ToolActivity styles). Applies
+   to every scrollable element (saved-chats list, chat log, tool activity,
+   PDF preview, etc.) rather than being redefined per-component. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.35) rgba(255, 255, 255, 0.04);
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.35);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.6);
+}
