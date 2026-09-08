@@ -181,3 +181,24 @@ A saved chat's `AgentConfig` round-trips through `localStorage` (see #3) — goo
 
 ### 8. Bootstrap quality is input-dependent
 Vague purpose descriptions produce generic tools. The Setup screen's Agent Type preset dropdown (`AGENT_TEMPLATES` in `Setup.tsx`) narrows this by giving Gemini a purpose-built prompt template per type rather than a freeform box, but a structured review/regenerate step before launching chat is still a possible next step.
+
+---
+
+## Roadmap — Multi-Agent Direction
+
+Five forward-looking directions for this project, none started yet. Captured here as work to accomplish, not as current limitations of the single-agent design — each assumes the existing bootstrap/agent-loop architecture as a starting point rather than a replacement.
+
+### 1. Multi-agent orchestration
+This is the natural fit. Right now AIAgent scaffolds one agent per task. The freeform version: let it scaffold a team — a planner agent that decomposes the task and spins up worker agents with their own tools, then a supervisor pattern to merge results. That's CrewAI/AutoGen territory, but you can prototype the pattern yourself on top of your existing loop before reaching for a framework, which will make you a much sharper evaluator of those frameworks when you do pick one up.
+
+### 2. A2A protocol
+AIAgent's dynamically-generated agents are a good target for making A2A-discoverable, since each one already has a defined role/tools. Two AIAgent-spawned agents negotiating a task over A2A instead of just sharing memory internally would be a clean proof-of-concept, and it's a step up from bolting A2A onto Jobfit's fixed three tools.
+
+### 3. Agent memory/context engineering
+You've already got "full conversation memory across follow-ups." The freeform extension: memory that persists and is reasoned about across completely different spawned agents — shared long-term memory vs. per-agent scratch memory, summarization/compaction as context grows. Rigid pipelines like Jobfit don't really surface this problem; open-ended agent spawning does.
+
+### 4. Governance/guardrails
+Since AIAgent generates Python implementations on the fly, this is actually a sharper testbed than Jobfit for sandboxing and permissioning (what can a dynamically-written tool be allowed to touch?), which is a much more interesting guardrails story than gating three known tools.
+
+### 5. Deployment breadth
+Lambda suits AIAgent's request/response scaffolding well, but if you add persistent multi-agent state or long-running orchestration, that's your excuse to stand up an ECS/Fargate or GKE variant and genuinely compare the two, rather than picking one because it's "the AWS option."

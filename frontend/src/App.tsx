@@ -24,6 +24,11 @@ export default function App() {
   }
 
   function handleBootstrapDone(config: AgentConfig) {
+    // The bootstrap call now invents its own name/personality from the
+    // purpose text (see backend/src/bootstrap.py's persona field) — prefer
+    // that over the random placeholder picked on load. Fall back to keeping
+    // the placeholder if the model omitted or mangled it.
+    if (config.persona?.name) setAgentName(config.persona.name)
     setAgentConfig(config)
     setPhase('chat')
   }

@@ -13,10 +13,21 @@ export type LlmProvider = 'gemini' | 'ollama' | null;
 // chat. Older saved chats predate this field, so treat missing as 'research'.
 export type AgentTemplateId = 'research' | 'job_search' | 'general';
 
+// The agent's own answer to "what's your name and personality?" — invented by
+// the bootstrap call from the purpose text, same as system_prompt/tools are.
+// Optional: older saved chats and malformed bootstrap responses predate/omit
+// this, so callers fall back to the client-side random surname (surnames.ts).
+export interface AgentPersona {
+  name: string;
+  traits: string[];
+  rationale: string;
+}
+
 export interface AgentConfig {
   purpose: string;
   system_prompt: string;
   tools: ToolDefinition[];
+  persona?: AgentPersona;
   keywords?: string[];
   location?: string;
   provider?: LlmProvider;

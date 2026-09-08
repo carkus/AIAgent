@@ -226,6 +226,11 @@ export default function Chat({ agentConfig, agentName, onReset }: Props) {
       <header className={styles.header}>
         <div>
           <span className={styles.headerTitle}>Agent {agentName}</span>
+          {agentConfig.persona?.traits && agentConfig.persona.traits.length > 0 && (
+            <span className={styles.personaTraits} title={agentConfig.persona.rationale}>
+              {agentConfig.persona.traits.join(' · ')}
+            </span>
+          )}
           <span className={styles.headerPurpose}>{agentConfig.purpose}</span>
           {agentConfig.provider === 'ollama' && (
             <span className={styles.localBadge}>

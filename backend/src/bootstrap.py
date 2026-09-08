@@ -12,6 +12,11 @@ You are a meta-agent configurator. A user wants a custom AI agent for the follow
 Design and configure this agent. Return a single JSON object with exactly these fields:
 
 {{
+  "persona": {{
+    "name": "<a single surname-style name that fits this agent's purpose and tone — not a title, not the word \"Agent\", not a full name>",
+    "traits": ["<adjective>", "<adjective>", "<adjective>"],
+    "rationale": "<one sentence connecting the name/traits to the stated purpose>"
+  }},
   "system_prompt": "<detailed role and behaviour instructions for the agent>",
   "tools": [
     {{
@@ -45,6 +50,7 @@ Two primitive tools are pre-built and always available to the agent — do NOT i
 Instruct the agent to call these directly rather than reinventing them.
 
 Rules:
+- persona.traits must be exactly 3 short adjectives describing the agent's working style, grounded in the purpose (e.g. a legal-research agent might get ["meticulous", "formal", "cautious"]; a casual recipe agent might get ["playful", "practical", "warm"]) — avoid generic filler like "helpful" or "efficient" alone
 - Design tools that directly serve the stated purpose
 - Tool implementations must be self-contained Python snippets
 - Do NOT generate a fetch_url, fetch_page, scrape, or HTTP-request tool — use the built-in `fetch_page` primitive instead
@@ -70,6 +76,30 @@ def _try_parse(text: str) -> tuple[dict | None, json.JSONDecodeError | None]:
         return json.loads(text), None
     except json.JSONDecodeError as e:
         return None, e
+
+
+def _normalize_persona(config: dict) -> None:
+    """Best-effort cleanup of the model-generated `persona` field. A model
+    can omit it, mistype a field, or nest it wrong — rather than let a bad
+    shape reach the frontend (which does `persona.traits.join(...)`), drop
+    the whole field on any defect so callers just fall back to the random
+    surname placeholder, same as if the model had never returned one."""
+    persona = config.get("persona")
+    if not isinstance(persona, dict):
+        config.pop("persona", None)
+        return
+    name = persona.get("name")
+    traits = persona.get("traits")
+    rationale = persona.get("rationale")
+    valid = (
+        isinstance(name, str) and name.strip()
+        and isinstance(traits, list) and all(isinstance(t, str) for t in traits)
+        and isinstance(rationale, str)
+    )
+    if valid:
+        config["persona"] = {"name": name.strip(), "traits": traits, "rationale": rationale}
+    else:
+        config.pop("persona", None)
 
 
 def generate_agent_config(purpose: str, provider: str | None = None, model: str | None = None) -> dict:
@@ -112,6 +142,7 @@ def generate_agent_config(purpose: str, provider: str | None = None, model: str 
             f"Try a simpler purpose description, or a different model if running local-only."
         )
 
+    _normalize_persona(config)
     config["purpose"] = purpose
     # Carried in AgentConfig so every subsequent /agent turn in this session
     # reuses the same provider/model choice made on the Setup screen.
@@ -122,6 +153,8 @@ def generate_agent_config(purpose: str, provider: str | None = None, model: str 
 
 _TOOL_NAME_RE = re.compile(r'"name"\s*:\s*"([^"]+)"')
 _SYSTEM_PROMPT_KEY_RE = re.compile(r'"system_prompt"\s*:\s*"')
+_PERSONA_KEY_RE = re.compile(r'"persona"\s*:\s*\{')
+_TOOLS_KEY_RE = re.compile(r'"tools"\s*:\s*\[')
 
 
 def _model_event(meta: dict) -> dict:
@@ -151,7 +184,9 @@ def generate_agent_config_stream(purpose: str, provider: str | None = None, mode
     yield {"type": "status", "message": "Thinking about your purpose…"}
 
     seen_tools: set[str] = set()
+    seen_persona = False
     seen_system_prompt = False
+    tools_start: int | None = None
     buffer = ""
 
     meta: dict = {}
@@ -173,15 +208,27 @@ def generate_agent_config_stream(purpose: str, provider: str | None = None, mode
                 continue
             buffer += delta
 
+            if not seen_persona and _PERSONA_KEY_RE.search(buffer):
+                seen_persona = True
+                yield {"type": "status", "message": "Choosing a personality…"}
+
             if not seen_system_prompt and _SYSTEM_PROMPT_KEY_RE.search(buffer):
                 seen_system_prompt = True
                 yield {"type": "status", "message": "Writing system prompt…"}
 
-            for m in _TOOL_NAME_RE.finditer(buffer):
-                name = m.group(1)
-                if name not in seen_tools:
-                    seen_tools.add(name)
-                    yield {"type": "tool", "name": name}
+            # Tool names are only scanned for past the "tools": [ marker —
+            # persona also has a "name" field, and matching it here would
+            # misreport the persona's name as a tool.
+            if tools_start is None:
+                tools_match = _TOOLS_KEY_RE.search(buffer)
+                if tools_match:
+                    tools_start = tools_match.end()
+            if tools_start is not None:
+                for m in _TOOL_NAME_RE.finditer(buffer, tools_start):
+                    name = m.group(1)
+                    if name not in seen_tools:
+                        seen_tools.add(name)
+                        yield {"type": "tool", "name": name}
     except Exception as e:
         yield _model_event(meta)
         yield {"type": "error", "message": f"Bootstrap failed: {e}"}
@@ -231,6 +278,7 @@ def generate_agent_config_stream(purpose: str, provider: str | None = None, mode
         )}
         return
 
+    _normalize_persona(config)
     config["purpose"] = purpose
     config["provider"] = provider
     config["ollama_model"] = model

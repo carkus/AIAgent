@@ -26,6 +26,19 @@
   margin-right: 0.75rem;
 }
 
+.personaTraits {
+  display: block;
+  color: #a5f3fc;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.7rem;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  margin: 0.15rem 0 0.3rem;
+  cursor: help;
+  width: fit-content;
+  border-bottom: 1px dotted rgba(34, 211, 238, 0.4);
+}
+
 .headerPurpose {
   color: #9aa0af;
   font-size: 0.8rem;
