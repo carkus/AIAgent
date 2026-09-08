@@ -53,8 +53,45 @@ _SEARCH_TOOL_NAMES = {
     "search", "search_internet", "internet_search",
 }
 
+# Multi-agent orchestration, first scaffold (CLAUDE.md roadmap item 1).
+# Available to the main agent only — passing allow_delegation=False (used when
+# orchestrator.run_worker runs a worker's own loop) omits this tool entirely,
+# so a worker never sees it and can't spawn further sub-workers. One level deep
+# for now.
+_DELEGATE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "delegate_to_worker",
+        "description": (
+            "Spin up a fresh worker agent — with its own name, personality, and "
+            "purpose-built toolset — to independently handle ONE focused, "
+            "self-contained subtask, then hand its finished result back to you. "
+            "Use this to split a genuinely separable request into parts a "
+            "specialist can each own, rather than doing everything yourself with "
+            "one toolset. The worker does not see this conversation — give it "
+            "everything it needs via `task` and `context`."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "type": "string",
+                    "description": "A complete, self-contained description of the subtask for the worker to accomplish.",
+                },
+                "context": {
+                    "type": "string",
+                    "description": "Optional extra background or data (e.g. results from your own earlier tool calls) the worker needs but `task` alone doesn't convey.",
+                },
+            },
+            "required": ["task"],
+        },
+    },
+}
 
-def run_agent_stream(messages: list, agent_config: dict):
+MAX_DELEGATIONS_PER_REQUEST = 3
+
+
+def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool = True):
     """
     Generator that yields event dicts as the agent loop runs.
 
@@ -63,6 +100,10 @@ def run_agent_stream(messages: list, agent_config: dict):
       {"type": "tool_result", "tool": "name", "result": "..."}
       {"type": "done",        "response": "...", "tool_calls": [...], "duration_seconds": N}
       {"type": "error",       "message": "..."}
+
+    allow_delegation gates the delegate_to_worker primitive (see _DELEGATE_TOOL
+    above) — False when this call itself IS a worker's loop, to keep
+    orchestration one level deep.
     """
     system_prompt = agent_config["system_prompt"] + """
 
@@ -79,11 +120,16 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
 3. USE `fetch_page` for everything else — company pages, news, general URLs.
 
 4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — listing counts, job titles, salary ranges, company names. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
----"""
+""" + (f"""
+5. You also have `delegate_to_worker` — use it ONLY when the request has genuinely
+   separable parts a specialist could each own (e.g. "research X and also draft Y").
+   Don't delegate something you can just do yourself with your own tools; each
+   delegation is a full extra agent run. Limit: {MAX_DELEGATIONS_PER_REQUEST} per turn.
+---""" if allow_delegation else "\n---")
 
     tool_definitions = agent_config["tools"]
 
-    tools = _PRIMITIVE_TOOLS + [
+    tools = _PRIMITIVE_TOOLS + ([_DELEGATE_TOOL] if allow_delegation else []) + [
         {
             "type": "function",
             "function": {
@@ -109,6 +155,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
     total_input_tokens = 0
     total_output_tokens = 0
     nudged = False
+    delegation_count = 0
     # Hard ceiling on LLM calls per request — without this, a model stuck in a
     # tool-calling loop (or a buggy tool) burns unlimited API quota on one request.
     max_iterations = 25
@@ -204,6 +251,28 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                         results_per_page=tool_inputs.get("results_per_page") or 20,
                         page=tool_inputs.get("page") or 1,
                     )
+                elif tool_name == "delegate_to_worker":
+                    if delegation_count >= MAX_DELEGATIONS_PER_REQUEST:
+                        result = {
+                            "error": (
+                                f"Delegation limit ({MAX_DELEGATIONS_PER_REQUEST}) reached "
+                                "for this turn — finish the task yourself with the tools "
+                                "you already have."
+                            )
+                        }
+                    else:
+                        delegation_count += 1
+                        # Deferred import: orchestrator imports run_agent_stream from
+                        # this module, so importing it back at module load time would
+                        # be circular. Safe here since it's only needed once this
+                        # branch actually runs.
+                        from orchestrator import run_worker
+                        result = run_worker(
+                            task=tool_inputs.get("task", ""),
+                            context=tool_inputs.get("context", ""),
+                            provider=provider,
+                            model=model,
+                        )
                 elif tool_name in _SEARCH_TOOL_NAMES:
                     result = {
                         "error": (

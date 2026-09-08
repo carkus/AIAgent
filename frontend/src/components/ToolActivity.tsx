@@ -142,6 +142,12 @@ function isBlockedResult(raw: string): boolean {
   return code !== null && (code === 401 || code === 403 || code === 404 || code === 429)
 }
 
+function isWorkerResult(v: unknown): v is Record<string, unknown> & { worker_name: string; response: string } {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
+  const o = v as Record<string, unknown>
+  return typeof o.worker_name === 'string' && typeof o.response === 'string'
+}
+
 function extractSavedFile(raw: string): string | null {
   const data = parseResult(raw)
   if (typeof data !== 'object' || data === null || Array.isArray(data)) return null
@@ -292,6 +298,34 @@ function MarketTrendCard({ data }: { data: Record<string, unknown> }) {
   )
 }
 
+// ─── Delegated worker result (multi-agent orchestration, first scaffold) ─────
+
+function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
+  const name = data.worker_name as string
+  const traits = (data.worker_traits as string[] | undefined) ?? []
+  const task = data.task as string | undefined
+  const response = data.response as string
+  const toolsUsed = (data.tools_used as string[] | undefined) ?? []
+
+  return (
+    <div className={styles.workerCard}>
+      <p className={styles.workerHeading}>
+        <span className={styles.workerName}>🤝 {name}</span>
+        {traits.length > 0 && (
+          <span className={styles.workerTraits}>{traits.join(' · ')}</span>
+        )}
+      </p>
+      {task && <p className={styles.workerTask}>{task}</p>}
+      {response && <p className={styles.workerResponse}>{response}</p>}
+      {toolsUsed.length > 0 && (
+        <p className={styles.workerTools}>
+          {toolsUsed.map((t, i) => <span key={i} className={styles.pill}><span className={styles.pillVal}>{t}</span></span>)}
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ─── Saved file viewer ────────────────────────────────────────────────────────
 
 function SavedFileViewer({ filename }: { filename: string }) {
@@ -433,6 +467,9 @@ function RawResult({ result }: { result: string }) {
 
   if (typeof data !== 'object' || data === null || Array.isArray(data)) return null
   const obj = data as Record<string, unknown>
+
+  // ── Delegated worker result (delegate_to_worker) ──────────────────────────
+  if (isWorkerResult(obj)) return <WorkerResultCard data={obj} />
 
   // ── Search / web-results pattern ──────────────────────────────────────────
   if (Array.isArray(obj.results)) {
