@@ -94,9 +94,10 @@ interface Props {
   onStart: () => void
   onDone: (config: AgentConfig) => void
   onError: (msg: string) => void
+  onResumeChat: (chat: SavedChat) => void
 }
 
-export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError }: Props) {
+export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat }: Props) {
   const [agentType, setAgentType] = useState<AgentTemplateId>('research')
   const [keywords, setKeywords] = useState<string[]>([])
   const [draft, setDraft] = useState('')
@@ -233,9 +234,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     deleteSavedSearch(id).catch(() => {})
   }
 
-  // Tapping a saved chat repopulates the query form with the settings that
-  // produced it — same idea as "Saved searches" — rather than jumping back
-  // into that old conversation.
+  // Tapping the row repopulates the query form with the settings that
+  // produced this chat — same idea as "Saved searches" — for starting a
+  // fresh run with the same setup. The → button next to it instead jumps
+  // straight back into that old conversation (App.tsx's onResumeChat).
   function loadSavedChatQuery(chat: SavedChat) {
     const { keywords: kws, location: loc, provider: prov, ollama_model: model, template } = chat.agentConfig
     setAgentType(template ?? 'research')
@@ -429,7 +431,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   onClick={saveSearch}
                   disabled={bootstrapping}
                 >
-                  Save
+                  Save Search
                 </button>
                 <button
                   type="button"
@@ -476,7 +478,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           {visibleSavedChats.length > 0 && (
             <div className={styles.savedSection}>
               <p className={styles.savedHeading}>Saved chats - {getTemplate(agentType).label}</p>
-              <div className={styles.savedList}>
+              <div className={`${styles.savedList} ${styles.savedListScroll}`}>
                 {visibleSavedChats.map(c => (
                   <div
                     key={c.id}
@@ -496,12 +498,19 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         <span className={styles.savedChatMeta}>No keywords saved</span>
                       )}
                       <span className={styles.savedChatMeta}>
-                        {c.agentConfig.location || 'No location'} · {formatModelLabel(c.agentConfig)}
-                      </span>
-                      <span className={styles.savedChatMeta}>
+                        {c.agentConfig.location || 'No location'} · {formatModelLabel(c.agentConfig)} ·{' '}
                         {c.messages.length} message{c.messages.length !== 1 ? 's' : ''} · {formatSavedAt(c.savedAt)}
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      className={styles.savedResume}
+                      onClick={ev => { ev.stopPropagation(); onResumeChat(c) }}
+                      aria-label={`Continue chat with Agent ${c.agentName}`}
+                      title="Continue this chat"
+                    >
+                      →
+                    </button>
                     <button
                       type="button"
                       className={styles.savedDelete}

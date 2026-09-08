@@ -312,6 +312,13 @@
   gap: 0.3rem;
 }
 
+/* Saved chats can grow long — cap at roughly 3 rows and scroll the rest. */
+.savedListScroll {
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
 .savedRow {
   display: flex;
   align-items: center;
@@ -362,6 +369,21 @@
 .savedChatMeta {
   color: #7d8393;
   font-size: 0.72rem;
+}
+
+.savedResume {
+  background: none;
+  border: none;
+  color: #7d8393;
+  cursor: pointer;
+  font-size: 1.05rem;
+  line-height: 1;
+  padding: 0 0.2rem;
+  flex-shrink: 0;
+}
+
+.savedResume:hover {
+  color: #22d3ee;
 }
 
 .savedDelete {
