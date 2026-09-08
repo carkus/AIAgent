@@ -7,7 +7,7 @@ import { buildChatPdf, type PdfMessage } from '../chatPdf'
 import ToolActivity from './ToolActivity'
 import ContinuePanel from './ContinuePanel'
 import PdfPreviewModal from './PdfPreviewModal'
-import type { AgentConfig, SavedChat, StreamEvent, ToolCall } from '../types'
+import type { AgentConfig, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import styles from '../styles/Chat.module.css'
 
 interface LiveToolCall {
@@ -30,10 +30,15 @@ interface Props {
   agentConfig: AgentConfig
   agentName: string
   onReset: () => void
+  // Set when this Chat is being mounted to resume a saved chat (Setup's →
+  // button) rather than starting fresh from bootstrap — see App.tsx's
+  // onResumeChat.
+  initialMessages?: SavedChatMessage[]
+  initialChatId?: string
 }
 
-export default function Chat({ agentConfig, agentName, onReset }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+export default function Chat({ agentConfig, agentName, onReset, initialMessages, initialChatId }: Props) {
+  const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages ?? [])
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -49,8 +54,10 @@ export default function Chat({ agentConfig, agentName, onReset }: Props) {
   const markdownRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   // Stable identity for this conversation so re-saving it (after more
   // messages) updates the same localStorage entry instead of duplicating it.
-  const chatIdRef = useRef(crypto.randomUUID())
-  const autoSentRef = useRef(false)
+  const chatIdRef = useRef(initialChatId ?? crypto.randomUUID())
+  // Resuming a saved chat already has its history — don't fire the
+  // keyword auto-search again on top of it.
+  const autoSentRef = useRef((initialMessages?.length ?? 0) > 0)
   const abortRef = useRef<AbortController | null>(null)
 
   // Auto-send initial search when keywords are available

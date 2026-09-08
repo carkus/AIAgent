@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Setup from './components/Setup'
 import Chat from './components/Chat'
-import type { AgentConfig } from './types'
+import type { AgentConfig, SavedChat } from './types'
 import { SURNAMES } from './surnames'
 
 type Phase = 'setup' | 'bootstrapping' | 'chat'
@@ -17,6 +17,14 @@ export default function App() {
   // Picked once per agent (re-rolled on "New agent") so this instance has a
   // name for the whole session — a little personality, purely cosmetic.
   const [agentName, setAgentName] = useState<string>(randomSurname)
+  // Set only when jumping straight back into a saved chat (Setup's → button)
+  // rather than bootstrapping fresh — carries the prior message history into
+  // the next Chat mount. Cleared on reset/new bootstrap.
+  const [resumeChat, setResumeChat] = useState<SavedChat | null>(null)
+  // Bumped on every bootstrap/resume so Chat remounts with fresh internal
+  // state (messages, chatIdRef) instead of reusing a stale instance when
+  // going straight from one chat/resume into another.
+  const [chatKey, setChatKey] = useState(0)
 
   function handleBootstrapStart() {
     setBootstrapError(null)
@@ -30,6 +38,8 @@ export default function App() {
     // the placeholder if the model omitted or mangled it.
     if (config.persona?.name) setAgentName(config.persona.name)
     setAgentConfig(config)
+    setResumeChat(null)
+    setChatKey(k => k + 1)
     setPhase('chat')
   }
 
@@ -45,7 +55,18 @@ export default function App() {
   function handleReset() {
     setAgentConfig(null)
     setAgentName(randomSurname())
+    setResumeChat(null)
     setPhase('setup')
+  }
+
+  // Setup's → button on a saved chat — skip bootstrap entirely and drop
+  // straight back into that conversation with its original config + history.
+  function handleResumeChat(chat: SavedChat) {
+    setAgentConfig(chat.agentConfig)
+    setAgentName(chat.agentName)
+    setResumeChat(chat)
+    setChatKey(k => k + 1)
+    setPhase('chat')
   }
 
   return (
@@ -60,9 +81,17 @@ export default function App() {
           onStart={handleBootstrapStart}
           onDone={handleBootstrapDone}
           onError={handleBootstrapError}
+          onResumeChat={handleResumeChat}
         />
       ) : agentConfig ? (
-        <Chat agentConfig={agentConfig} agentName={agentName} onReset={handleReset} />
+        <Chat
+          key={chatKey}
+          agentConfig={agentConfig}
+          agentName={agentName}
+          onReset={handleReset}
+          initialMessages={resumeChat?.messages}
+          initialChatId={resumeChat?.id}
+        />
       ) : null}
     </div>
   )
