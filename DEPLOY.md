@@ -72,6 +72,23 @@ curl -s http://127.0.0.1:8787/models   # expect {"models": []} — no Ollama con
 
 Keep `--workers 1` in the unit — `rate_limit.py`'s counters are process-local; more worker *processes* would each get their own counters and silently multiply the effective rate limit. `--threads 4` gives real concurrency for the streaming `/agent` endpoint without that problem.
 
+## 4.5. MCP server unit (published agents as MCP tools)
+
+Separate process from the Flask app above — the `mcp` SDK's HTTP transport
+is ASGI (uvicorn), not WSGI (gunicorn), so it can't share the `aiagent`
+service. Same venv, same directory:
+
+```bash
+sudo cp /var/www/aiagent/src/deploy/aiagent-mcp.service /etc/systemd/system/aiagent-mcp.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now aiagent-mcp
+sudo systemctl status aiagent-mcp
+curl -s http://127.0.0.1:8788/mcp   # expect a 4xx (needs a real MCP session), not connection refused
+```
+
+Reverse-proxied at `/mcp` by `nginx-aiagent.conf` below, behind the same
+Basic Auth as everything else on this app.
+
 ## 5. Frontend build
 
 Build **locally** (or in CI) and copy the `dist/` output up — no Node needed on the droplet:

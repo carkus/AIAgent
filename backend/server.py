@@ -38,6 +38,7 @@ from agent_stream import run_agent_stream
 from llm_client import list_ollama_models
 import rate_limit
 import saved_searches
+import agent_registry
 
 app = Flask(__name__)
 
@@ -118,6 +119,30 @@ def saved_searches_item(search_id):
     if request.method == "OPTIONS":
         return "", 204
     saved_searches.delete_search(search_id)
+    return "", 204
+
+
+@app.route("/agents", methods=["GET", "POST", "OPTIONS"])
+def published_agents_collection():
+    if request.method == "OPTIONS":
+        return "", 204
+    if request.method == "GET":
+        return jsonify({"agents": agent_registry.list_agents()})
+    body = request.get_json() or {}
+    name = (body.get("name") or "").strip()
+    description = (body.get("description") or "").strip()
+    agent_config = body.get("agent_config")
+    if not name or not isinstance(agent_config, dict):
+        return jsonify({"error": "name and agent_config are required"}), 400
+    entry = agent_registry.publish(name, description, agent_config)
+    return jsonify(entry), 201
+
+
+@app.route("/agents/<agent_id>", methods=["DELETE", "OPTIONS"])
+def published_agents_item(agent_id):
+    if request.method == "OPTIONS":
+        return "", 204
+    agent_registry.unpublish(agent_id)
     return "", 204
 
 

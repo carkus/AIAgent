@@ -83,6 +83,28 @@ The server reads `env.json` on startup and hot-reloads when you edit files in `b
 
 ---
 
+## Step 4.5 — Start the MCP server (Terminal 3, optional)
+
+Only needed if you want to test AIAgent's own MCP-server side (published
+agents exposed as MCP tools other clients can call — see
+[CLAUDE.md](./CLAUDE.md)'s "AIAgent as an MCP server" section). It's a
+separate process from the Flask backend, since the `mcp` SDK's HTTP
+transport is ASGI, not WSGI:
+
+```powershell
+python backend/mcp_server.py
+```
+
+```
+Starting MCP server on http://localhost:4892/mcp
+```
+
+Publish an agent first (the "Publish as MCP tool" button in Chat, after
+bootstrapping and chatting with one), then point any MCP client at
+`http://localhost:4892/mcp`.
+
+---
+
 ## Step 5 — Start the frontend (Terminal 2)
 
 ```powershell
@@ -141,11 +163,14 @@ Then update `frontend/vite.config.ts` to proxy to the new port — it has five r
 proxy: {
   '/bootstrap': 'http://localhost:3987',
   '/agent': 'http://localhost:3987',
+  '/agents': 'http://localhost:3987',
   '/file': 'http://localhost:3987',
   '/models': 'http://localhost:3987',
   '/saved-searches': 'http://localhost:3987',
 }
 ```
+
+The MCP server (`backend/mcp_server.py`) has its own port, `4892`, overridable via `MCP_PORT` — it's a separate process from the Flask backend, not proxied by Vite (MCP clients connect to it directly, not through the frontend).
 
 ---
 

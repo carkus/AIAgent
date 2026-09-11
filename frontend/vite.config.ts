@@ -9,6 +9,7 @@ export default defineConfig({
     proxy: {
       '/bootstrap': 'http://localhost:4891',
       '/agent': 'http://localhost:4891',
+      '/agents': 'http://localhost:4891',
       '/file': 'http://localhost:4891',
       '/models': 'http://localhost:4891',
       '/saved-searches': 'http://localhost:4891',

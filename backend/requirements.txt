@@ -6,3 +6,7 @@ gunicorn>=22.0.0
 # server, see backend/src/mcp_registry.py / mcp_client.py
 mcp[cli]>=1.0.0
 mcp-server-time>=0.6.0
+# MCP server (root CLAUDE.md Gaps item 4): exposes published agents as MCP
+# tools, see backend/mcp_server.py / backend/src/agent_registry.py. Runs as
+# its own ASGI process (the mcp SDK's HTTP transports are Starlette/ASGI-only).
+uvicorn>=0.30.0

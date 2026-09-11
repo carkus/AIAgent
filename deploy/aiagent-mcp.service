@@ -1,0 +1,24 @@
+[Unit]
+Description=AIAgent MCP server (uvicorn) — published agents exposed as MCP tools
+After=network.target
+
+[Service]
+Type=simple
+User=aiagent
+WorkingDirectory=/var/www/aiagent/backend
+EnvironmentFile=/var/www/aiagent/.env
+# Own port, next to gunicorn's 8787 (deploy/aiagent.service) — a structurally
+# separate ASGI process because the mcp SDK's HTTP transports are
+# Starlette/ASGI-only, with no WSGI transport, so this can't share the Flask
+# app's process. Single process is fine here (unlike gunicorn's --workers 1
+# constraint, which exists because of rate_limit.py's process-local counters
+# — this process has no such state, MCP tool calls are just low-volume).
+ExecStart=/var/www/aiagent/venv/bin/uvicorn \
+    --host 127.0.0.1 \
+    --port 8788 \
+    mcp_server:app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

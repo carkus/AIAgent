@@ -127,6 +127,52 @@ export async function deleteSavedSearch(id: string): Promise<void> {
   await fetch(`${API_URL}/saved-searches/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
+export interface PublishedAgent {
+  id: string;
+  tool_name: string;
+  name: string;
+  description: string;
+  agent_config: AgentConfig;
+  created_at: number;
+}
+
+/** Published agents — server-side registry (backend/src/agent_registry.py)
+ * backing the MCP server (backend/mcp_server.py), which exposes each one as
+ * an MCP tool other MCP clients (Claude Desktop, Claude Code, another
+ * AIAgent instance) can call. [] on any failure, same degrade-quietly shape
+ * as listSavedSearches(). */
+export async function listPublishedAgents(): Promise<PublishedAgent[]> {
+  try {
+    const res = await fetch(`${API_URL}/agents`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.agents) ? data.agents : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function publishAgent(
+  name: string,
+  description: string,
+  agentConfig: AgentConfig,
+): Promise<PublishedAgent> {
+  const res = await fetch(`${API_URL}/agents`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, description, agent_config: agentConfig }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? 'Failed to publish agent');
+  }
+  return res.json();
+}
+
+export async function unpublishAgent(id: string): Promise<void> {
+  await fetch(`${API_URL}/agents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 export async function runAgent(
   messages: { role: string; content: string }[],
   agentConfig: AgentConfig,

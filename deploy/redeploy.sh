@@ -27,8 +27,9 @@ deploy_backend() {
     ssh "${SSH_OPTS[@]}" "$HOST" \
         "sudo -u aiagent $REMOTE_BASE/venv/bin/pip install -q -r $REMOTE_BASE/src/backend/requirements.txt"
 
-    echo "==> Restarting aiagent service ..."
+    echo "==> Restarting aiagent + aiagent-mcp services ..."
     ssh "${SSH_OPTS[@]}" "$HOST" "systemctl restart aiagent && sleep 1 && systemctl is-active aiagent"
+    ssh "${SSH_OPTS[@]}" "$HOST" "systemctl restart aiagent-mcp && sleep 1 && systemctl is-active aiagent-mcp"
 
     echo "==> Smoke check ..."
     ssh "${SSH_OPTS[@]}" "$HOST" "curl -s http://127.0.0.1:8787/models"
