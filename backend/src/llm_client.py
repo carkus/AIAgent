@@ -27,6 +27,11 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 GEMINI_MODEL = "gemini-3.6-flash"
+# Served from the same OpenAI-compat base_url as chat completions
+# (https://ai.google.dev/gemini-api/docs/openai) — used by embeddings.py for
+# bootstrap-grounding RAG (CLAUDE.md priority 5). Kept as a separate constant
+# from GEMINI_MODEL since it's a different model family (embedding, not chat).
+GEMINI_EMBED_MODEL = "gemini-embedding-2-preview"
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5")
 # Native Ollama API (for /api/tags — model listing isn't part of the OpenAI-compatible surface)
