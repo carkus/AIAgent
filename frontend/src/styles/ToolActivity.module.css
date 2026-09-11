@@ -603,6 +603,23 @@
   font-size: 0.72rem;
 }
 
+.jobTechRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0 0 0.3rem;
+}
+
+.techChip {
+  background: #1e2a4a;
+  border: 1px solid #2a3a6a;
+  border-radius: 3px;
+  color: #22d3ee;
+  font-size: 0.66rem;
+  padding: 0.05rem 0.35rem;
+  flex-shrink: 0;
+}
+
 .jobSnippet {
   color: #b5bac5;
   margin: 0;

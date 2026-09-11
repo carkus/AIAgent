@@ -181,12 +181,50 @@ function InputSummary({ inputs }: { inputs: Record<string, unknown> }) {
 
 // ─── Job listing card ─────────────────────────────────────────────────────────
 
+// Adzuna doesn't return a structured tech-stack field, so we derive one by
+// scanning the listing's own text for recognised technology names. Heuristic,
+// not authoritative — "if possible" is the operative word here.
+const TECH_KEYWORDS = [
+  // Languages
+  'JavaScript', 'TypeScript', 'Python', 'Java', 'C#', 'C++', 'Golang', 'Go', 'Rust', 'Ruby',
+  'PHP', 'Swift', 'Kotlin', 'Scala', 'Elixir', 'Haskell', 'Dart', 'Objective-C',
+  // Frontend
+  'React', 'Angular', 'Vue', 'Svelte', 'Next.js', 'Redux', 'jQuery', 'Tailwind', 'Bootstrap',
+  // Backend / frameworks
+  '.NET', 'ASP.NET', 'Node.js', 'Express', 'Django', 'Flask', 'FastAPI', 'Spring Boot', 'Spring',
+  'Rails', 'Laravel', 'Symfony', 'NestJS',
+  // Data / DB
+  'SQL', 'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'Elasticsearch', 'DynamoDB', 'SQLite',
+  'Oracle', 'Cassandra', 'GraphQL',
+  // Cloud / infra
+  'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'Terraform', 'Jenkins', 'CI/CD', 'Ansible', 'Linux',
+  // AI/ML
+  'TensorFlow', 'PyTorch', 'Pandas', 'NumPy', 'Scikit-learn', 'LangChain', 'OpenAI',
+] as const
+
+const TECH_REGEXES = TECH_KEYWORDS.map(
+  kw => [kw, new RegExp(`(?<![A-Za-z0-9])${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9])`, 'i')] as const
+)
+
+function extractTechStack(job: Record<string, unknown>): string[] {
+  const text = [job.title, job.description, job.snippet, job.summary, job.excerpt]
+    .filter(v => typeof v === 'string')
+    .join(' ')
+  if (!text) return []
+  const found: string[] = []
+  for (const [label, re] of TECH_REGEXES) {
+    if (re.test(text)) found.push(label)
+  }
+  return found.slice(0, 8) // keep the card compact
+}
+
 function JobCard({ job }: { job: Record<string, unknown> }) {
   const url = (job.redirect_url ?? job.url ?? job.apply_url ?? job.link) as string | undefined
   const snippet = (job.snippet ?? job.description ?? job.summary ?? job.excerpt) as string | undefined
   const company = (job.company ?? job.employer ?? job.company_name) as string | undefined
   const salaryLabel = formatSalaryRange(job.salary_min as number | null, job.salary_max as number | null)
   const meta = [company, job.location, formatDate(job.created as string)].filter(Boolean).join(' · ')
+  const techStack = extractTechStack(job)
 
   return (
     <div className={styles.jobCard}>
@@ -201,6 +239,11 @@ function JobCard({ job }: { job: Record<string, unknown> }) {
         {salaryLabel && <span className={styles.salaryChip}>{salaryLabel}</span>}
       </div>
       {meta && <p className={styles.jobMeta}>{meta}</p>}
+      {techStack.length > 0 && (
+        <div className={styles.jobTechRow}>
+          {techStack.map(t => <span key={t} className={styles.techChip}>{t}</span>)}
+        </div>
+      )}
       {snippet && (
         <p className={styles.jobSnippet}>
           {snippet.length > 220 ? snippet.slice(0, 220) + '…' : snippet}
