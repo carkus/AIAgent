@@ -56,9 +56,19 @@ ADZUNA_APP_ID=<real id>
 ADZUNA_APP_KEY=<real key>
 RATE_LIMIT_PER_MINUTE=5
 RATE_LIMIT_PER_DAY=50
+MCP_API_KEY=<random per-consumer key, e.g. `openssl rand -hex 32`>
 EOF
 sudo chmod 600 /var/www/aiagent/.env
 ```
+
+`MCP_API_KEY` is read by `backend/mcp_server.py` (`aiagent-mcp.service`, same
+`EnvironmentFile`) — it's what a programmatic MCP client (e.g. jobfit) sends
+as an `X-Api-Key` header to call `/mcp`, instead of holding the shared
+`auth_basic` login below. `deploy/nginx-aiagent.conf`'s `/mcp` location opts
+out of `auth_basic` for exactly this reason. Leave it unset to leave `/mcp`
+open (matches local dev); rotate it by changing this value and restarting
+`aiagent-mcp.service` — it isn't shared with any other consumer or with the
+human login, so rotating it doesn't affect anything else.
 
 ## 4. systemd service
 

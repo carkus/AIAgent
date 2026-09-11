@@ -131,10 +131,60 @@ class _StreamableHttpASGIApp:
         await session_manager.handle_request(scope, receive, send)
 
 
+class _ApiKeyMiddleware:
+    """Per-consumer key check for /mcp, additive and off by default.
+
+    Production nginx used to gate /mcp behind the same shared `auth_basic`
+    login as the rest of the site (one human login, not revocable per
+    caller) — see deploy/nginx-aiagent.conf. This gives a programmatic MCP
+    client (e.g. jobfit) its own `MCP_API_KEY`, checked as `X-Api-Key`
+    (header or `?key=` query param), mirroring jobfit's own MCP_API_KEY/
+    X-Api-Key pattern (jobfit's Program.cs) so both sides speak the same
+    convention. When MCP_API_KEY is unset — true for local dev — this is a
+    no-op and every request passes through unchanged, same as before this
+    middleware existed. Deliberately just a header check on the ASGI scope,
+    nothing agent-specific: doesn't touch list_tools/call_tool, the agent
+    registry, or any published agent's behavior.
+    """
+
+    def __init__(self, app):
+        self._app = app
+        self._key = os.environ.get("MCP_API_KEY")
+
+    async def __call__(self, scope, receive, send):
+        if not self._key or scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers") or [])
+        supplied = headers.get(b"x-api-key", b"").decode("latin-1")
+        if not supplied:
+            query = (scope.get("query_string") or b"").decode("latin-1")
+            for part in query.split("&"):
+                if part.startswith("key="):
+                    supplied = part[len("key="):]
+                    break
+
+        if supplied != self._key:
+            await send({
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [(b"content-type", b"application/json")],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": json.dumps({"error": "Unauthorized"}).encode(),
+            })
+            return
+
+        await self._app(scope, receive, send)
+
+
 app = Starlette(
     routes=[Route("/mcp", endpoint=_StreamableHttpASGIApp())],
     lifespan=lambda _app: session_manager.run(),
 )
+app = _ApiKeyMiddleware(app)
 
 
 if __name__ == "__main__":

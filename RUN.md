@@ -172,6 +172,8 @@ proxy: {
 
 The MCP server (`backend/mcp_server.py`) has its own port, `4892`, overridable via `MCP_PORT` — it's a separate process from the Flask backend, not proxied by Vite (MCP clients connect to it directly, not through the frontend).
 
+**Auth:** unset `MCP_API_KEY` locally (the default) leaves `/mcp` open, same as today. Set `MCP_API_KEY` to require every request to send a matching `X-Api-Key` header (or `?key=` query param) — see DEPLOY.md for the production story.
+
 ---
 
 ## Troubleshooting
