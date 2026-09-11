@@ -2,6 +2,7 @@ import json
 import time
 from llm_client import create_chat_completion
 from tools import execute_tool, fetch_page, search_jobs
+import mcp_client
 
 _PRIMITIVE_TOOLS = [
     {
@@ -141,7 +142,10 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
         for t in tool_definitions
     ]
 
-    impl_map = {t["name"]: t["implementation"] for t in tool_definitions}
+    # Keyed by name -> the full tool def, not just `implementation`, so
+    # dispatch below can tell a generated tool from an MCP-backed one
+    # (CLAUDE.md MCP priority 6) and route accordingly.
+    tool_def_map = {t["name"]: t for t in tool_definitions}
     provider = agent_config.get("provider")
     model = agent_config.get("ollama_model")
 
@@ -239,7 +243,11 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                 except json.JSONDecodeError:
                     tool_inputs = {}
 
-                yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs}
+                tool_def = tool_def_map.get(tool_name)
+                source = "mcp" if tool_def and tool_def.get("source") == "mcp" else (
+                    "primitive" if tool_name in ("fetch_page", "search_jobs", "delegate_to_worker") else "generated"
+                )
+                yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs, "source": source}
 
                 if tool_name == "fetch_page":
                     result = fetch_page(tool_inputs.get("url", ""))
@@ -281,8 +289,13 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                             "For any other URL, use fetch_page."
                         )
                     }
+                elif source == "mcp":
+                    # Routed to the real vetted MCP server, not exec()'d —
+                    # this is the whole point of CLAUDE.md's MCP priority 6:
+                    # bootstrap picked the tool, never wrote its implementation.
+                    result = mcp_client.call_tool(tool_def["mcp_server"], tool_def["mcp_tool"], tool_inputs)
                 else:
-                    implementation = impl_map.get(tool_name, "result = 'Unknown tool'")
+                    implementation = tool_def["implementation"] if tool_def else "result = 'Unknown tool'"
                     result = execute_tool(implementation, tool_inputs)
 
                 try:
@@ -294,9 +307,10 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                     "tool": tool_name,
                     "inputs": tool_inputs,
                     "result": result_str,
+                    "source": source,
                 })
 
-                yield {"type": "tool_result", "tool": tool_name, "result": result_str}
+                yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source}
 
                 tool_result_messages.append({
                     "role": "tool",
