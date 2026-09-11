@@ -430,6 +430,7 @@ function KeywordSection({
           {toolCalls.length > 1 && (
             <span className={styles.toolName}>{tc.tool}</span>
           )}
+          {tc.source === 'mcp' && <span className={styles.mcpBadge}>🔌 MCP</span>}
           <RawResult result={tc.result} />
         </div>
       ))}
@@ -629,6 +630,7 @@ function LiveToolRow({ tc, location }: { tc: ToolCall; location?: string }) {
     <div className={styles.entry}>
       <div className={styles.entryHeader}>
         <span className={styles.toolName}>{tc.tool}</span>
+        {tc.source === 'mcp' && <span className={styles.mcpBadge}>🔌 MCP</span>}
         <InputSummary inputs={tc.inputs} />
       </div>
       {isPending && <p className={styles.pending}>Running…</p>}

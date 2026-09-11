@@ -56,6 +56,18 @@
   flex-shrink: 0;
 }
 
+.mcpBadge {
+  color: #7dd3fc;
+  font-family: 'Share Tech Mono', monospace;
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  flex-shrink: 0;
+}
+
 .inputPills {
   display: flex;
   flex-wrap: wrap;
