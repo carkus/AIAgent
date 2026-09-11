@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { bootstrap, createSavedSearch, deleteSavedSearch, listOllamaModels, listSavedSearches } from '../api'
-import type { SavedSearch } from '../api'
+import { bootstrap, createSavedSearch, deleteSavedSearch, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
+import type { PublishedAgent, SavedSearch } from '../api'
 import { deleteSavedChat, loadSavedChats } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
 import styles from '../styles/Setup.module.css'
@@ -112,6 +112,18 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   useEffect(() => {
     listSavedSearches().then(setSaved)
   }, [])
+  // Published agents — the MCP server's tool catalog (backend/mcp_server.py
+  // reads backend/src/agent_registry.py). Shown here, not scoped by agent
+  // type, so the user can see/manage everything currently externally
+  // callable in one place.
+  const [publishedAgents, setPublishedAgents] = useState<PublishedAgent[]>([])
+  useEffect(() => {
+    listPublishedAgents().then(setPublishedAgents)
+  }, [])
+  function removePublishedAgent(id: string) {
+    setPublishedAgents(prev => prev.filter(a => a.id !== id))
+    unpublishAgent(id).catch(() => {})
+  }
   // Only show saved searches that match the currently selected agent type —
   // a "Job search agent" list of keywords isn't a useful preset when you're
   // building a "Research agent". Pre-existing saves have no agentType and
@@ -285,7 +297,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     <div className={styles.container}>
       <div className={styles.card}>
         <h1 className={styles.title}>Agent {agentName}</h1>
-        <p className={styles.subtitle}>Add keywords, then deploy Agent {agentName}.</p>
+        <p className={styles.subtitle}>Add keywords, then deploy Agent {agentName}. The agent will compose a dedicated agent for your request.</p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.agentTypeRow}>
@@ -307,6 +319,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
           </div>
 
+          <p className={styles.keywordHint}>Type a keyword, press Enter to add it</p>
           <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
             {keywords.map(kw => (
               <span key={kw} className={styles.chip}>
@@ -516,6 +529,33 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       className={styles.savedDelete}
                       onClick={ev => { ev.stopPropagation(); removeSavedChat(c.id) }}
                       aria-label="Delete saved chat"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {publishedAgents.length > 0 && (
+            <div className={styles.savedSection}>
+              <p className={styles.savedHeading}>Published as MCP tools</p>
+              <div className={styles.savedList}>
+                {publishedAgents.map(a => (
+                  <div key={a.id} className={styles.savedRow} title={a.description}>
+                    <div className={styles.savedChatInfo}>
+                      <span className={styles.savedChatName}>{a.name}</span>
+                      <span className={styles.savedChatMeta}>
+                        Tool name: {a.tool_name}{a.description ? ` · ${a.description}` : ''}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.savedDelete}
+                      onClick={ev => { ev.stopPropagation(); removePublishedAgent(a.id) }}
+                      aria-label={`Unpublish ${a.name}`}
+                      title="Unpublish (stop exposing as an MCP tool)"
                     >
                       ×
                     </button>

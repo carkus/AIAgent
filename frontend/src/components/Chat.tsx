@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { runAgent } from '../api'
+import { publishAgent, runAgent } from '../api'
 import { saveChat } from '../chatStorage'
 import { buildChatPdf, type PdfMessage } from '../chatPdf'
 import ToolActivity from './ToolActivity'
@@ -14,6 +14,7 @@ interface LiveToolCall {
   tool: string
   inputs: Record<string, unknown>
   result?: string
+  source?: ToolCall['source']
 }
 
 interface ChatMessage {
@@ -45,6 +46,17 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
   const [error, setError] = useState<string | null>(null)
   const [continueOpen, setContinueOpen] = useState(false)
   const [saveFeedback, setSaveFeedback] = useState(false)
+  // Publishing turns this bootstrapped agent into a standing MCP tool any
+  // MCP client can call (backend/mcp_server.py) — deliberately a manual,
+  // reviewed step (not automatic on bootstrap) since generated tool code
+  // has no real sandbox (see AIAgent/CLAUDE.md Limitation #2), so only an
+  // agent the user has actually exercised in chat gets made permanently
+  // externally-callable.
+  const [publishOpen, setPublishOpen] = useState(false)
+  const [publishName, setPublishName] = useState(agentName)
+  const [publishDescription, setPublishDescription] = useState(agentConfig.purpose ?? '')
+  const [publishing, setPublishing] = useState(false)
+  const [publishFeedback, setPublishFeedback] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [pdfPreview, setPdfPreview] = useState<{ blobUrl: string; filename: string; doc: ReturnType<typeof buildChatPdf> } | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -84,6 +96,23 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
     saveChat(chat)
     setSaveFeedback(true)
     window.setTimeout(() => setSaveFeedback(false), 1500)
+  }
+
+  async function handlePublish() {
+    const name = publishName.trim()
+    if (!name || publishing) return
+    setPublishing(true)
+    setPublishFeedback(null)
+    try {
+      await publishAgent(name, publishDescription.trim(), agentConfig)
+      setPublishFeedback(`Published as MCP tool "${name}"`)
+      setPublishOpen(false)
+    } catch (err) {
+      setPublishFeedback(err instanceof Error ? err.message : 'Failed to publish agent')
+    } finally {
+      setPublishing(false)
+      window.setTimeout(() => setPublishFeedback(null), 4000)
+    }
   }
 
   function handleExportPdf() {
@@ -167,7 +196,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
               ...msg,
               liveToolCalls: [
                 ...(msg.liveToolCalls ?? []),
-                { tool: event.tool, inputs: event.inputs },
+                { tool: event.tool, inputs: event.inputs, source: event.source },
               ],
             }))
             break
@@ -177,7 +206,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
               ...msg,
               liveToolCalls: (msg.liveToolCalls ?? []).map(tc =>
                 tc.tool === event.tool && tc.result === undefined
-                  ? { ...tc, result: event.result }
+                  ? { ...tc, result: event.result, source: tc.source ?? event.source }
                   : tc
               ),
             }))
@@ -209,7 +238,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
           ...msg,
           toolCalls: (msg.liveToolCalls ?? [])
             .filter(tc => tc.result !== undefined)
-            .map(tc => ({ tool: tc.tool, inputs: tc.inputs, result: tc.result! })),
+            .map(tc => ({ tool: tc.tool, inputs: tc.inputs, result: tc.result!, source: tc.source })),
           liveToolCalls: undefined,
         }))
       } else {
@@ -248,6 +277,13 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
         <div className={styles.headerActions}>
           <button
             type="button"
+            className={styles.publishBtn}
+            onClick={() => setPublishOpen(o => !o)}
+          >
+            Publish as MCP tool
+          </button>
+          <button
+            type="button"
             className={styles.saveBtn}
             onClick={handleSaveChat}
             disabled={messages.length === 0}
@@ -266,6 +302,35 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
         </div>
         <ContinuePanel isOpen={continueOpen} onToggle={() => setContinueOpen(!continueOpen)} />
       </header>
+
+      {publishOpen && (
+        <div className={styles.publishPanel}>
+          <input
+            className={styles.publishInput}
+            value={publishName}
+            onChange={e => setPublishName(e.target.value)}
+            placeholder="Tool name (shown to MCP clients)"
+          />
+          <input
+            className={styles.publishInput}
+            value={publishDescription}
+            onChange={e => setPublishDescription(e.target.value)}
+            placeholder="Description (what this agent does)"
+          />
+          <button
+            type="button"
+            className={styles.publishConfirmBtn}
+            onClick={handlePublish}
+            disabled={!publishName.trim() || publishing}
+          >
+            {publishing ? 'Publishing…' : 'Publish'}
+          </button>
+          <button type="button" className={styles.publishCancelBtn} onClick={() => setPublishOpen(false)}>
+            Cancel
+          </button>
+        </div>
+      )}
+      {publishFeedback && <p className={styles.publishFeedback}>{publishFeedback}</p>}
 
       <div className={styles.container}>
         <div className={styles.mainContent}>
@@ -287,6 +352,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
                   tool: tc.tool,
                   inputs: tc.inputs,
                   result: tc.result ?? '…',
+                  source: tc.source,
                 }))}
                 live
                 location={agentConfig.location}

@@ -108,6 +108,12 @@
   margin: 0;
 }
 
+.keywordHint {
+  color: #8b90a0;
+  font-size: 0.75rem;
+  margin: 0 0 -0.25rem;
+}
+
 .hintActions {
   display: flex;
   gap: 0.5rem;

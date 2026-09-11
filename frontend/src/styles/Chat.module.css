@@ -145,6 +145,87 @@
   cursor: default;
 }
 
+.publishBtn {
+  background: rgba(192, 132, 252, 0.12);
+  border: 1px solid rgba(192, 132, 252, 0.4);
+  border-radius: 10px;
+  color: #d8b4fe;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.12s, opacity 0.15s;
+}
+
+.publishBtn:hover {
+  background: rgba(192, 132, 252, 0.22);
+  transform: translateY(-1px);
+}
+
+.publishPanel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  border-bottom: 1px solid rgba(192, 132, 252, 0.25);
+  background: rgba(192, 132, 252, 0.05);
+  flex-shrink: 0;
+}
+
+.publishInput {
+  background: #171a21;
+  border: 1px solid #2a2f3a;
+  border-radius: 6px;
+  color: #eceef2;
+  flex: 1;
+  min-width: 180px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  padding: 0.5rem 0.75rem;
+}
+
+.publishInput:focus {
+  border-color: #c084fc;
+}
+
+.publishConfirmBtn {
+  background: #c084fc;
+  border: none;
+  border-radius: 6px;
+  color: #1a0a2a;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.5rem 1rem;
+  white-space: nowrap;
+}
+
+.publishConfirmBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.publishCancelBtn {
+  background: transparent;
+  border: 1px solid #333846;
+  border-radius: 6px;
+  color: #9aa0af;
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 0.5rem 1rem;
+  white-space: nowrap;
+}
+
+.publishFeedback {
+  color: #d8b4fe;
+  font-size: 0.78rem;
+  margin: 0;
+  padding: 0.4rem 1.25rem 0;
+}
+
 .container {
   display: flex;
   flex: 1;
