@@ -2,3 +2,7 @@ openai>=1.0.0
 requests>=2.31.0
 flask>=3.0.0
 gunicorn>=22.0.0
+# MCP client (CLAUDE.md priority 6): official SDK + one vetted reference
+# server, see backend/src/mcp_registry.py / mcp_client.py
+mcp[cli]>=1.0.0
+mcp-server-time>=0.6.0
