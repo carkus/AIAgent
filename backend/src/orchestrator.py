@@ -38,7 +38,13 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None)
     from agent_stream import run_agent_stream
 
     try:
-        worker_config = generate_agent_config(purpose=task, provider=provider, model=model)
+        # is_worker=True buckets this bootstrap separately in bootstrap_memory
+        # (CLAUDE.md RAG priority 5) — a narrow delegated subtask and a
+        # top-level user purpose aren't good few-shot matches for each other,
+        # but a worker IS an agent bootstrapped the normal way, so it benefits
+        # from the same grounding (few-shot retrieval + the MCP tool catalog)
+        # with zero extra code path.
+        worker_config = generate_agent_config(purpose=task, provider=provider, model=model, is_worker=True)
     except Exception as e:
         return {
             "worker_name": "Worker",

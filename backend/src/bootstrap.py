@@ -1,6 +1,11 @@
 import json
+import logging
 import re
 from llm_client import create_chat_completion
+import bootstrap_memory
+import mcp_client
+
+logger = logging.getLogger(__name__)
 
 _BOOTSTRAP_PROMPT = """\
 You are a meta-agent configurator. A user wants a custom AI agent for the following purpose:
@@ -8,7 +13,7 @@ You are a meta-agent configurator. A user wants a custom AI agent for the follow
 <purpose>
 {purpose}
 </purpose>
-
+{fewshot}
 Design and configure this agent. Return a single JSON object with exactly these fields:
 
 {{
@@ -49,9 +54,16 @@ Two primitive tools are pre-built and always available to the agent — do NOT i
 
 Instruct the agent to call these directly rather than reinventing them.
 
+Vetted MCP tools (real, independently-maintained servers — prefer these over writing your own implementation when one already covers the need):
+{mcp_catalog}
+To use one of these, add it to the tools array as ONLY:
+{{"name": "<snake_case_name>", "source": "mcp", "mcp_server": "<server id from the list above>", "mcp_tool": "<tool name from the list above>"}}
+Do NOT include "description" or "input_schema" or "implementation" for an MCP tool — they are filled in automatically from the real server, and inventing them yourself will be ignored/overwritten. Only reference a server id and tool name that actually appear in the list above; do not guess or invent one — if nothing in the list fits, write a normal generated tool instead.
+
 Rules:
 - persona.traits must be exactly 3 short adjectives describing the agent's working style, grounded in the purpose (e.g. a legal-research agent might get ["meticulous", "formal", "cautious"]; a casual recipe agent might get ["playful", "practical", "warm"]) — avoid generic filler like "helpful" or "efficient" alone
 - Design tools that directly serve the stated purpose
+- Check the vetted MCP tools list above first for each capability the agent needs — only write a generated Python `implementation` for something no primitive and no vetted MCP tool already covers
 - Tool implementations must be self-contained Python snippets
 - Do NOT generate a fetch_url, fetch_page, scrape, or HTTP-request tool — use the built-in `fetch_page` primitive instead
 - Do NOT generate any tool that fetches or scrapes job listings, salary data, or job boards (SEEK, Indeed, LinkedIn, etc.) via `fetch_page` or raw HTTP requests — those sites block this server's IP with a 403 regardless of headers. For ANY job search, job listing, or salary-research purpose, the system_prompt MUST instruct the agent to call the built-in `search_jobs` primitive instead.
@@ -78,6 +90,106 @@ def _try_parse(text: str) -> tuple[dict | None, json.JSONDecodeError | None]:
         return None, e
 
 
+def _tool_syntax_errors(config: dict) -> list[tuple[str, SyntaxError]]:
+    """Bootstrap only guarantees the config is valid JSON — the `implementation`
+    field is just a string as far as JSON is concerned, so a model can hand
+    back perfectly valid JSON containing broken Python (a truncated dict
+    literal, mismatched braces from bad escaping, etc.). That only used to
+    surface later as a `Tool execution error` the first time the tool was
+    actually called. Compile-checking every implementation here catches it
+    at bootstrap time instead."""
+    errors: list[tuple[str, SyntaxError]] = []
+    for tool in config.get("tools", []):
+        if not isinstance(tool, dict):
+            continue
+        impl = tool.get("implementation")
+        if not isinstance(impl, str):
+            continue
+        try:
+            compile(impl, "<tool>", "exec")
+        except SyntaxError as e:
+            errors.append((tool.get("name", "<unnamed>"), e))
+    return errors
+
+
+def _describe_tool_errors(errors: list[tuple[str, SyntaxError]]) -> str:
+    return "; ".join(f"tool '{name}': {e.msg} at line {e.lineno}" for name, e in errors)
+
+
+def _format_mcp_catalog(catalog: list[dict]) -> str:
+    """Renders mcp_client.catalog_summary() for the bootstrap prompt. Empty
+    catalog (no vetted server reachable in this environment) renders as an
+    explicit "none available" line rather than an empty gap in the prompt,
+    so the model doesn't fabricate one anyway."""
+    if not catalog:
+        return "(none currently available)"
+    return "\n".join(
+        f'- server "{c["server_id"]}", tool "{c["tool_name"]}": {c["description"]}'
+        for c in catalog
+    )
+
+
+def _resolve_mcp_tools(config: dict) -> None:
+    """For every tool the model tagged "source": "mcp", replace whatever it
+    wrote for name/description/input_schema with the REAL schema from the
+    vetted server (same "trust the live schema, not the model's guess"
+    lesson as ComfyUI's node_schemas) and drop any implementation it may
+    have hallucinated alongside it. A (mcp_server, mcp_tool) pair that
+    doesn't match anything in the real catalog is dropped entirely — same
+    "drop the offending tool" behaviour _tool_syntax_errors already uses for
+    broken generated Python, just for a hallucinated MCP reference instead."""
+    catalog = {(c["server_id"], c["tool_name"]): c for c in mcp_client.catalog_summary()}
+    resolved = []
+    for tool in config.get("tools", []):
+        if not isinstance(tool, dict):
+            continue
+        if tool.get("source") == "mcp":
+            real = catalog.get((tool.get("mcp_server"), tool.get("mcp_tool")))
+            if real is None:
+                logger.info(
+                    "Dropping hallucinated MCP tool reference: server=%s tool=%s",
+                    tool.get("mcp_server"), tool.get("mcp_tool"),
+                )
+                continue
+            tool["name"] = tool.get("name") or real["tool_name"]
+            tool["description"] = real["description"]
+            tool["input_schema"] = real["input_schema"]
+            tool.pop("implementation", None)
+        resolved.append(tool)
+    config["tools"] = resolved
+
+
+def _format_fewshot(entries: list[dict]) -> str:
+    """Renders bootstrap_memory.retrieve_similar() results as a few-shot
+    block for the prompt. Empty list (no history yet, or embeddings
+    unavailable) renders as "" so the prompt is byte-identical to before
+    this feature existed — that's the cold-start / degraded path."""
+    if not entries:
+        return ""
+    blocks = []
+    for entry in entries:
+        persona = entry.get("persona") or {}
+        tool_lines = "\n".join(
+            f'  - {t.get("name")}: {t.get("description")}'
+            for t in entry.get("tool_descriptions", []) if t.get("name")
+        ) or "  (none)"
+        persona_line = (
+            f'{persona.get("name")} ({", ".join(persona.get("traits", []))})'
+            if persona.get("name") else "(none)"
+        )
+        blocks.append(
+            f'Purpose: "{entry.get("purpose")}"\n'
+            f'Persona: {persona_line}\n'
+            f'Tools:\n{tool_lines}'
+        )
+    joined = "\n\n".join(blocks)
+    return (
+        "\nSimilar past agents that worked well for related purposes — use these as "
+        "reference for what a well-scoped tool set looks like, but design tools "
+        f"specific to THIS purpose rather than copying them verbatim:\n\n{joined}\n"
+    )
+
+
 def _normalize_persona(config: dict) -> None:
     """Best-effort cleanup of the model-generated `persona` field. A model
     can omit it, mistype a field, or nest it wrong — rather than let a bad
@@ -102,12 +214,30 @@ def _normalize_persona(config: dict) -> None:
         config.pop("persona", None)
 
 
-def generate_agent_config(purpose: str, provider: str | None = None, model: str | None = None) -> dict:
+def _build_prompt(purpose: str, provider: str | None, is_worker: bool) -> tuple[str, int]:
+    """Grounds the bootstrap prompt in real data (CLAUDE.md RAG priority 5 +
+    MCP priority 6): past similar bootstraps as few-shot examples, and the
+    real vetted MCP tool catalog. Returns (prompt, fewshot_count) — the count
+    is surfaced as a status event by the streaming variant."""
+    fewshot_entries = bootstrap_memory.retrieve_similar(purpose, provider, is_worker)
+    mcp_catalog = mcp_client.catalog_summary()
+    prompt = _BOOTSTRAP_PROMPT.format(
+        purpose=purpose,
+        fewshot=_format_fewshot(fewshot_entries),
+        mcp_catalog=_format_mcp_catalog(mcp_catalog),
+    )
+    return prompt, len(fewshot_entries)
+
+
+def generate_agent_config(
+    purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False
+) -> dict:
+    prompt, _ = _build_prompt(purpose, provider, is_worker)
     response = create_chat_completion(
         provider=provider,
         model=model,
         max_tokens=16000,
-        messages=[{"role": "user", "content": _BOOTSTRAP_PROMPT.format(purpose=purpose)}],
+        messages=[{"role": "user", "content": prompt}],
     )
     text = _extract_text(response)
     config, error = _try_parse(text)
@@ -122,7 +252,7 @@ def generate_agent_config(purpose: str, provider: str | None = None, model: str 
             model=model,
             max_tokens=16000,
             messages=[
-                {"role": "user", "content": _BOOTSTRAP_PROMPT.format(purpose=purpose)},
+                {"role": "user", "content": prompt},
                 {"role": "assistant", "content": text},
                 {"role": "user", "content": (
                     "That was not valid JSON "
@@ -142,12 +272,48 @@ def generate_agent_config(purpose: str, provider: str | None = None, model: str 
             f"Try a simpler purpose description, or a different model if running local-only."
         )
 
+    # Second validation pass: valid JSON doesn't mean valid Python inside the
+    # `implementation` strings. One correction retry, same shape as the JSON
+    # retry above; if it's still broken, drop just the offending tool(s)
+    # rather than failing the whole agent over one bad tool.
+    tool_errors = _tool_syntax_errors(config)
+    if tool_errors:
+        correction_response = create_chat_completion(
+            provider=provider,
+            model=model,
+            max_tokens=16000,
+            messages=[
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": text},
+                {"role": "user", "content": (
+                    "The JSON parsed, but these tools' `implementation` strings are not "
+                    f"valid Python and fail to compile: {_describe_tool_errors(tool_errors)}. "
+                    "Return ONLY the corrected, complete, valid JSON object with fixed "
+                    "implementations — no markdown fences, no explanation, no truncation."
+                )},
+            ],
+        )
+        text = _extract_text(correction_response)
+        retried_config, retry_error = _try_parse(text)
+        if retried_config is not None:
+            config = retried_config
+            tool_errors = _tool_syntax_errors(config)
+
+    if tool_errors:
+        broken = {name for name, _ in tool_errors}
+        config["tools"] = [
+            t for t in config.get("tools", [])
+            if not isinstance(t, dict) or t.get("name") not in broken
+        ]
+
+    _resolve_mcp_tools(config)
     _normalize_persona(config)
     config["purpose"] = purpose
     # Carried in AgentConfig so every subsequent /agent turn in this session
     # reuses the same provider/model choice made on the Setup screen.
     config["provider"] = provider
     config["ollama_model"] = model
+    bootstrap_memory.record(purpose, config, provider, is_worker)
     return config
 
 
@@ -164,7 +330,9 @@ def _model_event(meta: dict) -> dict:
     return {"type": "model", "used": meta.get("used"), "failed": meta.get("failed", [])}
 
 
-def generate_agent_config_stream(purpose: str, provider: str | None = None, model: str | None = None):
+def generate_agent_config_stream(
+    purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False
+):
     """
     Streaming counterpart to generate_agent_config, used only by server.py's
     /bootstrap (not the Lambda handler, which has no streaming response type
@@ -183,6 +351,10 @@ def generate_agent_config_stream(purpose: str, provider: str | None = None, mode
     """
     yield {"type": "status", "message": "Thinking about your purpose…"}
 
+    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker)
+    if fewshot_count:
+        yield {"type": "status", "message": f"Found {fewshot_count} similar past agent(s) — reusing what worked…"}
+
     seen_tools: set[str] = set()
     seen_persona = False
     seen_system_prompt = False
@@ -197,7 +369,7 @@ def generate_agent_config_stream(purpose: str, provider: str | None = None, mode
             max_tokens=16000,
             stream=True,
             _meta=meta,
-            messages=[{"role": "user", "content": _BOOTSTRAP_PROMPT.format(purpose=purpose)}],
+            messages=[{"role": "user", "content": prompt}],
         )
         yield _model_event(meta)
         for chunk in stream:
@@ -252,7 +424,7 @@ def generate_agent_config_stream(purpose: str, provider: str | None = None, mode
                 max_tokens=16000,
                 _meta=correction_meta,
                 messages=[
-                    {"role": "user", "content": _BOOTSTRAP_PROMPT.format(purpose=purpose)},
+                    {"role": "user", "content": prompt},
                     {"role": "assistant", "content": text},
                     {"role": "user", "content": (
                         "That was not valid JSON "
@@ -278,8 +450,51 @@ def generate_agent_config_stream(purpose: str, provider: str | None = None, mode
         )}
         return
 
+    # Same compile-check + one correction retry as generate_agent_config —
+    # see _tool_syntax_errors for why JSON validity alone isn't enough.
+    tool_errors = _tool_syntax_errors(config)
+    if tool_errors:
+        yield {"type": "status", "message": "Fixing broken tool code…"}
+        tool_fix_meta: dict = {}
+        try:
+            correction_response = create_chat_completion(
+                provider=provider,
+                model=model,
+                max_tokens=16000,
+                _meta=tool_fix_meta,
+                messages=[
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": text},
+                    {"role": "user", "content": (
+                        "The JSON parsed, but these tools' `implementation` strings are not "
+                        f"valid Python and fail to compile: {_describe_tool_errors(tool_errors)}. "
+                        "Return ONLY the corrected, complete, valid JSON object with fixed "
+                        "implementations — no markdown fences, no explanation, no truncation."
+                    )},
+                ],
+            )
+            yield _model_event(tool_fix_meta)
+            text = _extract_text(correction_response)
+            retried_config, _ = _try_parse(text)
+            if retried_config is not None:
+                config = retried_config
+                tool_errors = _tool_syntax_errors(config)
+        except Exception as e:
+            yield _model_event(tool_fix_meta)
+            yield {"type": "error", "message": f"Tool-code correction retry failed: {e}"}
+            return
+
+    if tool_errors:
+        broken = {name for name, _ in tool_errors}
+        config["tools"] = [
+            t for t in config.get("tools", [])
+            if not isinstance(t, dict) or t.get("name") not in broken
+        ]
+
+    _resolve_mcp_tools(config)
     _normalize_persona(config)
     config["purpose"] = purpose
     config["provider"] = provider
     config["ollama_model"] = model
+    bootstrap_memory.record(purpose, config, provider, is_worker)
     yield {"type": "done", "config": config}
