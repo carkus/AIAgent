@@ -2,7 +2,14 @@ export interface ToolDefinition {
   name: string;
   description: string;
   input_schema: Record<string, unknown>;
-  implementation: string;
+  // Generated tools carry a Python implementation; MCP-backed tools (CLAUDE.md
+  // MCP priority 6) carry source/mcp_server/mcp_tool instead — bootstrap
+  // picked a real vetted tool rather than writing one, so there's no
+  // implementation to run client-side or otherwise.
+  implementation?: string;
+  source?: 'generated' | 'mcp';
+  mcp_server?: string;
+  mcp_tool?: string;
 }
 
 // undefined/null = default cascade (Gemini, falling back to local Ollama on error)
@@ -41,6 +48,11 @@ export interface ToolCall {
   tool: string;
   inputs: Record<string, unknown>;
   result: string;
+  // 'primitive' (fetch_page/search_jobs/delegate_to_worker), 'generated'
+  // (Claude-written Python), or 'mcp' (a real vetted MCP server call —
+  // CLAUDE.md MCP priority 6). Optional: absent on saved chats from before
+  // this field existed.
+  source?: 'primitive' | 'generated' | 'mcp';
 }
 
 export interface Message {
@@ -50,8 +62,8 @@ export interface Message {
 
 // Stream events emitted by the agent loop
 export type StreamEvent =
-  | { type: 'tool_start'; tool: string; inputs: Record<string, unknown> }
-  | { type: 'tool_result'; tool: string; result: string }
+  | { type: 'tool_start'; tool: string; inputs: Record<string, unknown>; source?: ToolCall['source'] }
+  | { type: 'tool_result'; tool: string; result: string; source?: ToolCall['source'] }
   | {
       type: 'done';
       response: string;
