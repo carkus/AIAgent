@@ -148,6 +148,40 @@ function isWorkerResult(v: unknown): v is Record<string, unknown> & { worker_nam
   return typeof o.worker_name === 'string' && typeof o.response === 'string'
 }
 
+interface WorkerSummary {
+  name: string
+  traits: string[]
+  task: string
+  pending: boolean
+}
+
+// One summary entry per delegate_to_worker call — the "how many agents did
+// this search actually spin up, and what was each one's remit" overview
+// shown above the per-keyword breakdown.
+function extractWorkerSummaries(toolCalls: ToolCall[]): WorkerSummary[] {
+  return toolCalls
+    .filter(tc => tc.tool === 'delegate_to_worker')
+    .map((tc): WorkerSummary | null => {
+      if (tc.result === '…') {
+        return {
+          name: 'Worker',
+          traits: [],
+          task: typeof tc.inputs.task === 'string' ? tc.inputs.task : '',
+          pending: true,
+        }
+      }
+      const data = parseResult(tc.result)
+      if (!isWorkerResult(data)) return null
+      return {
+        name: data.worker_name,
+        traits: (data.worker_traits as string[] | undefined) ?? [],
+        task: (data.task as string | undefined) ?? '',
+        pending: false,
+      }
+    })
+    .filter((w): w is WorkerSummary => w !== null)
+}
+
 function extractSavedFile(raw: string): string | null {
   const data = parseResult(raw)
   if (typeof data !== 'object' || data === null || Array.isArray(data)) return null
@@ -344,6 +378,7 @@ function MarketTrendCard({ data }: { data: Record<string, unknown> }) {
 // ─── Delegated worker result (multi-agent orchestration, first scaffold) ─────
 
 function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
+  const [open, setOpen] = useState(true)
   const name = data.worker_name as string
   const traits = (data.worker_traits as string[] | undefined) ?? []
   const task = data.task as string | undefined
@@ -352,18 +387,28 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
 
   return (
     <div className={styles.workerCard}>
-      <p className={styles.workerHeading}>
+      <button
+        type="button"
+        className={styles.workerHeadingBtn}
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        <span className={styles.workerHeadingArrow}>{open ? '▾' : '▸'}</span>
         <span className={styles.workerName}>🤝 {name}</span>
         {traits.length > 0 && (
           <span className={styles.workerTraits}>{traits.join(' · ')}</span>
         )}
-      </p>
-      {task && <p className={styles.workerTask}>{task}</p>}
-      {response && <p className={styles.workerResponse}>{response}</p>}
-      {toolsUsed.length > 0 && (
-        <p className={styles.workerTools}>
-          {toolsUsed.map((t, i) => <span key={i} className={styles.pill}><span className={styles.pillVal}>{t}</span></span>)}
-        </p>
+      </button>
+      {open && (
+        <>
+          {task && <p className={styles.workerTask}>{task}</p>}
+          {response && <p className={styles.workerResponse}>{response}</p>}
+          {toolsUsed.length > 0 && (
+            <p className={styles.workerTools}>
+              {toolsUsed.map((t, i) => <span key={i} className={styles.pill}><span className={styles.pillVal}>{t}</span></span>)}
+            </p>
+          )}
+        </>
       )}
     </div>
   )
@@ -407,6 +452,35 @@ function SavedFileViewer({ filename }: { filename: string }) {
   )
 }
 
+// ─── Agents-employed summary (how many workers this search delegated) ───────
+
+function AgentsEmployedSummary({ workers }: { workers: WorkerSummary[] }) {
+  if (workers.length === 0) return null
+  return (
+    <div className={styles.agentsSummary}>
+      <p className={styles.agentsSummaryHeading}>
+        {workers.length} agent{workers.length !== 1 ? 's' : ''} employed
+      </p>
+      <div className={styles.agentsSummaryPills}>
+        {workers.map((w, i) => (
+          <span key={i} className={styles.agentPill}>
+            <span className={styles.agentPillName}>🤝 {w.name}</span>
+            {w.traits.length > 0 && (
+              <span className={styles.agentPillTraits}>{w.traits.join(' · ')}</span>
+            )}
+            {w.task && (
+              <span className={styles.agentPillTask}>
+                {w.task.length > 90 ? w.task.slice(0, 90) + '…' : w.task}
+              </span>
+            )}
+            {w.pending && <span className={styles.agentPillPending}>running…</span>}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Keyword section (completed view) ────────────────────────────────────────
 
 function KeywordSection({
@@ -416,6 +490,8 @@ function KeywordSection({
   toolCalls: ToolCall[]
   location?: string
 }) {
+  const [open, setOpen] = useState(true)
+
   // Collect all listings across tool calls for this keyword, deduplicated
   const seen = new Set<string>()
   const allListings = toolCalls.flatMap(tc => extractListingsFromResult(tc.result))
@@ -447,36 +523,48 @@ function KeywordSection({
 
   return (
     <div className={styles.kwSection}>
-      <p className={styles.kwHeading}>
-        {/^https?:\/\//i.test(keyword) ? (
-          <a href={keyword} target="_blank" rel="noreferrer" className={styles.kwLink}>
-            {keyword.replace(/^https?:\/\//, '').slice(0, 70)}
-            {keyword.replace(/^https?:\/\//, '').length > 70 ? '…' : ''}
-          </a>
-        ) : (
-          keyword.length > 70 ? keyword.slice(0, 70) + '…' : keyword
-        )}
-        {filtered.length > 0 && (
-          <span className={styles.kwCount}>
-            {' '}{filtered.length} listing{filtered.length !== 1 ? 's' : ''}
-            {hidden > 0 && <span className={styles.filteredNote}> · {hidden} filtered</span>}
-          </span>
-        )}
-      </p>
-
-      {filtered.map((job, i) => <JobCard key={i} job={job} />)}
-      {marketResults.map((d, i) => <MarketTrendCard key={i} data={d} />)}
-      {savedFiles.map(f => <SavedFileViewer key={f} filename={f} />)}
-
-      {!hasStructured && toolCalls.map((tc, i) => (
-        <div key={i} className={styles.rawEntry}>
-          {toolCalls.length > 1 && (
-            <span className={styles.toolName}>{tc.tool}</span>
+      <button
+        type="button"
+        className={styles.kwHeadingBtn}
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        <span className={styles.kwHeadingArrow}>{open ? '▾' : '▸'}</span>
+        <span className={styles.kwHeading}>
+          {/^https?:\/\//i.test(keyword) ? (
+            <a href={keyword} target="_blank" rel="noreferrer" className={styles.kwLink} onClick={e => e.stopPropagation()}>
+              {keyword.replace(/^https?:\/\//, '').slice(0, 70)}
+              {keyword.replace(/^https?:\/\//, '').length > 70 ? '…' : ''}
+            </a>
+          ) : (
+            keyword.length > 70 ? keyword.slice(0, 70) + '…' : keyword
           )}
-          {tc.source === 'mcp' && <span className={styles.mcpBadge}>🔌 MCP</span>}
-          <RawResult result={tc.result} />
-        </div>
-      ))}
+          {filtered.length > 0 && (
+            <span className={styles.kwCount}>
+              {' '}{filtered.length} listing{filtered.length !== 1 ? 's' : ''}
+              {hidden > 0 && <span className={styles.filteredNote}> · {hidden} filtered</span>}
+            </span>
+          )}
+        </span>
+      </button>
+
+      {open && (
+        <>
+          {filtered.map((job, i) => <JobCard key={i} job={job} />)}
+          {marketResults.map((d, i) => <MarketTrendCard key={i} data={d} />)}
+          {savedFiles.map(f => <SavedFileViewer key={f} filename={f} />)}
+
+          {!hasStructured && toolCalls.map((tc, i) => (
+            <div key={i} className={styles.rawEntry}>
+              {toolCalls.length > 1 && (
+                <span className={styles.toolName}>{tc.tool}</span>
+              )}
+              {tc.source === 'mcp' && <span className={styles.mcpBadge}>🔌 MCP</span>}
+              <RawResult result={tc.result} />
+            </div>
+          ))}
+        </>
+      )}
     </div>
   )
 }
@@ -696,16 +784,31 @@ function LiveToolRow({ tc, location }: { tc: ToolCall; location?: string }) {
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export default function ToolActivity({ toolCalls, live = false, location }: Props) {
+  const [open, setOpen] = useState(true)
+
   if (toolCalls.length === 0) return null
 
   if (live) {
     return (
       <div className={styles.container}>
-        <p className={styles.heading}>
-          Running · {toolCalls.length} call{toolCalls.length !== 1 ? 's' : ''}
-          <span className={styles.liveDot} />
-        </p>
-        {toolCalls.map((tc, i) => <LiveToolRow key={i} tc={tc} location={location} />)}
+        <button
+          type="button"
+          className={styles.headingBtn}
+          onClick={() => setOpen(o => !o)}
+          aria-expanded={open}
+        >
+          <span className={styles.headingArrow}>{open ? '▾' : '▸'}</span>
+          <span className={styles.heading}>
+            Running · {toolCalls.length} call{toolCalls.length !== 1 ? 's' : ''}
+            <span className={styles.liveDot} />
+          </span>
+        </button>
+        {open && (
+          <>
+            <AgentsEmployedSummary workers={extractWorkerSummaries(toolCalls)} />
+            {toolCalls.map((tc, i) => <LiveToolRow key={i} tc={tc} location={location} />)}
+          </>
+        )}
       </div>
     )
   }
@@ -732,21 +835,35 @@ export default function ToolActivity({ toolCalls, live = false, location }: Prop
 
   return (
     <div className={styles.container}>
-      <p className={styles.heading}>
-        Tool activity · {toolCalls.length} call{toolCalls.length !== 1 ? 's' : ''}
-      </p>
+      <button
+        type="button"
+        className={styles.headingBtn}
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        <span className={styles.headingArrow}>{open ? '▾' : '▸'}</span>
+        <span className={styles.heading}>
+          Tool activity · {toolCalls.length} call{toolCalls.length !== 1 ? 's' : ''}
+        </span>
+      </button>
 
-      {[...byKeyword.entries()].map(([kw, tcs]) => (
-        <KeywordSection key={kw} keyword={kw} toolCalls={tcs} location={location} />
-      ))}
+      {open && (
+        <>
+          {[...byKeyword.entries()].map(([kw, tcs]) => (
+            <KeywordSection key={kw} keyword={kw} toolCalls={tcs} location={location} />
+          ))}
 
-      {savedFromOther.map(f => (
-        <div key={f} className={styles.kwSection}>
-          <SavedFileViewer filename={f} />
-        </div>
-      ))}
+          <AgentsEmployedSummary workers={extractWorkerSummaries(toolCalls)} />
 
-      {unsavedOther.map((tc, i) => <LiveToolRow key={i} tc={tc} location={location} />)}
+          {savedFromOther.map(f => (
+            <div key={f} className={styles.kwSection}>
+              <SavedFileViewer filename={f} />
+            </div>
+          ))}
+
+          {unsavedOther.map((tc, i) => <LiveToolRow key={i} tc={tc} location={location} />)}
+        </>
+      )}
     </div>
   )
 }

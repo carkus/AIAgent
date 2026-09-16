@@ -26,11 +26,31 @@
 
 .heading {
   color: #9aa0af;
-  margin: 0 0 0.5rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-size: 0.68rem;
+}
+
+.headingBtn {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-family: inherit;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.headingArrow {
+  color: #22d3ee;
+  flex-shrink: 0;
+  font-size: 0.7rem;
 }
 
 .entry {
@@ -139,12 +159,32 @@
   margin-top: 0.65rem;
 }
 
+.kwHeadingBtn {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-family: inherit;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.kwHeadingArrow {
+  color: #ff2fd6;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+}
+
 .kwHeading {
   color: #ff2fd6;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.82rem;
   font-weight: 700;
-  margin: 0 0 0.5rem;
   text-transform: lowercase;
 }
 
@@ -506,6 +546,69 @@
   color: #7d8393;
 }
 
+/* Agents-employed summary */
+
+.agentsSummary {
+  border-top: 1px solid #262a33;
+  padding-top: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.agentsSummaryHeading {
+  color: #a5b4fc;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0 0 0.4rem;
+}
+
+.agentsSummaryPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.agentPill {
+  align-items: baseline;
+  background: #13161c;
+  border: 1px solid #2a2f6b;
+  border-left: 2px solid #7c83ff;
+  border-radius: 5px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.25rem 0.55rem;
+  max-width: 100%;
+}
+
+.agentPillName {
+  color: #a5b4fc;
+  font-family: 'Share Tech Mono', monospace;
+  font-weight: 700;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.agentPillTraits {
+  color: #7db8e8;
+  font-style: italic;
+  font-size: 0.66rem;
+  flex-shrink: 0;
+}
+
+.agentPillTask {
+  color: #9aa0af;
+  font-size: 0.7rem;
+}
+
+.agentPillPending {
+  color: #ff2fd6;
+  font-size: 0.66rem;
+  font-style: italic;
+  flex-shrink: 0;
+}
+
 .workerCard {
   background: #13161c;
   border: 1px solid #2a2f6b;
@@ -515,12 +618,26 @@
   padding: 0.65rem 0.75rem;
 }
 
-.workerHeading {
+.workerHeadingBtn {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 0.5rem;
+  font-family: inherit;
   margin: 0 0 0.35rem;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.workerHeadingArrow {
+  color: #a5b4fc;
+  flex-shrink: 0;
+  font-size: 0.7rem;
 }
 
 .workerName {

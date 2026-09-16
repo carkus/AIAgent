@@ -6,6 +6,8 @@ Describe what you want an agent to do — in plain language, no configuration fi
 
 And once it starts, it doesn't forget. Every tool call, every search result, every piece of analysis stays in context. Ask follow-up questions, dig deeper, change direction — the agent carries the full thread of the conversation. It's not a one-shot query tool. It's a researcher you can talk to.
 
+The platform can also delegate: a request naming several distinct topics ("Python developer, React developer, DevOps engineer" — or "renewable energy, EV batteries, grid storage") spins up one disposable worker agent per topic, each with its own tools, searching and reporting back independently, capped at 6 per turn.
+
 ---
 
 ## What You Can Do With It
@@ -17,7 +19,7 @@ Tell it what you need. It figures out the rest.
  volume, seniority mix, salary ranges, top hiring companies."
 ```
 
-The agent bootstraps itself with the right tools for that task — job board search, data analysis, report writing — then works through the problem autonomously, calling tools in sequence, reasoning over results, and delivering a structured answer.
+The agent bootstraps itself with the right tools for that task — job board search, data analysis, report writing — then works through the problem autonomously, calling tools in sequence, reasoning over results, and delivering a structured answer. Where the findings are a comparison, a distribution, or a multi-step flow, the agent draws a Mermaid diagram instead of a wall of prose.
 
 Then keep going:
 
@@ -32,46 +34,61 @@ The agent remembers everything. The full conversation history travels with every
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Phase 1: Bootstrap                                     │
-│                                                         │
-│  User describes purpose                                 │
-│       │                                                 │
-│       ▼                                                 │
-│  Claude (claude-opus-4-8) generates:                    │
-│    • system_prompt  — role, personality, approach       │
-│    • tools[]        — name, description, input_schema   │
-│                       + Python implementation code      │
-│                                                         │
-│  Result stored in React state as AgentConfig            │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│  Phase 1: Bootstrap  (POST /bootstrap, streamed)               │
+│                                                                 │
+│  User describes purpose                                        │
+│       │                                                         │
+│       ▼                                                         │
+│  Gemini (⟶ Ollama fallback, dev-only) generates AgentConfig:   │
+│    • system_prompt  — role, personality, approach              │
+│    • tools[]        — name, description, input_schema, and     │
+│                        either a Python implementation string   │
+│                        or a source: "mcp" reference to a real,  │
+│                        vetted MCP server tool                  │
+│  Grounded by: 1-2 similar past bootstraps (RAG, bootstrap_memory)│
+│               + the live vetted-MCP-server tool catalog        │
+│                                                                 │
+│  Result stored in React state as AgentConfig                   │
+└───────────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────┐
-│  Phase 2: Agent Loop                                    │
-│                                                         │
-│  User sends message                                     │
-│       │                                                 │
-│       ▼                                                 │
-│  Claude runs with dynamic tool schemas                  │
-│       │                                                 │
-│       ├── tool_use → execute Python impl → result       │
-│       ├── tool_use → ...                                │
-│       └── end_turn → final response returned to UI      │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│  Phase 2: Agent Loop  (POST /agent, streamed NDJSON)           │
+│                                                                 │
+│  User sends message                                             │
+│       │                                                         │
+│       ▼                                                         │
+│  Gemini (⟶ Ollama fallback, dev-only) runs with dynamic tools  │
+│       │                                                         │
+│       ├── tool_use (generated)  → exec() the implementation     │
+│       ├── tool_use (source:mcp) → route to the real MCP server  │
+│       ├── tool_use (delegate_to_worker) → bootstrap + run a     │
+│       │      one-shot worker agent, hand back its result        │
+│       └── end_turn → final response streamed to the UI          │
+└───────────────────────────────────────────────────────────────┘
 ```
 
-The tool implementations are Python snippets written by Claude during bootstrap and executed via `exec()` inside the Lambda function. Tools have access to `inputs` (their arguments), the `requests` library, `json`, and `os`.
+A bootstrapped agent that's actually been exercised in chat can also be
+**published** as a standing MCP tool (`backend/mcp_server.py`, its own
+process), so any MCP client — Claude Desktop, Claude Code, another AIAgent
+instance — can call it directly, not just this project's own frontend.
 
 ---
 
 ## Stack
 
-| Layer    | Technology                              |
-|----------|-----------------------------------------|
-| Frontend | React 18, TypeScript, Vite              |
-| Backend  | Python 3.12, AWS Lambda, API Gateway    |
-| AI       | Anthropic Claude API (`claude-opus-4-8`)|
-| IaC      | AWS SAM                                 |
+| Layer    | Technology                                                      |
+|----------|------------------------------------------------------------------|
+| Frontend | React 18, TypeScript, Vite, `react-markdown` + `mermaid` for diagrammed replies |
+| Backend  | Python 3.12, Flask + gunicorn (WSGI, chat/bootstrap API), a second `uvicorn`/Starlette (ASGI) process for the MCP server |
+| AI       | Gemini (primary) → Ollama (local-only dev fallback) |
+| Tool sourcing | Gemini-generated Python (`exec()`), or real tools from vetted MCP servers via the official `mcp` SDK |
+| Hosting  | systemd + nginx on a droplet (`agent.carkus.com`); no container orchestration, no CI — deployed by tarball over SSH |
+
+An AWS SAM/Lambda path (`template.yaml`, `backend/src/handler.py`) still
+exists in the repo as **dev-only tooling** (`sam local`) — it is not what's
+deployed. Don't expect changes to `handler.py` to reach production; see
+[`AIAgent/CLAUDE.md`](./CLAUDE.md) for the full architecture rationale.
 
 ---
 
@@ -80,26 +97,42 @@ The tool implementations are Python snippets written by Claude during bootstrap 
 ```
 AIAgent/
 ├── backend/
+│   ├── server.py            # Flask app — actual runtime for dev + prod: /bootstrap, /agent, /models, /agents, /file/<name>
+│   ├── mcp_server.py         # Separate uvicorn/ASGI process — exposes published agents as MCP tools over Streamable HTTP
 │   ├── src/
-│   │   ├── handler.py       # Lambda entry point — routes /bootstrap and /agent
-│   │   ├── bootstrap.py     # Calls Claude to generate AgentConfig from purpose
-│   │   ├── agent.py         # Agentic loop — calls tools until end_turn
-│   │   └── tools.py         # Executes Claude-generated Python tool implementations
+│   │   ├── bootstrap.py         # Streams the bootstrap call; grounds it with few-shot examples + vetted MCP catalog
+│   │   ├── agent_stream.py      # The agentic loop that actually runs in prod (streamed tool_start/tool_result/done)
+│   │   ├── orchestrator.py      # Multi-agent scaffold — bootstraps + runs a delegated worker agent
+│   │   ├── llm_client.py        # Gemini → Ollama cascade
+│   │   ├── embeddings.py        # Embeddings for bootstrap RAG grounding (Gemini or Ollama)
+│   │   ├── bootstrap_memory.py  # File-store of past purpose → config pairs, powers few-shot retrieval
+│   │   ├── mcp_registry.py      # Directory of vetted MCP servers bootstrap can pick a real tool from
+│   │   ├── mcp_client.py        # Sync wrapper around the official MCP SDK's stdio client
+│   │   ├── agent_registry.py    # File-store of published agents — backs mcp_server.py's tool list
+│   │   ├── tools.py             # exec()'s Gemini-generated tool implementations; primitive tools (fetch_page, search_jobs)
+│   │   ├── rate_limit.py        # Per-IP rate limiting
+│   │   ├── handler.py, agent.py # AWS SAM/Lambda path — dev-only (sam local), not deployed
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx                    # Phase state machine: setup → bootstrapping → chat
-│   │   ├── api.ts                     # Typed fetch wrappers for /bootstrap and /agent
+│   │   ├── api.ts                     # Typed fetch wrappers for /bootstrap, /agent, /agents, /models
 │   │   ├── types.ts                   # Shared TypeScript types
 │   │   └── components/
-│   │       ├── Setup.tsx              # Purpose input form
-│   │       ├── Chat.tsx               # Chat UI with message history
-│   │       └── ToolActivity.tsx       # Inline display of tool calls + results
+│   │       ├── Setup.tsx              # Purpose input form + published-agent management
+│   │       ├── Chat.tsx               # Chat UI, message history, Mermaid-fence rendering
+│   │       ├── ToolActivity.tsx        # Collapsible tool-call log + per-worker result cards
+│   │       └── MermaidDiagram.tsx      # Renders a ```mermaid fence as an SVG chart
 │   ├── index.html
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── vite.config.ts
-├── template.yaml            # SAM template — two Lambda functions, one API Gateway
+├── deploy/
+│   ├── redeploy.sh                # One-command redeploy: tar/scp backend, npm build + ship frontend, restart services
+│   ├── aiagent.service            # systemd unit — gunicorn (Flask, WSGI)
+│   ├── aiagent-mcp.service        # systemd unit — uvicorn (MCP server, ASGI)
+│   └── nginx-aiagent.conf
+├── template.yaml            # AWS SAM template — dev-only (sam local), not deployed
 └── .env.example
 ```
 
@@ -109,158 +142,129 @@ AIAgent/
 
 - Python 3.12+
 - Node.js 18+
-- [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
-- [AWS CLI](https://aws.amazon.com/cli/) configured with credentials
-- Anthropic API key
+- A Gemini API key (production and default dev path)
+- [Ollama](https://ollama.com/) — optional, for a fully local/offline dev fallback (no cloud calls)
+- AWS SAM CLI — optional, only if you want to exercise the dev-only Lambda path via `sam local`
 
 ---
 
 ## Local Development
 
-**1. Clone and configure environment**
+No SAM or Docker needed day-to-day. Full first-time setup: [`RUN.md`](./RUN.md).
 
 ```bash
-cp .env.example .env
-# Edit .env — fill in your ANTHROPIC_API_KEY
-```
+# Backend — from the repo root (reads credentials from env.json / .env)
+python backend/server.py
 
-**2. Start the backend (SAM local)**
-
-```bash
-sam build --use-container
-sam local start-api --env-vars env.json
-# API available at http://localhost:3000
-```
-
-**3. Start the frontend (separate terminal)**
-
-```bash
+# Frontend — in a second terminal
 cd frontend
 npm install
 npm run dev
-# UI available at http://localhost:5173
 ```
+
+`server.py` listens on `localhost:3000`; the Vite dev server on
+`localhost:5173` proxies `/bootstrap`, `/agent`, `/agents`, `/models` to it.
+To also exercise the MCP-server side (publishing an agent and calling it
+from an MCP client), run `python backend/mcp_server.py` in a third terminal
+(default port `4892`).
+
+`sam local start-api` still works as an alternative that exercises
+`handler.py`/the Lambda code path instead, but it isn't the day-to-day flow.
 
 ---
 
 ## Deployment
 
-**1. Build**
+Production is a **systemd + nginx droplet** (`agent.carkus.com`), not AWS —
+see [`DEPLOY.md`](./DEPLOY.md) for full first-time setup and rationale.
+There is no git or CI on the droplet; code ships as a tarball over SSH.
 
 ```bash
-sam build
+deploy/redeploy.sh backend    # sync backend/src + requirements, restart aiagent + aiagent-mcp
+deploy/redeploy.sh frontend   # npm run build locally, ship dist/, fix ownership
+deploy/redeploy.sh all        # both
 ```
 
-**2. Deploy (guided first-time setup)**
+Run from the repo root; requires SSH access to the droplet.
 
-```bash
-sam deploy --guided
-# When prompted, provide your ANTHROPIC_API_KEY as a parameter
-```
-
-**3. Update `VITE_API_URL` and build the frontend**
-
-After deploy, SAM outputs the API Gateway URL. Set it before building:
-
-```bash
-cd frontend
-VITE_API_URL=https://<your-api-id>.execute-api.<region>.amazonaws.com/Prod npm run build
-```
-
-Upload the `dist/` folder to S3 + CloudFront, or drag it into Amplify / Netlify.
+- `gunicorn server:app` runs the chat/bootstrap API under the `aiagent` systemd unit — single worker process (rate-limit counters are process-local, don't raise `--workers`)
+- `uvicorn mcp_server:app` runs the MCP server under its own `aiagent-mcp` systemd unit — a structurally separate ASGI process, since the MCP SDK's HTTP transports are Starlette-only and can't share the Flask/gunicorn app
+- nginx serves the built frontend and reverse-proxies API routes to gunicorn and `/mcp` to uvicorn; one shared HTTP Basic Auth login gates the whole app
+- Production is Gemini-only — no Ollama fallback in prod
 
 ---
 
 ## Environment Variables
 
-| Variable          | Where          | Description                                      |
-|-------------------|----------------|--------------------------------------------------|
-| `ANTHROPIC_API_KEY` | Lambda (env) | Your Anthropic API key — never sent to browser   |
-| `VITE_API_URL`    | Frontend build | Base URL of the deployed API (or `localhost:3000`)|
+| Variable          | Where            | Description                                          |
+|--------------------|------------------|-------------------------------------------------------|
+| `GEMINI_API_KEY`   | Backend env      | Gemini API key — primary provider for bootstrap, chat, and embeddings |
+| `OLLAMA_MODEL`     | Backend env (dev) | Local Ollama model name, used only when running `server.py` locally with a local-only agent |
+| `MCP_API_KEY`      | Backend env (prod) | Per-consumer API key gating `/mcp` independently of the site's shared login |
+| `MCP_PORT`         | Backend env (dev) | Port for `mcp_server.py`'s dev server (default `4892`) |
+| `VITE_API_URL`     | Frontend build   | Base URL of the deployed API (defaults to `http://localhost:3000` if unset) |
+
+See `.env.example` for the full list, including the dev-only Lambda/SAM variables.
 
 ---
 
 ## Current Limitations and Proposed Solutions
 
-### 1. API Gateway 29-second hard timeout
+### 1. Tool execution security (`exec()` in-process)
 
-**Problem:** API Gateway cuts off any request that takes longer than 29 seconds. Complex agent tasks with many tool calls can exceed this.
+**Problem:** Gemini-generated code runs in-process (the `aiagent` gunicorn worker in prod, or locally under `server.py`). A builtins allowlist is in place but is not a full sandbox.
 
 **Proposed solutions:**
-- **Lambda Function URLs with response streaming** — bypasses API Gateway; responses stream token-by-token to the browser via SSE. This is the recommended next step.
-- **Async pattern** — Lambda immediately returns a job ID; client polls a `/status/{job_id}` endpoint backed by DynamoDB until the result is ready.
-- **WebSockets via API Gateway** — bidirectional connection; Lambda pushes progress events as they happen. More complex to implement but enables real-time tool activity streaming.
+- Process isolation per tool call.
+- [RestrictedPython](https://github.com/zopefoundation/RestrictedPython) — compiles Python to a restricted AST, blocking dangerous constructs before execution.
+- Prefer routing more tool categories through vetted MCP servers (`mcp_registry.py`) instead of generated code — already done for the categories a vetted server exists for; growing that directory removes the exec() risk entirely for the tools it covers.
 
 ---
 
-### 2. Tool implementations run in-process via `exec()`
+### 2. No server-side conversation persistence
 
-**Problem:** Claude-generated Python code runs inside the Lambda process via `exec()`. A malformed or malicious implementation could affect the Lambda runtime, exhaust memory, or make unintended network calls. The current builtins allowlist reduces but does not eliminate risk.
+**Problem:** Chat history lives in React state; a "Save chat" button persists it to the browser's `localStorage`, but nothing is stored server-side — saved chats don't follow the user across browsers/devices.
 
-**Proposed solutions:**
-- **Separate Lambda per tool execution** — invoke a dedicated "tool runner" Lambda for each tool call. Isolation is complete; a crash does not affect the agent loop.
-- **[RestrictedPython](https://github.com/zopefoundation/RestrictedPython)** — a library that compiles Python to a restricted AST, blocking dangerous constructs before execution.
-- **AWS Lambda `--use-container` / Firecracker microVMs** — run each tool call inside a fresh microVM for true sandboxing.
-- **Anthropic Managed Agents** — Anthropic's hosted agent platform provides a managed sandbox (bash, file ops, code execution) and removes the need to run tool code yourself.
+**Proposed solution:** a session table server-side, if cross-device continuity becomes a real need.
 
 ---
 
-### 3. No conversation persistence
+### 3. Authentication is perimeter-only
 
-**Problem:** The full message history is sent from the browser on every request. Long conversations bloat the request payload, and history is lost on page refresh.
+**Problem:** Production sits behind one shared nginx HTTP Basic Auth login (frontend and API alike) rather than per-user accounts; anyone with that login can use the whole app. Fine for a single-operator/demo deployment, not for multi-user access control.
 
 **Proposed solutions:**
-- **DynamoDB session table** — store messages server-side keyed by `session_id`. Frontend sends only the new message; Lambda loads history, appends, and saves back.
-- **AgentConfig caching** — the bootstrap result (system prompt + tools) is held in React state. If the page refreshes, the user must re-bootstrap. Store AgentConfig in DynamoDB alongside the session, keyed by `session_id` in `localStorage`.
+- Per-user accounts with a real session/token scheme.
+- Scope the `/mcp` endpoint's existing per-consumer `MCP_API_KEY` model out to the rest of the API too.
 
 ---
 
-### 4. No streaming responses
+### 4. File output is ephemeral
 
-**Problem:** The UI shows "Working..." with no progress feedback until the entire agent loop finishes. For tasks with multiple tool calls this can feel unresponsive.
+**Problem:** The `save_output` tool writes to the backend process's `/tmp/`, served back via `GET /file/<name>` — lost on restart/redeploy, and shared across all users of the one shared login rather than scoped per session.
 
-**Proposed solutions:**
-- **Lambda Function URLs + SSE** — stream each token and tool-call event from the Lambda as it happens. Requires replacing API Gateway with a Function URL and updating the agent loop to use `client.messages.stream()`.
-- **WebSocket push** — Lambda sends events to a WebSocket connection managed by API Gateway WebSocket API as the agent progresses.
+**Proposed solution:** write to S3 (or equivalent) and return a pre-signed URL.
 
 ---
 
-### 5. No authentication or rate limiting
+### 5. Bootstrap quality is input-dependent
 
-**Problem:** The API endpoints are open. Anyone with the URL can send requests and incur Claude API costs.
+**Problem:** Vague purpose descriptions still produce generic tools, especially on the first bootstrap of a given kind of purpose (before any few-shot grounding exists for it).
 
-**Proposed solutions:**
-- **API Gateway usage plans + API keys** — simple; attach an API key header to frontend requests.
-- **Amazon Cognito** — full user auth with JWT tokens validated by an API Gateway authorizer.
-- **Lambda-side rate limiting** — track calls per IP/user in DynamoDB with a TTL-based counter.
+**Already addressed, partially:**
+- The Setup screen's Agent Type preset dropdown narrows freeform input into a purpose-built prompt template per type.
+- Bootstrap RAG grounding (`bootstrap_memory.py`/`embeddings.py`) feeds the model 1-2 similar past `purpose → config` pairs as few-shot examples once enough bootstraps have accumulated for that kind of purpose.
 
----
-
-### 6. Lambda cold starts
-
-**Problem:** The first request after a period of inactivity incurs a cold start (~1–2 seconds for Python). This adds to already-noticeable latency on the bootstrap call.
-
-**Proposed solutions:**
-- **Provisioned concurrency** — keeps N Lambda instances warm at all times. Costs money even when idle.
-- **Scheduled warm-up ping** — EventBridge rule fires a no-op request every few minutes to keep the Lambda warm. Cheap but not guaranteed.
+**Still open:** a structured review/regenerate step before launching chat, and cold-start quality for a genuinely novel kind of purpose.
 
 ---
 
-### 7. File output is ephemeral
+### 6. AgentConfig persistence is split, not unified
 
-**Problem:** The generated `save_output` tool writes to Lambda `/tmp/`, which is destroyed when the invocation ends. Files cannot be retrieved by the user.
+**Problem:** A saved chat's `AgentConfig` round-trips through browser `localStorage` (see limitation 2) for "reload this browser's chat"; separately, an explicit **publish** step (`agent_registry.py`) persists a chosen `AgentConfig` server-side so it can be exposed as an MCP tool. These are two different persistence paths for two different purposes, not one general store.
 
-**Proposed solutions:**
-- **S3 pre-signed URLs** — the `save_output` tool writes to S3 instead of `/tmp/`. Lambda returns a pre-signed URL in the tool result; the frontend renders it as a download link.
-- **Return file content directly** — for small outputs, embed the file content in the agent's final response.
+**Proposed solution:** if a unified server-side store becomes worth the complexity, it would subsume both — but the current split is deliberate (publish is a human-in-the-loop step, not automatic for every bootstrap), not an oversight to fix by default.
 
 ---
 
-### 8. Bootstrap quality depends on purpose description
-
-**Problem:** Vague purpose descriptions produce generic tools. If the user writes "help me with stuff", Claude generates unhelpful tools.
-
-**Proposed solutions:**
-- **Guided purpose form** — add structured fields (goal, data sources, output format) alongside the free-text area to give Claude more signal.
-- **Bootstrap review step** — show the user the generated system prompt and tool list before launching the chat, with an option to regenerate or edit.
-- **Iterative refinement** — let the agent ask clarifying questions in its first message before committing to a tool set.
+For the fuller architecture picture — including the Gemini/Ollama provider cascade, the multi-agent delegation scaffold, and the MCP client/server design — see [`AIAgent/CLAUDE.md`](./CLAUDE.md).

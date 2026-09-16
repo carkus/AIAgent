@@ -84,8 +84,9 @@ expecting it to reach production.
 | `frontend/src/types.ts` | Shared types: `AgentConfig`, `ToolDefinition`, `Message`, etc. |
 | `frontend/src/App.tsx` | Phase state machine |
 | `frontend/src/components/Setup.tsx` | Purpose input form |
-| `frontend/src/components/Chat.tsx` | Chat UI; owns message history and calls `runAgent()` |
-| `frontend/src/components/ToolActivity.tsx` | Renders tool call log inline under each assistant message |
+| `frontend/src/components/Chat.tsx` | Chat UI; owns message history and calls `runAgent()`; overrides `ReactMarkdown`'s `code` renderer so a ` ```mermaid ` fence renders as `MermaidDiagram` instead of a code block |
+| `frontend/src/components/ToolActivity.tsx` | Renders tool call log inline under each assistant message; top-level container and every nested keyword/worker section are independently collapsible |
+| `frontend/src/components/MermaidDiagram.tsx` | Renders one Mermaid chart string to SVG via the `mermaid` package, themed to match the app's dark-cyan palette; used by `Chat.tsx` for ` ```mermaid ` fences in assistant replies |
 
 ---
 
@@ -133,6 +134,33 @@ A tool whose definition carries `source: "mcp"` skips this entirely — `agent_s
 - `mcp_registry.py` — the vetted MCP server directory; currently one entry (`mcp-server-time`, official Anthropic reference server, spawned via stdio). Add a new trusted server here, not by asking the model to shell out to one.
 - `mcp_client.py` — sync wrapper (`asyncio.run`) around the official `mcp` SDK's `StdioServerParameters`/`stdio_client`/`ClientSession`. `catalog_summary()` fetches real tool schemas from every registered server (a server that fails to start is logged and simply omitted — bootstrap still works with zero vetted tools available); `call_tool()` runs one, returning `{"error": ...}` on failure instead of raising.
 - Both features apply to worker bootstraps automatically — `orchestrator.run_worker()` calls `generate_agent_config(..., is_worker=True)`, the same function the main agent uses, just bucketed separately in `bootstrap_memory` so a narrow subtask doesn't get matched against a broad top-level purpose (or vice versa).
+
+### Output style: diagrams over prose, and delegation defaults
+
+`agent_stream.py`'s system-prompt addendum (rebuilt fresh on every turn, not
+cached — editing the text changes behavior on the very next request with no
+other code path involved) carries two rules worth calling out beyond the
+tool-usage basics:
+
+- **Prefer a Mermaid diagram over a wordy paragraph.** For a comparison,
+  distribution, category breakdown, or multi-step flow, the agent is
+  instructed to emit a ` ```mermaid ` fenced block (`pie`/`xychart-beta` for
+  distributions, `flowchart`/`graph` for a process, `mindmap` for a grouped
+  breakdown) followed by at most one or two sentences of takeaway, rather
+  than restating the same numbers in prose. `Chat.tsx` renders the fence via
+  `MermaidDiagram.tsx`. Applies to worker agents too (workers get rules 1-5
+  of the addendum, just not the delegation rule below).
+- **Delegation is the default for multi-keyword requests, not an
+  exception.** A request naming several distinct keywords/topics/roles
+  (e.g. a comma-separated list) delegates one `delegate_to_worker` call per
+  keyword by default — each worker independently searches and reports back
+  on just its own keyword. `MAX_DELEGATIONS_PER_REQUEST` is `6` (raised from
+  `3`) to match typical keyword counts without silently falling back to
+  doing everything in the main agent's own tool calls. This was tightened
+  after observing the older, more conservative wording produced zero
+  delegations even for genuinely multi-part requests — the main agent just
+  did all the work itself with `fetch_page`/`search_jobs` instead of
+  spinning up workers, which is why "agents employed" showed as zero.
 
 ### AIAgent as an MCP server
 
@@ -285,8 +313,8 @@ Vague purpose descriptions produce generic tools. The Setup screen's Agent Type 
 
 Five forward-looking directions for this project. Captured here as work to accomplish, not as current limitations of the single-agent design — each assumes the existing bootstrap/agent-loop architecture as a starting point rather than a replacement.
 
-### 1. Multi-agent orchestration — first scaffold done
-`orchestrator.py`'s `run_worker()` + `agent_stream.py`'s `delegate_to_worker` tool implement the basic version: the main agent can spin up a worker agent (bootstrapped via the same `generate_agent_config` call, own name/personality/toolset, `is_worker=True`) to own one self-contained subtask and hand back its finished result — one level deep, synchronous, capped at `MAX_DELEGATIONS_PER_REQUEST` per turn (see `agent_stream.py`'s module docstring for the deliberate scope limits). Not yet done: a planner agent that decomposes the task itself (today the *main* agent decides when/what to delegate via its own judgment, there's no separate planning phase), recursive sub-worker spawning, and a supervisor pattern beyond "main agent reads the worker's result and continues."
+### 1. Multi-agent orchestration — first scaffold done, delegation guidance tightened
+`orchestrator.py`'s `run_worker()` + `agent_stream.py`'s `delegate_to_worker` tool implement the basic version: the main agent can spin up a worker agent (bootstrapped via the same `generate_agent_config` call, own name/personality/toolset, `is_worker=True`) to own one self-contained subtask and hand back its finished result — one level deep, synchronous, capped at `MAX_DELEGATIONS_PER_REQUEST` per turn (now `6`, raised from `3` — see `agent_stream.py`'s module docstring for the deliberate scope limits). The prompt wording now treats "one worker per named keyword/topic" as the normal way to handle a multi-part request, not a rare exception — see Backend Patterns' "Output style: diagrams over prose, and delegation defaults" above for why that changed. Not yet done: a planner agent that decomposes the task itself (today the *main* agent decides when/what to delegate via its own judgment, there's no separate planning phase), recursive sub-worker spawning, and a supervisor pattern beyond "main agent reads the worker's result and continues."
 
 ### 2. A2A protocol
 AIAgent's dynamically-generated agents are a good target for making A2A-discoverable, since each one already has a defined role/tools. Two AIAgent-spawned agents negotiating a task over A2A instead of just sharing memory internally would be a clean proof-of-concept, and it's a step up from bolting A2A onto Jobfit's fixed three tools.

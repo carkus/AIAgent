@@ -89,7 +89,7 @@ _DELEGATE_TOOL = {
     },
 }
 
-MAX_DELEGATIONS_PER_REQUEST = 3
+MAX_DELEGATIONS_PER_REQUEST = 6
 
 
 def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool = True):
@@ -121,11 +121,29 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
 3. USE `fetch_page` for everything else — company pages, news, general URLs.
 
 4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — listing counts, job titles, salary ranges, company names. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
+
+5. PREFER A DIAGRAM OVER A WORDY PARAGRAPH. When findings involve a comparison, a
+   distribution, a breakdown by category, or a multi-step flow (e.g. salary ranges
+   across roles, seniority/skill mix, counts by location or company, a process with
+   stages), draw a Mermaid diagram in a ```mermaid fenced code block instead of
+   restating the numbers in prose — use `pie` or `xychart-beta` for distributions/
+   comparisons, `flowchart`/`graph` for a process or relationship, `mindmap` for a
+   grouped breakdown of topics. Follow the diagram with at most one or two short
+   sentences of takeaway — not a paragraph re-explaining what the diagram already
+   shows. For a single flat fact (one number, one listing), just say it plainly;
+   don't force a diagram where there's nothing to compare.
 """ + (f"""
-5. You also have `delegate_to_worker` — use it ONLY when the request has genuinely
-   separable parts a specialist could each own (e.g. "research X and also draft Y").
-   Don't delegate something you can just do yourself with your own tools; each
-   delegation is a full extra agent run. Limit: {MAX_DELEGATIONS_PER_REQUEST} per turn.
+6. You also have `delegate_to_worker`. When the request names multiple distinct
+   keywords, topics, roles, or subjects to search/research (e.g. a request
+   listing several comma-separated items — "python developer, react developer",
+   "renewable energy, EV batteries, grid storage"), delegate ONE worker per
+   keyword/topic — each worker independently searches and reports back on just
+   its own keyword. This is the normal way to handle a multi-keyword request in
+   this app, not an exception reserved for unusual cases. For a single keyword,
+   or a request with no genuinely separable parts, just do it yourself with your
+   own tools instead of delegating a one-part task. Limit: {MAX_DELEGATIONS_PER_REQUEST}
+   per turn — if there are more keywords than that, handle the remainder yourself
+   with your own tools after delegating as many as the limit allows.
 ---""" if allow_delegation else "\n---")
 
     tool_definitions = agent_config["tools"]

@@ -5,6 +5,7 @@ import { publishAgent, runAgent } from '../api'
 import { saveChat } from '../chatStorage'
 import { buildChatPdf, type PdfMessage } from '../chatPdf'
 import ToolActivity from './ToolActivity'
+import MermaidDiagram from './MermaidDiagram'
 import ContinuePanel from './ContinuePanel'
 import PdfPreviewModal from './PdfPreviewModal'
 import type { AgentConfig, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
@@ -59,7 +60,6 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
   const [publishFeedback, setPublishFeedback] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [pdfPreview, setPdfPreview] = useState<{ blobUrl: string; filename: string; doc: ReturnType<typeof buildChatPdf> } | null>(null)
-  const bottomRef = useRef<HTMLDivElement>(null)
   // Rendered markdown DOM per assistant message index, so PDF export can
   // walk react-markdown's actual output (link hrefs, list/heading structure)
   // instead of re-parsing the raw markdown string itself.
@@ -151,10 +151,6 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
     if (pdfPreview) URL.revokeObjectURL(pdfPreview.blobUrl)
     setPdfPreview(null)
   }
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, thinking])
 
   useEffect(() => {
     if (!thinking) { setElapsed(0); return }
@@ -368,7 +364,20 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
                       else markdownRefs.current.delete(i)
                     }}
                   >
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code({ className, children, ...props }) {
+                          const isMermaid = className === 'language-mermaid'
+                          if (isMermaid) {
+                            return <MermaidDiagram chart={String(children).trim()} />
+                          }
+                          return <code className={className} {...props}>{children}</code>
+                        },
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
                   </div>
                 )
                 : <p className={styles.bubbleText}>{msg.content}</p>
@@ -404,7 +413,6 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
           </div>
         ))}
         {error && <p className={styles.error}>{error}</p>}
-        <div ref={bottomRef} />
       </div>
 
       <form className={styles.inputRow} onSubmit={handleSend}>
