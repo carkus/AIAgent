@@ -58,7 +58,10 @@ def _save(entries: list) -> None:
     os.replace(tmp_path, path)
 
 
-def record(purpose: str, config: dict, provider: str | None, is_worker: bool = False) -> None:
+def record(
+    purpose: str, config: dict, provider: str | None, is_worker: bool = False,
+    agent_type: str | None = None,
+) -> None:
     """Best-effort: embed `purpose` and store a compact summary of `config`
     for future few-shot retrieval. Swallows every failure — called after
     bootstrap has already produced a valid response, so nothing here should
@@ -74,6 +77,7 @@ def record(purpose: str, config: dict, provider: str | None, is_worker: bool = F
             "id": uuid.uuid4().hex,
             "purpose": purpose,
             "is_worker": is_worker,
+            "agent_type": agent_type,
             "embedding": embedding,
             "persona": {
                 "name": persona.get("name"),
@@ -98,11 +102,18 @@ def record(purpose: str, config: dict, provider: str | None, is_worker: bool = F
 
 
 def retrieve_similar(
-    purpose: str, provider: str | None, is_worker: bool = False, k: int = 2, min_similarity: float = 0.6
+    purpose: str, provider: str | None, is_worker: bool = False, k: int = 2, min_similarity: float = 0.6,
+    agent_type: str | None = None,
 ) -> list[dict]:
     """Top-k past bootstrap entries whose purpose is most similar to `purpose`,
     restricted to the same is_worker bucket (a top-level user purpose and a
-    narrow delegated subtask aren't good few-shot matches for each other).
+    narrow delegated subtask aren't good few-shot matches for each other) and,
+    when the caller knows it, the same agent_type (research/job_search/
+    general) — a "research" purpose can be semantically close enough to a
+    past "job_search" purpose to pass the similarity threshold, which used to
+    hand back a job-search example that a research agent would then copy
+    wholesale. Entries recorded before this field existed have no agent_type
+    and are simply excluded from a type-scoped query rather than guessed at.
     Returns [] on any failure, including "no embedding provider available" —
     that's the expected, silent path for the very first bootstraps."""
     try:
@@ -116,6 +127,8 @@ def retrieve_similar(
         scored = []
         for entry in entries:
             if entry.get("is_worker", False) != is_worker:
+                continue
+            if agent_type is not None and entry.get("agent_type") != agent_type:
                 continue
             embedding = entry.get("embedding")
             if not embedding:

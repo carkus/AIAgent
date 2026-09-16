@@ -61,6 +61,7 @@ def bootstrap():
         return jsonify({"error": "purpose is required"}), 400
     provider = ((body or {}).get("provider") or "").strip() or None
     model = ((body or {}).get("ollama_model") or "").strip() or None
+    agent_type = ((body or {}).get("agentType") or "").strip() or None
     # Only rate-limit requests that actually spend Gemini quota — a local-only
     # request costs nothing, so don't burn a caller's rate-limit budget on it.
     if provider != "ollama":
@@ -69,7 +70,7 @@ def bootstrap():
             return jsonify({"error": rate_limit_error}), 429
     def generate():
         try:
-            for event in generate_agent_config_stream(purpose, provider, model):
+            for event in generate_agent_config_stream(purpose, provider, model, agent_type=agent_type):
                 yield json.dumps(event) + "\n"
         except Exception as e:
             yield json.dumps({"type": "error", "message": str(e)}) + "\n"

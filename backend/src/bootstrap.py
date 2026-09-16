@@ -214,12 +214,14 @@ def _normalize_persona(config: dict) -> None:
         config.pop("persona", None)
 
 
-def _build_prompt(purpose: str, provider: str | None, is_worker: bool) -> tuple[str, int]:
+def _build_prompt(
+    purpose: str, provider: str | None, is_worker: bool, agent_type: str | None = None
+) -> tuple[str, int]:
     """Grounds the bootstrap prompt in real data (CLAUDE.md RAG priority 5 +
     MCP priority 6): past similar bootstraps as few-shot examples, and the
     real vetted MCP tool catalog. Returns (prompt, fewshot_count) — the count
     is surfaced as a status event by the streaming variant."""
-    fewshot_entries = bootstrap_memory.retrieve_similar(purpose, provider, is_worker)
+    fewshot_entries = bootstrap_memory.retrieve_similar(purpose, provider, is_worker, agent_type=agent_type)
     mcp_catalog = mcp_client.catalog_summary()
     prompt = _BOOTSTRAP_PROMPT.format(
         purpose=purpose,
@@ -230,9 +232,10 @@ def _build_prompt(purpose: str, provider: str | None, is_worker: bool) -> tuple[
 
 
 def generate_agent_config(
-    purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False
+    purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False,
+    agent_type: str | None = None,
 ) -> dict:
-    prompt, _ = _build_prompt(purpose, provider, is_worker)
+    prompt, _ = _build_prompt(purpose, provider, is_worker, agent_type)
     response = create_chat_completion(
         provider=provider,
         model=model,
@@ -313,7 +316,7 @@ def generate_agent_config(
     # reuses the same provider/model choice made on the Setup screen.
     config["provider"] = provider
     config["ollama_model"] = model
-    bootstrap_memory.record(purpose, config, provider, is_worker)
+    bootstrap_memory.record(purpose, config, provider, is_worker, agent_type=agent_type)
     return config
 
 
@@ -331,7 +334,8 @@ def _model_event(meta: dict) -> dict:
 
 
 def generate_agent_config_stream(
-    purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False
+    purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False,
+    agent_type: str | None = None,
 ):
     """
     Streaming counterpart to generate_agent_config, used only by server.py's
@@ -351,7 +355,7 @@ def generate_agent_config_stream(
     """
     yield {"type": "status", "message": "Thinking about your purpose…"}
 
-    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker)
+    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type)
     if fewshot_count:
         yield {"type": "status", "message": f"Found {fewshot_count} similar past agent(s) — reusing what worked…"}
 
@@ -496,5 +500,5 @@ def generate_agent_config_stream(
     config["purpose"] = purpose
     config["provider"] = provider
     config["ollama_model"] = model
-    bootstrap_memory.record(purpose, config, provider, is_worker)
+    bootstrap_memory.record(purpose, config, provider, is_worker, agent_type=agent_type)
     yield {"type": "done", "config": config}

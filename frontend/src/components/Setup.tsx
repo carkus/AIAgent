@@ -286,6 +286,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         provider,
         provider === 'ollama' ? ollamaModel : null,
         handleProgress,
+        agentType,
       )
       onDone({ ...config, keywords, location: loc, provider, ollama_model: provider === 'ollama' ? ollamaModel : null, template: agentType })
     } catch (err) {
@@ -297,7 +298,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     <div className={styles.container}>
       <div className={styles.card}>
         <h1 className={styles.title}>Agent {agentName}</h1>
-        <p className={styles.subtitle}>Add keywords, then deploy Agent {agentName}. The agent will compose a dedicated agent for your request.</p>
+        <p className={styles.subtitle}>Add keywords, then deploy Agent {agentName}. The agent will compose dedicated agents for your request.</p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.agentTypeRow}>

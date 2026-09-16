@@ -13,6 +13,7 @@ export async function bootstrap(
   provider?: LlmProvider,
   ollamaModel?: string | null,
   onProgress?: (event: BootstrapStreamEvent) => void,
+  agentType?: AgentTemplateId,
 ): Promise<AgentConfig> {
   const res = await fetch(`${API_URL}/bootstrap`, {
     method: 'POST',
@@ -21,6 +22,7 @@ export async function bootstrap(
       purpose,
       provider: provider ?? undefined,
       ollama_model: ollamaModel ?? undefined,
+      agentType: agentType ?? undefined,
     }),
   });
   if (!res.ok) {
