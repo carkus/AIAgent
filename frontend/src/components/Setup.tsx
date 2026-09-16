@@ -131,6 +131,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const visibleSaved = saved.filter(s => (s.agentType ?? 'research') === agentType)
   const [savedChats, setSavedChats] = useState<SavedChat[]>(loadSavedChats)
   const visibleSavedChats = savedChats.filter(c => (c.agentConfig.template ?? 'research') === agentType)
+  // Saved searches/chats default open (what most people want to see right
+  // away); published MCP tools default collapsed (a management list you dip
+  // into occasionally, not the main flow) — collapsing lets the card stay
+  // within its max-height without every section fighting for the same space.
+  const [searchesOpen, setSearchesOpen] = useState(true)
+  const [chatsOpen, setChatsOpen] = useState(true)
+  const [mcpToolsOpen, setMcpToolsOpen] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
   const [toolsSoFar, setToolsSoFar] = useState<string[]>([])
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
@@ -467,9 +474,19 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             )}
           </div>
 
+          <div className={styles.savedSectionsScroll}>
           {visibleSaved.length > 0 && (
             <div className={styles.savedSection}>
-              <p className={styles.savedHeading}>Saved searches - {getTemplate(agentType).label}</p>
+              <button
+                type="button"
+                className={styles.savedHeadingBtn}
+                onClick={() => setSearchesOpen(o => !o)}
+                aria-expanded={searchesOpen}
+              >
+                <span className={styles.savedHeadingArrow}>{searchesOpen ? '▾' : '▸'}</span>
+                Saved searches - {getTemplate(agentType).label} ({visibleSaved.length})
+              </button>
+              {searchesOpen && (
               <div className={styles.savedList}>
                 {visibleSaved.map(s => (
                   <div key={s.id} className={styles.savedRow} onClick={() => loadSearch(s)}>
@@ -489,13 +506,23 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   </div>
                 ))}
               </div>
+              )}
             </div>
           )}
 
           {visibleSavedChats.length > 0 && (
             <div className={styles.savedSection}>
-              <p className={styles.savedHeading}>Saved chats - {getTemplate(agentType).label}</p>
-              <div className={`${styles.savedList} ${styles.savedListScroll}`}>
+              <button
+                type="button"
+                className={styles.savedHeadingBtn}
+                onClick={() => setChatsOpen(o => !o)}
+                aria-expanded={chatsOpen}
+              >
+                <span className={styles.savedHeadingArrow}>{chatsOpen ? '▾' : '▸'}</span>
+                Saved chats - {getTemplate(agentType).label} ({visibleSavedChats.length})
+              </button>
+              {chatsOpen && (
+              <div className={styles.savedList}>
                 {visibleSavedChats.map(c => (
                   <div
                     key={c.id}
@@ -539,12 +566,22 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   </div>
                 ))}
               </div>
+              )}
             </div>
           )}
 
           {publishedAgents.length > 0 && (
             <div className={styles.savedSection}>
-              <p className={styles.savedHeading}>Published as MCP tools</p>
+              <button
+                type="button"
+                className={styles.savedHeadingBtn}
+                onClick={() => setMcpToolsOpen(o => !o)}
+                aria-expanded={mcpToolsOpen}
+              >
+                <span className={styles.savedHeadingArrow}>{mcpToolsOpen ? '▾' : '▸'}</span>
+                Published as MCP tools ({publishedAgents.length})
+              </button>
+              {mcpToolsOpen && (
               <div className={styles.savedList}>
                 {publishedAgents.map(a => (
                   <div key={a.id} className={styles.savedRow} title={a.description}>
@@ -566,8 +603,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   </div>
                 ))}
               </div>
+              )}
             </div>
           )}
+          </div>
 
           <div className={styles.actions}>
             <button

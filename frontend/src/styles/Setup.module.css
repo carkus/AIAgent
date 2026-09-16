@@ -12,6 +12,9 @@
   padding: 2.5rem;
   width: 100%;
   max-width: 560px;
+  max-height: 900px;
+  display: flex;
+  flex-direction: column;
   border: 1px solid rgba(34, 211, 238, 0.25);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 0 40px rgba(34, 211, 238, 0.08), 0 0 0 1px rgba(34, 211, 238, 0.06);
 }
@@ -37,6 +40,15 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Only the saved-sections wrapper is allowed to shrink/scroll — every other
+   field (agent type, keywords, location, model, hint row) must always
+   render at its full natural size, never compressed below its content. */
+.form > *:not(.savedSectionsScroll) {
+  flex-shrink: 0;
 }
 
 .chipArea {
@@ -312,16 +324,52 @@
   text-transform: uppercase;
 }
 
+.savedHeadingBtn {
+  background: none;
+  border: none;
+  color: #9aa0af;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  margin: 0 0 0.4rem;
+  padding: 0;
+  text-transform: uppercase;
+  width: 100%;
+  transition: color 0.15s;
+}
+
+.savedHeadingBtn:hover {
+  color: #22d3ee;
+}
+
+.savedHeadingArrow {
+  color: #22d3ee;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+}
+
 .savedList {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
 }
 
-/* Saved chats can grow long — cap at roughly 3 rows and scroll the rest. */
-.savedListScroll {
-  max-height: 280px;
+/* Saved searches, saved chats, and MCP tools share one scroll region so the
+   panel's overall height stays capped (see .card's max-height) while
+   whichever collapsibles are open can grow past the space available to
+   them without pushing the always-visible fields above out of view. */
+.savedSectionsScroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   padding-right: 0.25rem;
 }
 
