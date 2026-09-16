@@ -201,6 +201,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   }
 
   function addKeyword() {
+    if (bootstrapping) return
     const kw = draft.trim()
     if (!kw || keywords.map(k => k.toLowerCase()).includes(kw.toLowerCase())) return
     const next = [...keywords, kw]
@@ -210,6 +211,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   }
 
   function removeKeyword(kw: string) {
+    if (bootstrapping) return
     setKeywords(prev => prev.filter(k => k !== kw))
   }
 
@@ -330,6 +332,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   className={styles.chipX}
                   onClick={ev => { ev.stopPropagation(); removeKeyword(kw) }}
                   aria-label={`Remove ${kw}`}
+                  disabled={bootstrapping}
                 >
                   ×
                 </button>
