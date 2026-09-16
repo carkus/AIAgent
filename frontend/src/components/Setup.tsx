@@ -243,6 +243,17 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }
   }
 
+  // Keywords are scoped to one agent type (visibleSaved/visibleSavedChats
+  // already filter by it) — switching type manually clears them rather than
+  // carrying over keywords that don't apply to the new type; loadSearch/
+  // loadSavedChatQuery below set their own keywords right after switching
+  // type, so they don't go through this.
+  function handleAgentTypeChange(type: AgentTemplateId) {
+    setAgentType(type)
+    setKeywords([])
+    setDraft('')
+  }
+
   function loadSearch(entry: SavedSearch) {
     setAgentType(entry.agentType ?? 'research')
     setKeywords([...entry.keywords])
@@ -320,7 +331,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   role="radio"
                   aria-checked={agentType === t.id}
                   className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
-                  onClick={() => setAgentType(t.id)}
+                  onClick={() => handleAgentTypeChange(t.id)}
                   disabled={bootstrapping}
                 >
                   {t.label}
@@ -532,6 +543,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   >
                     <div className={styles.savedChatInfo}>
                       <span className={styles.savedChatName}>Agent {c.agentName}</span>
+                      {c.agentConfig.persona?.traits?.length ? (
+                        <span className={styles.savedChatTraits}>
+                          {c.agentConfig.persona.traits.join(' · ')}
+                        </span>
+                      ) : null}
                       {c.agentConfig.keywords?.length ? (
                         <div className={styles.savedChips}>
                           {c.agentConfig.keywords.map(kw => (

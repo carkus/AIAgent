@@ -420,6 +420,12 @@
   font-weight: 600;
 }
 
+.savedChatTraits {
+  color: #67e8f9;
+  font-size: 0.72rem;
+  font-style: italic;
+}
+
 .savedChatMeta {
   color: #7d8393;
   font-size: 0.72rem;
