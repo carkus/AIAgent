@@ -7,6 +7,14 @@ Type=simple
 User=aiagent
 WorkingDirectory=/var/www/aiagent/backend
 EnvironmentFile=/var/www/aiagent/.env
+# Pin DATA_DIR explicitly rather than let server.py infer it from __file__/cwd.
+# WorkingDirectory above is a symlink (/var/www/aiagent/backend ->
+# .../src/backend); Linux's getcwd() returns the resolved *real* path after a
+# chdir into a symlink, not the symlink itself, so the inferred path silently
+# became /var/www/aiagent/src/data instead of the intended
+# /var/www/aiagent/data — confirmed live (empty /agents despite a populated
+# registry file at the intended path). DATA_DIR here overrides that inference.
+Environment=DATA_DIR=/var/www/aiagent/data
 # Single worker PROCESS is required — rate_limit.py's counters are process-local.
 # --threads gives real concurrency for the streaming /agent endpoint without
 # violating that. --timeout must exceed the longest expected agent loop

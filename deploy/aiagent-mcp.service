@@ -7,6 +7,11 @@ Type=simple
 User=aiagent
 WorkingDirectory=/var/www/aiagent/backend
 EnvironmentFile=/var/www/aiagent/.env
+# Same DATA_DIR override as aiagent.service, same reason (see its comment) —
+# mcp_server.py has its own __file__-relative inference with the identical
+# symlink-resolution bug, and must resolve to the same directory as
+# aiagent.service since both read/write agent_registry.json.
+Environment=DATA_DIR=/var/www/aiagent/data
 # Own port, next to gunicorn's 8787 (deploy/aiagent.service) — a structurally
 # separate ASGI process because the mcp SDK's HTTP transports are
 # Starlette/ASGI-only, with no WSGI transport, so this can't share the Flask

@@ -50,8 +50,9 @@ function Deploy-Backend {
     Write-Host "==> Installing any new/changed Python deps ..."
     ssh @SshOpts $RemoteHost "sudo -u aiagent $RemoteBase/venv/bin/pip install -q -r $RemoteBase/src/backend/requirements.txt"
 
-    Write-Host "==> Restarting aiagent service ..."
+    Write-Host "==> Restarting aiagent + aiagent-mcp services ..."
     ssh @SshOpts $RemoteHost "systemctl restart aiagent && sleep 1 && systemctl is-active aiagent"
+    ssh @SshOpts $RemoteHost "systemctl restart aiagent-mcp && sleep 1 && systemctl is-active aiagent-mcp"
 
     Write-Host "==> Smoke check ..."
     ssh @SshOpts $RemoteHost "curl -s http://127.0.0.1:8787/models"
