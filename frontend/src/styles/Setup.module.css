@@ -285,6 +285,21 @@
   border-top: 1px dashed #ddd9cd;
 }
 
+.agentSummaryRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed #ddd9cd;
+}
+
+.agentSummaryText {
+  margin: 0;
+  color: #33475a;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
 .fieldLabel {
   display: inline-flex;
   align-items: center;

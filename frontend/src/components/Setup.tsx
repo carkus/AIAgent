@@ -94,6 +94,26 @@ function getTemplate(id: AgentTemplateId | undefined): AgentTemplate {
   return AGENT_TEMPLATES.find(t => t.id === id) ?? AGENT_TEMPLATES[0]
 }
 
+function joinNatural(items: string[]): string {
+  if (items.length === 0) return ''
+  if (items.length === 1) return items[0]
+  if (items.length === 2) return `${items[0]} and ${items[1]}`
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+}
+
+function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], loc: string): string {
+  const topics = joinNatural(keywords)
+  const beat = loc ? ` out of ${loc}` : ''
+  switch (agentType) {
+    case 'research':
+      return `This agent's got a case open on ${topics}${beat} — doesn't stop digging till the data confesses.`
+    case 'job_search':
+      return `This agent's working the leads on ${topics}${beat} — won't quit till it tracks down the right fit.`
+    default:
+      return `This agent's got a file open on ${topics}${beat} — doesn't leave a stone unturned.`
+  }
+}
+
 type SavedSectionId = 'searches' | 'chats' | 'mcp'
 
 function formatSavedAt(ts: number): string {
@@ -477,6 +497,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 </span>
               )}
             </div>
+          </div>
+
+          <div className={styles.agentSummaryRow}>
+            <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Brief</span>
+            <p className={styles.agentSummaryText}>
+              {keywords.length > 0
+                ? buildAgentBrief(agentType, keywords, location.trim())
+                : 'Add specialties above to generate this agent’s brief.'}
+            </p>
           </div>
 
           <div className={styles.profileActionsRow}>
