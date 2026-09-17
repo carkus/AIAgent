@@ -193,6 +193,16 @@ tool-usage basics:
   `run_worker()` itself is a single blocking call), then a `WorkerResultCard`
   per finished worker shows its name/traits/task/response/tools as its own
   block once the matching `tool_result` arrives.
+- **`WorkerResultCard` starts collapsed, always shows the task it was
+  prompted with, and renders its response as real markdown.** The card
+  opens collapsed by default (`useState(false)`) so a multi-worker reply
+  doesn't dump five full responses on screen at once; the worker's `task`
+  string renders above the fold regardless of collapse state ("Prompted:
+  ..."), so the user can see what each worker was asked without expanding
+  it. The `response` field renders through the same `ReactMarkdown` +
+  `remarkGfm` pipeline `Chat.tsx` already uses for the main agent's reply
+  (previously a plain `<p>`, so a worker's markdown — bold, lists, links —
+  showed as literal syntax instead of being formatted).
 
 ### AIAgent as an MCP server
 

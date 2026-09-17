@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { fetchFile } from '../api'
 import type { ToolCall } from '../types'
 import styles from '../styles/ToolActivity.module.css'
@@ -390,7 +392,7 @@ function MarketTrendCard({ data }: { data: Record<string, unknown> }) {
 // ─── Delegated worker result (multi-agent orchestration, first scaffold) ─────
 
 function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const name = data.worker_name as string
   const traits = (data.worker_traits as string[] | undefined) ?? []
   const task = data.task as string | undefined
@@ -418,10 +420,14 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
           </span>
         )}
       </button>
+      {task && <p className={styles.workerTask}>Prompted: {task}</p>}
       {open && (
         <>
-          {task && <p className={styles.workerTask}>{task}</p>}
-          {response && <p className={styles.workerResponse}>{response}</p>}
+          {response && (
+            <div className={styles.workerResponse}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{response}</ReactMarkdown>
+            </div>
+          )}
           {toolsUsed.length > 0 && (
             <p className={styles.workerTools}>
               {toolsUsed.map((t, i) => (
