@@ -134,6 +134,7 @@ A tool whose definition carries `source: "mcp"` skips this entirely — `agent_s
 - `mcp_registry.py` — the vetted MCP server directory; currently one entry (`mcp-server-time`, official Anthropic reference server, spawned via stdio). Add a new trusted server here, not by asking the model to shell out to one.
 - `mcp_client.py` — sync wrapper (`asyncio.run`) around the official `mcp` SDK's `StdioServerParameters`/`stdio_client`/`ClientSession`. `catalog_summary()` fetches real tool schemas from every registered server (a server that fails to start is logged and simply omitted — bootstrap still works with zero vetted tools available); `call_tool()` runs one, returning `{"error": ...}` on failure instead of raising.
 - Both features apply to worker bootstraps automatically — `orchestrator.run_worker()` calls `generate_agent_config(..., is_worker=True)`, the same function the main agent uses, just bucketed separately in `bootstrap_memory` so a narrow subtask doesn't get matched against a broad top-level purpose (or vice versa).
+- **Both are surfaced in the UI for delegated workers, not just the main agent.** `generate_agent_config()` returns `(config, fewshot_count)` — previously `_build_prompt()`'s fewshot count was only read by the streaming bootstrap path (`generate_agent_config_stream`, main-agent-only) and silently discarded by the synchronous one `run_worker()` calls. `orchestrator.run_worker()` now returns that count as `fewshot_count`, plus `tool_sources` (parallel array to `tools_used`, each entry the matching call's `"mcp"/"primitive"/"generated"` tag already computed by `agent_stream.py`) in the `delegate_to_worker` tool result. `ToolActivity.tsx`'s `WorkerResultCard` renders a "🧠 grounded ×N" badge next to the worker's name when `fewshot_count > 0`, and a "🔌 MCP" badge (the same `styles.mcpBadge` class already used for the main agent's own tool rows) on each worker tool pill whose source is `"mcp"`.
 
 ### Output style: diagrams over prose, and delegation defaults
 
@@ -150,17 +151,48 @@ tool-usage basics:
   than restating the same numbers in prose. `Chat.tsx` renders the fence via
   `MermaidDiagram.tsx`. Applies to worker agents too (workers get rules 1-5
   of the addendum, just not the delegation rule below).
-- **Delegation is the default for multi-keyword requests, not an
-  exception.** A request naming several distinct keywords/topics/roles
-  (e.g. a comma-separated list) delegates one `delegate_to_worker` call per
-  keyword by default — each worker independently searches and reports back
-  on just its own keyword. `MAX_DELEGATIONS_PER_REQUEST` is `6` (raised from
-  `3`) to match typical keyword counts without silently falling back to
-  doing everything in the main agent's own tool calls. This was tightened
-  after observing the older, more conservative wording produced zero
-  delegations even for genuinely multi-part requests — the main agent just
-  did all the work itself with `fetch_page`/`search_jobs` instead of
-  spinning up workers, which is why "agents employed" showed as zero.
+- **Delegation is mandatory for multi-keyword requests, not a default the
+  model can talk itself out of.** A request naming several distinct
+  keywords/topics/roles (e.g. a comma-separated list) MUST delegate one
+  `delegate_to_worker` call per keyword — each worker independently searches
+  and reports back on just its own keyword; the main agent must not research
+  more than one keyword itself with its own tools when several are named.
+  `MAX_DELEGATIONS_PER_REQUEST` is `6` (raised from `3`) to match typical
+  keyword counts without silently falling back to doing everything in the
+  main agent's own tool calls. This was tightened twice: first from an
+  exception-worded rule that produced zero delegations even for genuinely
+  multi-part requests (the main agent just did all the work itself with
+  `fetch_page`/`search_jobs`, which is why "agents employed" showed as
+  zero), then from a "default, not exception" wording to an explicit MUST
+  after the softer phrasing still let the model quietly handle a second or
+  third keyword itself instead of spinning up a worker for it.
+- **The main agent's own reply must not re-dump each worker's findings.**
+  A new rule 7 in the same addendum tells the main agent that once workers
+  report back, its own reply should be a short synthesis/comparison at
+  most — never a restatement of content a worker already reported — because
+  each worker's full response is already shown to the user as its own
+  attributed card (see the frontend bullet below). Without this, delegating
+  five keywords produced one long assistant message re-explaining all five
+  workers' findings in prose on top of the five worker cards already
+  showing the same information, i.e. the "big scroll of text" this was
+  meant to replace.
+- **Each worker gets its own live "working" state and its own result card,
+  never folded into keyword grouping or a raw JSON dump.**
+  `ToolActivity.tsx` used to run every tool call — including
+  `delegate_to_worker` — through the same keyword-extraction/raw-result
+  path as ordinary tool calls; `extractKeyword()`'s fallback (any short
+  string field) frequently matched a worker's own `task` text, so a
+  finished worker's result could get misfiled under a fake "keyword
+  section" labeled with its task string, or fall through to a raw
+  `JSON.stringify` dump, instead of the existing `WorkerResultCard`.
+  `delegate_to_worker` calls are now filtered out of both the live and
+  completed grouping logic up front and rendered from a dedicated
+  `extractCompletedWorkers()` list — `AgentsEmployedSummary`'s pending pill
+  shows "running…" while a worker is still in flight (the `tool_start`
+  event for `delegate_to_worker` streams immediately, even though
+  `run_worker()` itself is a single blocking call), then a `WorkerResultCard`
+  per finished worker shows its name/traits/task/response/tools as its own
+  block once the matching `tool_result` arrives.
 
 ### AIAgent as an MCP server
 

@@ -30,7 +30,7 @@ def bootstrap_handler(event, context):
 
         provider = (body.get("provider") or "").strip() or None
         model = (body.get("ollama_model") or "").strip() or None
-        config = generate_agent_config(purpose, provider, model)
+        config, _ = generate_agent_config(purpose, provider, model)
         return _cors_response(200, config)
     except Exception as e:
         return _cors_response(500, {"error": str(e)})

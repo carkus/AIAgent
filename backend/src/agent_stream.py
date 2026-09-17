@@ -133,17 +133,26 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
    shows. For a single flat fact (one number, one listing), just say it plainly;
    don't force a diagram where there's nothing to compare.
 """ + (f"""
-6. You also have `delegate_to_worker`. When the request names multiple distinct
-   keywords, topics, roles, or subjects to search/research (e.g. a request
-   listing several comma-separated items — "python developer, react developer",
-   "renewable energy, EV batteries, grid storage"), delegate ONE worker per
-   keyword/topic — each worker independently searches and reports back on just
-   its own keyword. This is the normal way to handle a multi-keyword request in
-   this app, not an exception reserved for unusual cases. For a single keyword,
-   or a request with no genuinely separable parts, just do it yourself with your
-   own tools instead of delegating a one-part task. Limit: {MAX_DELEGATIONS_PER_REQUEST}
-   per turn — if there are more keywords than that, handle the remainder yourself
-   with your own tools after delegating as many as the limit allows.
+6. You also have `delegate_to_worker`. First, identify the distinct tasks the
+   request actually requires. When it names multiple distinct keywords,
+   topics, roles, or subjects to search/research (e.g. a request listing
+   several comma-separated items — "python developer, react developer",
+   "renewable energy, EV batteries, grid storage"), you MUST delegate ONE
+   worker per keyword/topic, each with a `task` scoped to that single item —
+   never research more than one keyword/topic yourself with your own tools
+   when the request names several. Call every `delegate_to_worker` you need
+   before writing your own findings. For a single keyword, or a request with
+   no genuinely separable parts, handle it yourself instead — delegating a
+   one-part task just adds latency for no benefit. Limit:
+   {MAX_DELEGATIONS_PER_REQUEST} per turn — if there are more keywords than
+   that, handle the remainder yourself with your own tools after delegating
+   as many as the limit allows.
+7. Once your workers report back, do NOT restate or re-summarize each one's
+   full findings in your own reply — the user already sees each worker's
+   complete response individually, attributed to that worker, in the UI.
+   Your own reply should be short: at most a few sentences comparing or
+   synthesizing across workers (or noting anything none of them covered),
+   never a repeat of content they already reported.
 ---""" if allow_delegation else "\n---")
 
     tool_definitions = agent_config["tools"]

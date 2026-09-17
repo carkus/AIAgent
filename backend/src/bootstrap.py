@@ -234,8 +234,11 @@ def _build_prompt(
 def generate_agent_config(
     purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False,
     agent_type: str | None = None,
-) -> dict:
-    prompt, _ = _build_prompt(purpose, provider, is_worker, agent_type)
+) -> tuple[dict, int]:
+    """Returns (config, fewshot_count) — the count is how many past similar
+    bootstraps grounded this one (0 if none), surfaced by callers that want
+    to show whether RAG grounding was used (e.g. orchestrator.run_worker)."""
+    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type)
     response = create_chat_completion(
         provider=provider,
         model=model,
@@ -317,7 +320,7 @@ def generate_agent_config(
     config["provider"] = provider
     config["ollama_model"] = model
     bootstrap_memory.record(purpose, config, provider, is_worker, agent_type=agent_type)
-    return config
+    return config, fewshot_count
 
 
 _TOOL_NAME_RE = re.compile(r'"name"\s*:\s*"([^"]+)"')

@@ -29,7 +29,14 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None)
     result, same as any other tool) so the parent agent — and the person
     reading tool activity in the UI — can see who was spun up, what traits
     it was given, and what it found:
-      {"worker_name", "worker_traits", "task", "response", "tools_used"}
+      {"worker_name", "worker_traits", "task", "response", "tools_used",
+       "tool_sources", "fewshot_count"}
+    `tool_sources` mirrors `tools_used` by index — each entry is the
+    corresponding call's "mcp"/"primitive"/"generated" source tag (see
+    agent_stream.py), so the UI can badge MCP-backed worker tool calls the
+    same way it already does for the main agent's own. `fewshot_count` is
+    how many past similar bootstraps grounded *this worker's* config (0 if
+    none) — see bootstrap.generate_agent_config's docstring.
     """
     # Deferred import: agent_stream imports this module (lazily, only when
     # delegate_to_worker is actually called) to build _DELEGATE_TOOL's
@@ -44,7 +51,9 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None)
         # but a worker IS an agent bootstrapped the normal way, so it benefits
         # from the same grounding (few-shot retrieval + the MCP tool catalog)
         # with zero extra code path.
-        worker_config = generate_agent_config(purpose=task, provider=provider, model=model, is_worker=True)
+        worker_config, fewshot_count = generate_agent_config(
+            purpose=task, provider=provider, model=model, is_worker=True
+        )
     except Exception as e:
         return {
             "worker_name": "Worker",
@@ -52,6 +61,8 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None)
             "task": task,
             "response": f"Could not assemble a worker for this subtask: {e}",
             "tools_used": [],
+            "tool_sources": [],
+            "fewshot_count": 0,
         }
 
     persona = worker_config.get("persona") or {}
@@ -79,4 +90,6 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None)
         "task": task,
         "response": final_response,
         "tools_used": [tc["tool"] for tc in tool_calls],
+        "tool_sources": [tc.get("source", "generated") for tc in tool_calls],
+        "fewshot_count": fewshot_count,
     }

@@ -654,6 +654,18 @@
   letter-spacing: 0.02em;
 }
 
+.groundedBadge {
+  color: #c4b5fd;
+  font-family: 'Share Tech Mono', monospace;
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(196, 181, 253, 0.4);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  flex-shrink: 0;
+}
+
 .workerTask {
   color: #9aa0af;
   font-size: 0.7rem;

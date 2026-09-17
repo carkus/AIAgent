@@ -182,6 +182,18 @@ function extractWorkerSummaries(toolCalls: ToolCall[]): WorkerSummary[] {
     .filter((w): w is WorkerSummary => w !== null)
 }
 
+// Completed delegate_to_worker calls, parsed into renderable worker-result
+// data — kept out of the generic keyword/raw-result paths entirely so a
+// worker's full response is always shown as its own attributed card, never
+// folded into a "keyword section" (extractKeyword can mistake a short task
+// string for a keyword) or dumped as an undifferentiated block of prose.
+function extractCompletedWorkers(toolCalls: ToolCall[]): (Record<string, unknown> & { worker_name: string; response: string })[] {
+  return toolCalls
+    .filter(tc => tc.tool === 'delegate_to_worker' && tc.result !== '…')
+    .map(tc => parseResult(tc.result))
+    .filter(isWorkerResult)
+}
+
 function extractSavedFile(raw: string): string | null {
   const data = parseResult(raw)
   if (typeof data !== 'object' || data === null || Array.isArray(data)) return null
@@ -384,6 +396,8 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
   const task = data.task as string | undefined
   const response = data.response as string
   const toolsUsed = (data.tools_used as string[] | undefined) ?? []
+  const toolSources = (data.tool_sources as string[] | undefined) ?? []
+  const fewshotCount = (data.fewshot_count as number | undefined) ?? 0
 
   return (
     <div className={styles.workerCard}>
@@ -398,6 +412,11 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
         {traits.length > 0 && (
           <span className={styles.workerTraits}>{traits.join(' · ')}</span>
         )}
+        {fewshotCount > 0 && (
+          <span className={styles.groundedBadge}>
+            🧠 grounded ×{fewshotCount}
+          </span>
+        )}
       </button>
       {open && (
         <>
@@ -405,7 +424,12 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
           {response && <p className={styles.workerResponse}>{response}</p>}
           {toolsUsed.length > 0 && (
             <p className={styles.workerTools}>
-              {toolsUsed.map((t, i) => <span key={i} className={styles.pill}><span className={styles.pillVal}>{t}</span></span>)}
+              {toolsUsed.map((t, i) => (
+                <span key={i} className={styles.pill}>
+                  <span className={styles.pillVal}>{t}</span>
+                  {toolSources[i] === 'mcp' && <span className={styles.mcpBadge}>🔌 MCP</span>}
+                </span>
+              ))}
             </p>
           )}
         </>
@@ -806,18 +830,23 @@ export default function ToolActivity({ toolCalls, live = false, location }: Prop
         {open && (
           <>
             <AgentsEmployedSummary workers={extractWorkerSummaries(toolCalls)} />
-            {toolCalls.map((tc, i) => <LiveToolRow key={i} tc={tc} location={location} />)}
+            {extractCompletedWorkers(toolCalls).map((data, i) => <WorkerResultCard key={i} data={data} />)}
+            {toolCalls.filter(tc => tc.tool !== 'delegate_to_worker').map((tc, i) => <LiveToolRow key={i} tc={tc} location={location} />)}
           </>
         )}
       </div>
     )
   }
 
-  // Completed: group by keyword
+  // Completed: group by keyword (delegate_to_worker calls are excluded up
+  // front — extractKeyword's fallback would otherwise mistake a worker's
+  // `task` string for a search keyword and misfile its result into a
+  // KeywordSection instead of its own WorkerResultCard)
   const byKeyword = new Map<string, ToolCall[]>()
   const other: ToolCall[] = []
 
   for (const tc of toolCalls) {
+    if (tc.tool === 'delegate_to_worker') continue
     const kw = extractKeyword(tc.inputs)
     if (kw) {
       const key = kw.toLowerCase()
@@ -854,6 +883,7 @@ export default function ToolActivity({ toolCalls, live = false, location }: Prop
           ))}
 
           <AgentsEmployedSummary workers={extractWorkerSummaries(toolCalls)} />
+          {extractCompletedWorkers(toolCalls).map((data, i) => <WorkerResultCard key={i} data={data} />)}
 
           {savedFromOther.map(f => (
             <div key={f} className={styles.kwSection}>
