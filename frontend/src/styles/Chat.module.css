@@ -118,29 +118,6 @@
   box-shadow: 0 1px 3px rgba(28, 40, 51, 0.15);
 }
 
-.saveBtn {
-  background: rgba(22, 101, 52, 0.08);
-  border: 1px solid rgba(22, 101, 52, 0.35);
-  border-radius: 10px;
-  color: #166534;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding: 0.6rem 1.2rem;
-  flex-shrink: 0;
-  transition: background 0.15s, transform 0.12s, opacity 0.15s;
-}
-
-.saveBtn:hover:not(:disabled) {
-  background: rgba(22, 101, 52, 0.16);
-  transform: translateY(-1px);
-}
-
-.saveBtn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
 .exportBtn {
   background: rgba(31, 111, 115, 0.08);
   border: 1px solid rgba(31, 111, 115, 0.35);
@@ -164,7 +141,7 @@
   cursor: default;
 }
 
-.publishBtn {
+.rosterBtn {
   background: rgba(63, 126, 160, 0.08);
   border: 1px solid rgba(63, 126, 160, 0.35);
   border-radius: 10px;
@@ -177,12 +154,17 @@
   transition: background 0.15s, transform 0.12s, opacity 0.15s;
 }
 
-.publishBtn:hover {
+.rosterBtn:hover:not(:disabled) {
   background: rgba(63, 126, 160, 0.16);
   transform: translateY(-1px);
 }
 
-.publishPanel {
+.rosterBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.rosterPanel {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -193,7 +175,7 @@
   flex-shrink: 0;
 }
 
-.publishInput {
+.rosterInput {
   background: #ffffff;
   border: 1px solid #ddd9cd;
   border-radius: 6px;
@@ -206,11 +188,11 @@
   padding: 0.5rem 0.75rem;
 }
 
-.publishInput:focus {
+.rosterInput:focus {
   border-color: #3f7ea0;
 }
 
-.publishConfirmBtn {
+.rosterConfirmBtn {
   background: #3f7ea0;
   border: none;
   border-radius: 6px;
@@ -222,12 +204,12 @@
   white-space: nowrap;
 }
 
-.publishConfirmBtn:disabled {
+.rosterConfirmBtn:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
-.publishCancelBtn {
+.rosterCancelBtn {
   background: transparent;
   border: 1px solid #ddd9cd;
   border-radius: 6px;
@@ -238,7 +220,7 @@
   white-space: nowrap;
 }
 
-.publishFeedback {
+.rosterFeedback {
   color: #3f7ea0;
   font-size: 0.78rem;
   margin: 0;

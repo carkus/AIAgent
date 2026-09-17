@@ -94,6 +94,8 @@ function getTemplate(id: AgentTemplateId | undefined): AgentTemplate {
   return AGENT_TEMPLATES.find(t => t.id === id) ?? AGENT_TEMPLATES[0]
 }
 
+type SavedSectionId = 'searches' | 'chats' | 'mcp'
+
 function formatSavedAt(ts: number): string {
   return new Date(ts).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
 }
@@ -170,7 +172,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const visibleSaved = saved.filter(s => (s.agentType ?? 'research') === agentType)
   const [savedChats, setSavedChats] = useState<SavedChat[]>(loadSavedChats)
   const visibleSavedChats = savedChats.filter(c => (c.agentConfig.template ?? 'research') === agentType)
-  const [activeSavedTab, setActiveSavedTab] = useState<'searches' | 'chats' | 'mcp'>('searches')
+  const [openSavedSections, setOpenSavedSections] = useState<Record<SavedSectionId, boolean>>({
+    searches: true,
+    chats: false,
+    mcp: false,
+  })
   const [progress, setProgress] = useState<string | null>(null)
   const [toolsSoFar, setToolsSoFar] = useState<string[]>([])
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
@@ -326,6 +332,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setDraft('')
   }
 
+  function toggleSavedSection(section: SavedSectionId) {
+    setOpenSavedSections(prev => ({ ...prev, [section]: !prev[section] }))
+  }
+
   function loadSearch(entry: SavedSearch) {
     setAgentType(entry.agentType ?? 'research')
     setKeywords([...entry.keywords])
@@ -429,7 +439,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
-          <p className={styles.keywordHint}>Search: Add keywords, personality traits, all requests...</p>
+          <p className={styles.keywordHint}>What should this agent work on? Add keywords, skills, or topics…</p>
           <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
             {keywords.map(kw => (
               <span key={kw} className={styles.chip}>
@@ -458,8 +468,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             />
             {keywords.length > 0 && (
               <span
-                className={styles.keywordCountBubble}
+                className={styles.keywordTally}
                 title={`${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} added`}
+                aria-hidden="true"
               >
                 {keywords.length}
               </span>
@@ -497,147 +508,171 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
           </div>
 
+          <div className={styles.dossierWrap}>
+          <span className={styles.dossierTab} aria-hidden="true">Agent Dossier</span>
           <div className={styles.savedSectionsScroll}>
-          <div className={styles.tabList} role="tablist" aria-label="Saved items">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeSavedTab === 'searches'}
-              className={`${styles.tabBtn} ${activeSavedTab === 'searches' ? styles.tabBtnActive : ''}`}
-              onClick={() => setActiveSavedTab('searches')}
-            >
-              Saved searches ({visibleSaved.length})
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeSavedTab === 'chats'}
-              className={`${styles.tabBtn} ${activeSavedTab === 'chats' ? styles.tabBtnActive : ''}`}
-              onClick={() => setActiveSavedTab('chats')}
-            >
-              Saved chats ({visibleSavedChats.length})
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeSavedTab === 'mcp'}
-              className={`${styles.tabBtn} ${activeSavedTab === 'mcp' ? styles.tabBtnActive : ''}`}
-              onClick={() => setActiveSavedTab('mcp')}
-            >
-              Published as MCP tools ({publishedAgents.length})
-            </button>
-          </div>
+          <span className={styles.dossierStamp} aria-hidden="true">On file</span>
 
-          <div className={styles.tabPanel} role="tabpanel">
-            {activeSavedTab === 'searches' && (
-              visibleSaved.length > 0 ? (
-                <div className={styles.savedList}>
-                  {visibleSaved.map(s => (
-                    <div key={s.id} className={styles.savedRow} onClick={() => loadSearch(s)}>
-                      <div className={styles.savedChips}>
-                        {s.keywords.map(kw => (
-                          <span key={kw} className={styles.savedChip}>{kw}</span>
-                        ))}
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.savedDelete}
-                        onClick={ev => { ev.stopPropagation(); deleteSearch(s.id) }}
-                        aria-label="Delete saved search"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className={styles.savedEmpty}>No saved searches for {getTemplate(agentType).label} yet.</p>
-              )
-            )}
-
-            {activeSavedTab === 'chats' && (
-              visibleSavedChats.length > 0 ? (
-                <div className={styles.savedList}>
-                  {visibleSavedChats.map(c => (
-                    <div
-                      key={c.id}
-                      className={styles.savedRow}
-                      onClick={() => loadSavedChatQuery(c)}
-                      title={c.agentConfig.purpose}
-                    >
-                      <div className={styles.savedChatInfo}>
-                        <span className={styles.savedChatName}>Agent {c.agentName}</span>
-                        {c.agentConfig.persona?.traits?.length ? (
-                          <span className={styles.savedChatTraits}>
-                            {c.agentConfig.persona.traits.join(' · ')}
-                          </span>
-                        ) : null}
-                        {c.agentConfig.keywords?.length ? (
+          <div className={styles.savedAccordion}>
+            <div className={styles.savedSection}>
+              <button
+                type="button"
+                className={styles.savedSectionHeader}
+                aria-expanded={openSavedSections.searches}
+                onClick={() => toggleSavedSection('searches')}
+              >
+                <span className={styles.savedSectionCaret} aria-hidden="true">
+                  {openSavedSections.searches ? '▾' : '▸'}
+                </span>
+                <span className={styles.savedSectionTitle}>Search Directives</span>
+                <span className={styles.savedSectionCount}>{visibleSaved.length}</span>
+              </button>
+              {openSavedSections.searches && (
+                <div className={styles.savedSectionBody}>
+                  {visibleSaved.length > 0 ? (
+                    <div className={styles.savedList}>
+                      {visibleSaved.map(s => (
+                        <div key={s.id} className={styles.savedRow} onClick={() => loadSearch(s)} title="Load this directive">
                           <div className={styles.savedChips}>
-                            {c.agentConfig.keywords.map(kw => (
+                            {s.keywords.map(kw => (
                               <span key={kw} className={styles.savedChip}>{kw}</span>
                             ))}
                           </div>
-                        ) : (
-                          <span className={styles.savedChatMeta}>No keywords saved</span>
-                        )}
-                        <span className={styles.savedChatMeta}>
-                          {c.agentConfig.location || 'No location'} · {formatModelLabel(c.agentConfig)} ·{' '}
-                          {c.messages.length} message{c.messages.length !== 1 ? 's' : ''} · {formatSavedAt(c.savedAt)}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.savedResume}
-                        onClick={ev => { ev.stopPropagation(); onResumeChat(c) }}
-                        aria-label={`Continue chat with Agent ${c.agentName}`}
-                        title="Continue this chat"
-                      >
-                        →
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.savedDelete}
-                        onClick={ev => { ev.stopPropagation(); removeSavedChat(c.id) }}
-                        aria-label="Delete saved chat"
-                      >
-                        ×
-                      </button>
+                          <button
+                            type="button"
+                            className={styles.savedDelete}
+                            onClick={ev => { ev.stopPropagation(); deleteSearch(s.id) }}
+                            aria-label="Delete directive"
+                            title="Delete directive"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <p className={styles.savedEmpty}>No directives logged for {getTemplate(agentType).label} yet.</p>
+                  )}
                 </div>
-              ) : (
-                <p className={styles.savedEmpty}>No saved chats for {getTemplate(agentType).label} yet.</p>
-              )
-            )}
+              )}
+            </div>
 
-            {activeSavedTab === 'mcp' && (
-              publishedAgents.length > 0 ? (
-                <div className={styles.savedList}>
-                  {publishedAgents.map(a => (
-                    <div key={a.id} className={styles.savedRow} title={a.description}>
-                      <div className={styles.savedChatInfo}>
-                        <span className={styles.savedChatName}>{a.name}</span>
-                        <span className={styles.savedChatMeta}>
-                          Tool name: {a.tool_name}{a.description ? ` · ${a.description}` : ''}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.savedDelete}
-                        onClick={ev => { ev.stopPropagation(); removePublishedAgent(a.id) }}
-                        aria-label={`Unpublish ${a.name}`}
-                        title="Unpublish (stop exposing as an MCP tool)"
-                      >
-                        ×
-                      </button>
+            <div className={styles.savedSection}>
+              <button
+                type="button"
+                className={styles.savedSectionHeader}
+                aria-expanded={openSavedSections.chats}
+                onClick={() => toggleSavedSection('chats')}
+              >
+                <span className={styles.savedSectionCaret} aria-hidden="true">
+                  {openSavedSections.chats ? '▾' : '▸'}
+                </span>
+                <span className={styles.savedSectionTitle}>Saved Agents</span>
+                <span className={styles.savedSectionCount}>{visibleSavedChats.length}</span>
+              </button>
+              {openSavedSections.chats && (
+                <div className={styles.savedSectionBody}>
+                  {visibleSavedChats.length > 0 ? (
+                    <div className={styles.savedList}>
+                      {visibleSavedChats.map(c => (
+                        <div
+                          key={c.id}
+                          className={styles.savedRow}
+                          onClick={() => loadSavedChatQuery(c)}
+                          title={c.agentConfig.purpose}
+                        >
+                          <div className={styles.savedChatInfo}>
+                            <span className={styles.savedChatName}>Agent {c.agentName}</span>
+                            {c.agentConfig.persona?.traits?.length ? (
+                              <span className={styles.savedChatTraits}>
+                                {c.agentConfig.persona.traits.join(' · ')}
+                              </span>
+                            ) : null}
+                            {c.agentConfig.keywords?.length ? (
+                              <div className={styles.savedChips}>
+                                {c.agentConfig.keywords.map(kw => (
+                                  <span key={kw} className={styles.savedChip}>{kw}</span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className={styles.savedChatMeta}>No directive on file</span>
+                            )}
+                            <span className={styles.savedChatMeta}>
+                              {c.agentConfig.location || 'No location set'} · {formatModelLabel(c.agentConfig)} ·{' '}
+                              {c.messages.length} exchange{c.messages.length !== 1 ? 's' : ''} logged · {formatSavedAt(c.savedAt)}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className={styles.savedResume}
+                            onClick={ev => { ev.stopPropagation(); onResumeChat(c) }}
+                            aria-label={`Resume Agent ${c.agentName}`}
+                            title="Resume this agent"
+                          >
+                            →
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.savedDelete}
+                            onClick={ev => { ev.stopPropagation(); removeSavedChat(c.id) }}
+                            aria-label="Remove saved agent"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <p className={styles.savedEmpty}>No saved agents for {getTemplate(agentType).label} yet.</p>
+                  )}
                 </div>
-              ) : (
-                <p className={styles.savedEmpty}>No agents published as MCP tools yet.</p>
-              )
-            )}
+              )}
+            </div>
+
+            <div className={styles.savedSection}>
+              <button
+                type="button"
+                className={styles.savedSectionHeader}
+                aria-expanded={openSavedSections.mcp}
+                onClick={() => toggleSavedSection('mcp')}
+              >
+                <span className={styles.savedSectionCaret} aria-hidden="true">
+                  {openSavedSections.mcp ? '▾' : '▸'}
+                </span>
+                <span className={styles.savedSectionTitle}>Agent Roster</span>
+                <span className={styles.savedSectionCount}>{publishedAgents.length}</span>
+              </button>
+              {openSavedSections.mcp && (
+                <div className={styles.savedSectionBody}>
+                  {publishedAgents.length > 0 ? (
+                    <div className={styles.savedList}>
+                      {publishedAgents.map(a => (
+                        <div key={a.id} className={styles.savedRow} title={a.description}>
+                          <div className={styles.savedChatInfo}>
+                            <span className={styles.savedChatName}>{a.name}</span>
+                            <span className={styles.savedChatMeta}>
+                              Callable as: {a.tool_name}{a.description ? ` · ${a.description}` : ''}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className={styles.savedDelete}
+                            onClick={ev => { ev.stopPropagation(); removePublishedAgent(a.id) }}
+                            aria-label={`Deactivate ${a.name}`}
+                            title="Deactivate (stop exposing as an MCP tool)"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={styles.savedEmpty}>No agents deployed to the roster yet — launch one from a chat.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
           </div>
           </div>
 

@@ -1,7 +1,8 @@
 .container {
   flex: 1;
+  min-height: 0;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   padding: 1rem;
   width: 100%;
@@ -10,7 +11,7 @@
 .card {
   width: 100%;
   max-width: 1000px;
-  max-height: 900px;
+  height: 100%;
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
@@ -21,7 +22,7 @@
 .brandLogo {
   display: block;
   align-self: center;
-  height: 88px;
+  height: 106px;
   width: auto;
   margin: -20px 0 1rem;
   border-radius: 10px;
@@ -30,7 +31,7 @@
 .title {
   margin: 0 0 0.5rem;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 1.6rem;
+  font-size: 1.85rem;
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -54,7 +55,7 @@
 /* Only the saved-sections wrapper is allowed to shrink/scroll — every other
    field (agent type, keywords, location, model, hint row) must always
    render at its full natural size, never compressed below its content. */
-.form > *:not(.savedSectionsScroll) {
+.form > *:not(.dossierWrap) {
   flex-shrink: 0;
 }
 
@@ -69,6 +70,7 @@
   min-height: 52px;
   padding: 0.6rem 0.75rem;
   align-items: center;
+  position: relative;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
@@ -108,12 +110,13 @@
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 6px;
+  box-sizing: border-box;
   color: #1f6f73;
-  flex: 0 1 auto;
-  width: 180px;
-  font-size: 0.82rem;
+  flex: 1 1 160px;
+  width: auto;
+  font-size: 0.75rem;
   font-weight: 500;
-  min-width: 100px;
+  min-width: 120px;
   outline: none;
   font-family: inherit;
   padding: 0.2rem 0.6rem;
@@ -127,22 +130,27 @@
 
 .chipInput::placeholder {
   color: #6b9895;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
 }
 
-.keywordCountBubble {
+.keywordTally {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #1f6f73;
+  background: #ffffff;
+  border: 1px solid #cfbf94;
   border-radius: 999px;
-  color: #ffffff;
-  flex-shrink: 0;
-  font-size: 0.72rem;
-  font-weight: 600;
-  height: 1.4rem;
-  min-width: 1.4rem;
-  padding: 0 0.35rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  color: #1f6f73;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 400;
+  height: 1.7rem;
+  min-width: 1.7rem;
+  padding: 0 0.4rem;
+  position: absolute;
+  top: -0.7rem;
+  right: -0.7rem;
 }
 
 .hintRow {
@@ -418,66 +426,142 @@
   margin: -0.35rem 0 0;
 }
 
-/* Saved searches / saved chats / published MCP tools tabs */
+/* Saved searches / saved chats / published MCP tools — "agent dossier" folder */
 
-.tabList {
+.dossierWrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
-  gap: 0.25rem;
-  border-bottom: 1px solid #ddd9cd;
+  flex-direction: column;
+  margin-top: 1.45rem;
+}
+
+.savedSectionsScroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.9rem 0.75rem 0.75rem;
+  background: #ede4cd;
+  border: 1px solid #cfbf94;
+  border-radius: 3px 10px 10px 10px;
+  box-shadow:
+    0 1px 0 #f5eeda,
+    0 8px 0 -3px #e2d6b3,
+    0 8px 1px -3px #cfbf94,
+    0 14px 24px rgba(28, 40, 51, 0.12);
+  overflow-y: auto;
+}
+
+.dossierTab {
+  position: absolute;
+  top: -1.05rem;
+  left: 0.75rem;
+  z-index: 1;
+  background: #ede4cd;
+  border: 1px solid #cfbf94;
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+  color: #6b5a32;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem 0.35rem;
+}
+
+.dossierStamp {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.9rem;
+  color: #1f6f73;
+  border: 1.5px solid #1f6f73;
+  border-radius: 4px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.4rem;
+  opacity: 0.55;
+  transform: rotate(-6deg);
+  pointer-events: none;
+}
+
+.savedAccordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.savedSection {
+  background: #f8f4e7;
+  border: 1px solid #ddd0a5;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.savedSectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #16324a;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+}
+
+.savedSectionHeader:hover {
+  background: rgba(31, 111, 115, 0.06);
+}
+
+.savedSectionCaret {
+  color: #6b5a32;
+  font-size: 0.7rem;
+  width: 0.8rem;
   flex-shrink: 0;
 }
 
-.tabBtn {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: #6b7785;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 0.72rem;
+.savedSectionTitle {
+  color: #16324a;
+  font-size: 0.82rem;
   font-weight: 600;
-  letter-spacing: 0.03em;
-  padding: 0.45rem 0.5rem;
-  transition: color 0.15s, border-color 0.15s;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.tabBtn:hover {
+.savedSectionCount {
+  background: #eef1f0;
+  border-radius: 999px;
   color: #1f6f73;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  flex-shrink: 0;
 }
 
-.tabBtnActive {
-  color: #1f6f73;
-  border-bottom-color: #1f6f73;
-}
-
-.tabPanel {
-  padding-top: 0.6rem;
+.savedSectionBody {
+  border-top: 1px solid #ddd0a5;
+  padding: 0.6rem 0.7rem 0.7rem;
 }
 
 .savedEmpty {
   color: #8a94a0;
   font-size: 0.8rem;
-  margin: 0.3rem 0 0;
+  margin: 0;
 }
 
 .savedList {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-}
-
-/* Saved searches, saved chats, and MCP tools share one scroll region so the
-   panel's overall height stays capped (see .card's max-height) while
-   whichever collapsibles are open can grow past the space available to
-   them without pushing the always-visible fields above out of view. */
-.savedSectionsScroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding-right: 0.25rem;
 }
 
 .savedRow {
@@ -535,8 +619,7 @@
 
 .savedChatMeta {
   color: #6b7785;
-  font-size: 0.7rem;
-  white-space: nowrap;
+  font-size: 0.62rem;
 }
 
 .savedResume {

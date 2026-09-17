@@ -48,18 +48,19 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [continueOpen, setContinueOpen] = useState(false)
-  const [saveFeedback, setSaveFeedback] = useState(false)
-  // Publishing turns this bootstrapped agent into a standing MCP tool any
-  // MCP client can call (backend/mcp_server.py) — deliberately a manual,
-  // reviewed step (not automatic on bootstrap) since generated tool code
-  // has no real sandbox (see AIAgent/CLAUDE.md Limitation #2), so only an
-  // agent the user has actually exercised in chat gets made permanently
-  // externally-callable.
-  const [publishOpen, setPublishOpen] = useState(false)
-  const [publishName, setPublishName] = useState(agentName)
-  const [publishDescription, setPublishDescription] = useState(agentConfig.purpose ?? '')
-  const [publishing, setPublishing] = useState(false)
-  const [publishFeedback, setPublishFeedback] = useState<string | null>(null)
+  // "Add to Roster" is one hiring-themed action that both keeps this
+  // conversation (saveChat, local) and files the agent itself as a standing,
+  // externally-callable MCP tool (publishAgent, server-side registry) — the
+  // agent's track record and its "personnel file" are the same event now,
+  // not two separate buttons. Publishing is still a manual, reviewed step
+  // (not automatic on bootstrap) since generated tool code has no real
+  // sandbox (see AIAgent/CLAUDE.md Limitation #2), so only an agent the user
+  // has actually exercised in chat gets made permanently externally-callable.
+  const [rosterOpen, setRosterOpen] = useState(false)
+  const [rosterName, setRosterName] = useState(agentName)
+  const [rosterDescription, setRosterDescription] = useState(agentConfig.purpose ?? '')
+  const [addingToRoster, setAddingToRoster] = useState(false)
+  const [rosterFeedback, setRosterFeedback] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [pdfPreview, setPdfPreview] = useState<{ blobUrl: string; filename: string; doc: ReturnType<typeof buildChatPdf> } | null>(null)
   // Rendered markdown DOM per assistant message index, so PDF export can
@@ -85,7 +86,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function handleSaveChat() {
+  function saveChatLocally() {
     const chat: SavedChat = {
       id: chatIdRef.current,
       agentName,
@@ -96,24 +97,23 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
       savedAt: Date.now(),
     }
     saveChat(chat)
-    setSaveFeedback(true)
-    window.setTimeout(() => setSaveFeedback(false), 1500)
   }
 
-  async function handlePublish() {
-    const name = publishName.trim()
-    if (!name || publishing) return
-    setPublishing(true)
-    setPublishFeedback(null)
+  async function handleAddToRoster() {
+    const name = rosterName.trim()
+    if (!name || addingToRoster) return
+    setAddingToRoster(true)
+    setRosterFeedback(null)
     try {
-      await publishAgent(name, publishDescription.trim(), agentConfig)
-      setPublishFeedback(`Published as MCP tool "${name}"`)
-      setPublishOpen(false)
+      saveChatLocally()
+      await publishAgent(name, rosterDescription.trim(), agentConfig)
+      setRosterFeedback(`Added "${name}" to the roster ✓`)
+      setRosterOpen(false)
     } catch (err) {
-      setPublishFeedback(err instanceof Error ? err.message : 'Failed to publish agent')
+      setRosterFeedback(err instanceof Error ? err.message : 'Failed to add agent to roster')
     } finally {
-      setPublishing(false)
-      window.setTimeout(() => setPublishFeedback(null), 4000)
+      setAddingToRoster(false)
+      window.setTimeout(() => setRosterFeedback(null), 4000)
     }
   }
 
@@ -285,18 +285,12 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
         <div className={styles.headerActions}>
           <button
             type="button"
-            className={styles.publishBtn}
-            onClick={() => setPublishOpen(o => !o)}
-          >
-            Publish as MCP tool
-          </button>
-          <button
-            type="button"
-            className={styles.saveBtn}
-            onClick={handleSaveChat}
+            className={styles.rosterBtn}
+            onClick={() => setRosterOpen(o => !o)}
             disabled={messages.length === 0}
+            title="Save this agent and deploy them as a callable tool on the roster"
           >
-            {saveFeedback ? 'Saved ✓' : 'Save chat'}
+            Add to Roster
           </button>
           <button
             type="button"
@@ -312,34 +306,34 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
         <ContinuePanel isOpen={continueOpen} onToggle={() => setContinueOpen(!continueOpen)} />
       </header>
 
-      {publishOpen && (
-        <div className={styles.publishPanel}>
+      {rosterOpen && (
+        <div className={styles.rosterPanel}>
           <input
-            className={styles.publishInput}
-            value={publishName}
-            onChange={e => setPublishName(e.target.value)}
-            placeholder="Tool name (shown to MCP clients)"
+            className={styles.rosterInput}
+            value={rosterName}
+            onChange={e => setRosterName(e.target.value)}
+            placeholder="Agent name (their ID on the roster)"
           />
           <input
-            className={styles.publishInput}
-            value={publishDescription}
-            onChange={e => setPublishDescription(e.target.value)}
-            placeholder="Description (what this agent does)"
+            className={styles.rosterInput}
+            value={rosterDescription}
+            onChange={e => setRosterDescription(e.target.value)}
+            placeholder="Role / what this agent does"
           />
           <button
             type="button"
-            className={styles.publishConfirmBtn}
-            onClick={handlePublish}
-            disabled={!publishName.trim() || publishing}
+            className={styles.rosterConfirmBtn}
+            onClick={handleAddToRoster}
+            disabled={!rosterName.trim() || addingToRoster}
           >
-            {publishing ? 'Publishing…' : 'Publish'}
+            {addingToRoster ? 'Deploying…' : 'Add to Roster'}
           </button>
-          <button type="button" className={styles.publishCancelBtn} onClick={() => setPublishOpen(false)}>
+          <button type="button" className={styles.rosterCancelBtn} onClick={() => setRosterOpen(false)}>
             Cancel
           </button>
         </div>
       )}
-      {publishFeedback && <p className={styles.publishFeedback}>{publishFeedback}</p>}
+      {rosterFeedback && <p className={styles.rosterFeedback}>{rosterFeedback}</p>}
 
       <div className={styles.container}>
         <div className={styles.mainContent}>
