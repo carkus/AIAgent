@@ -20,7 +20,54 @@ interface AgentTemplate {
   buildPurpose: (keywords: string[], location: string) => string
 }
 
+// Mono line icons matching the app's stroke-based visual style — plain
+// geometric shapes (magnifier / briefcase / compass), not emoji, so they
+// pick up the pill's currentColor and stay crisp at any size.
+function AgentTypeIcon({ id }: { id: AgentTemplateId }) {
+  const common = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.75,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  }
+  if (id === 'job_search') {
+    return (
+      <svg {...common}>
+        <rect x="2.5" y="7" width="19" height="13.5" rx="2" />
+        <path d="M8 7V5.5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2V7" />
+        <line x1="2.5" y1="13" x2="21.5" y2="13" />
+      </svg>
+    )
+  }
+  if (id === 'general') {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="9.25" />
+        <polygon points="15.5 8.5 13.2 13.2 8.5 15.5 10.8 10.8 15.5 8.5" />
+      </svg>
+    )
+  }
+  return (
+    <svg {...common}>
+      <circle cx="10.5" cy="10.5" r="7" />
+      <line x1="20.5" y1="20.5" x2="15.8" y2="15.8" />
+    </svg>
+  )
+}
+
 const AGENT_TEMPLATES: AgentTemplate[] = [
+  {
+    id: 'general',
+    label: 'General assistant',
+    keywordPlaceholder: 'Type a topic, press Enter…',
+    buildPurpose: (keywords, loc) =>
+      `General-purpose assistant covering the following topics: ${keywords.join(', ')}` +
+      `${loc ? ` (relevant to ${loc})` : ''}. ` +
+      `Decide what information or tools each topic needs and present clear, ` +
+      `well-organised findings.`,
+  },
   {
     id: 'research',
     label: 'Researcher',
@@ -40,16 +87,6 @@ const AGENT_TEMPLATES: AgentTemplate[] = [
       `${loc ? ` in ${loc}` : ''}. ` +
       `Search live job listings, compare requirements and salary across postings, ` +
       `and present clear, ranked findings for each role or skill.`,
-  },
-  {
-    id: 'general',
-    label: 'General assistant',
-    keywordPlaceholder: 'Type a topic, press Enter…',
-    buildPurpose: (keywords, loc) =>
-      `General-purpose assistant covering the following topics: ${keywords.join(', ')}` +
-      `${loc ? ` (relevant to ${loc})` : ''}. ` +
-      `Decide what information or tools each topic needs and present clear, ` +
-      `well-organised findings.`,
   },
 ]
 
@@ -133,13 +170,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const visibleSaved = saved.filter(s => (s.agentType ?? 'research') === agentType)
   const [savedChats, setSavedChats] = useState<SavedChat[]>(loadSavedChats)
   const visibleSavedChats = savedChats.filter(c => (c.agentConfig.template ?? 'research') === agentType)
-  // Saved searches/chats default open (what most people want to see right
-  // away); published MCP tools default collapsed (a management list you dip
-  // into occasionally, not the main flow) — collapsing lets the card stay
-  // within its max-height without every section fighting for the same space.
-  const [searchesOpen, setSearchesOpen] = useState(true)
-  const [chatsOpen, setChatsOpen] = useState(true)
-  const [mcpToolsOpen, setMcpToolsOpen] = useState(false)
+  const [activeSavedTab, setActiveSavedTab] = useState<'searches' | 'chats' | 'mcp'>('searches')
   const [progress, setProgress] = useState<string | null>(null)
   const [toolsSoFar, setToolsSoFar] = useState<string[]>([])
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
@@ -369,30 +400,36 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           ⚙
         </button>
         <img src={splashLogo} alt="Agent One" className={styles.brandLogo} />
-        <h1 className={styles.title}>Agent {agentName}</h1>
-        <p className={styles.locationLiner}>📍 {location || 'No location set'}</p>
+
+        <div className={styles.agentCard}>
+          <div className={styles.agentCardInfo}>
+            <h1 className={styles.title}>Agent {agentName}</h1>
+            <p className={styles.locationLiner}>📍 {location || 'No location set'}</p>
+            <p className={styles.agentTypeLiner}>{getTemplate(agentType).label}</p>
+          </div>
+          <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
+            {AGENT_TEMPLATES.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                role="radio"
+                aria-checked={agentType === t.id}
+                aria-label={t.label}
+                title={t.label}
+                className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
+                onClick={() => handleAgentTypeChange(t.id)}
+                disabled={bootstrapping}
+              >
+                <span className={styles.agentTypePillIcon} aria-hidden="true">
+                  <AgentTypeIcon id={t.id} />
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
-          <div className={styles.agentTypeRow}>
-            <span className={styles.locationLabel}>Agent type</span>
-            <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
-              {AGENT_TEMPLATES.map(t => (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={agentType === t.id}
-                  className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
-                  onClick={() => handleAgentTypeChange(t.id)}
-                  disabled={bootstrapping}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <p className={styles.keywordHint}>Define agent roles:</p>
+          <p className={styles.keywordHint}>Search: Add keywords, personality traits, all requests...</p>
           <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
             {keywords.map(kw => (
               <span key={kw} className={styles.chip}>
@@ -419,28 +456,19 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               disabled={bootstrapping}
               maxLength={50}
             />
+            {keywords.length > 0 && (
+              <span
+                className={styles.keywordCountBubble}
+                title={`${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} added`}
+              >
+                {keywords.length}
+              </span>
+            )}
           </div>
-
-          {keywords.length > 0 && (
-            <button
-              type="button"
-              className={styles.clearSmallBtn}
-              onClick={() => {
-                setKeywords([])
-                setDraft('')
-                inputRef.current?.focus()
-              }}
-              disabled={bootstrapping}
-            >
-              Clear keywords
-            </button>
-          )}
 
           <div className={styles.hintRow}>
             <p className={styles.charHint}>
-              {draft.length > 0
-                ? `${50 - draft.length} chars remaining`
-                : `${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} added`}
+              {draft.length > 0 ? `${50 - draft.length} chars remaining` : ''}
             </p>
             <div className={styles.hintActions}>
               {keywords.length > 0 && (
@@ -450,7 +478,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   onClick={saveSearch}
                   disabled={bootstrapping}
                 >
-                  Save Search
+                  Save Agent
                 </button>
               )}
               <button
@@ -470,142 +498,147 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
 
           <div className={styles.savedSectionsScroll}>
-          {visibleSaved.length > 0 && (
-            <div className={styles.savedSection}>
-              <button
-                type="button"
-                className={styles.savedHeadingBtn}
-                onClick={() => setSearchesOpen(o => !o)}
-                aria-expanded={searchesOpen}
-              >
-                <span className={styles.savedHeadingArrow}>{searchesOpen ? '▾' : '▸'}</span>
-                Saved searches - {getTemplate(agentType).label} ({visibleSaved.length})
-              </button>
-              {searchesOpen && (
-              <div className={styles.savedList}>
-                {visibleSaved.map(s => (
-                  <div key={s.id} className={styles.savedRow} onClick={() => loadSearch(s)}>
-                    <div className={styles.savedChips}>
-                      {s.keywords.map(kw => (
-                        <span key={kw} className={styles.savedChip}>{kw}</span>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.savedDelete}
-                      onClick={ev => { ev.stopPropagation(); deleteSearch(s.id) }}
-                      aria-label="Delete saved search"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-              )}
-            </div>
-          )}
+          <div className={styles.tabList} role="tablist" aria-label="Saved items">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeSavedTab === 'searches'}
+              className={`${styles.tabBtn} ${activeSavedTab === 'searches' ? styles.tabBtnActive : ''}`}
+              onClick={() => setActiveSavedTab('searches')}
+            >
+              Saved searches ({visibleSaved.length})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeSavedTab === 'chats'}
+              className={`${styles.tabBtn} ${activeSavedTab === 'chats' ? styles.tabBtnActive : ''}`}
+              onClick={() => setActiveSavedTab('chats')}
+            >
+              Saved chats ({visibleSavedChats.length})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeSavedTab === 'mcp'}
+              className={`${styles.tabBtn} ${activeSavedTab === 'mcp' ? styles.tabBtnActive : ''}`}
+              onClick={() => setActiveSavedTab('mcp')}
+            >
+              Published as MCP tools ({publishedAgents.length})
+            </button>
+          </div>
 
-          {visibleSavedChats.length > 0 && (
-            <div className={styles.savedSection}>
-              <button
-                type="button"
-                className={styles.savedHeadingBtn}
-                onClick={() => setChatsOpen(o => !o)}
-                aria-expanded={chatsOpen}
-              >
-                <span className={styles.savedHeadingArrow}>{chatsOpen ? '▾' : '▸'}</span>
-                Saved chats - {getTemplate(agentType).label} ({visibleSavedChats.length})
-              </button>
-              {chatsOpen && (
-              <div className={styles.savedList}>
-                {visibleSavedChats.map(c => (
-                  <div
-                    key={c.id}
-                    className={styles.savedRow}
-                    onClick={() => loadSavedChatQuery(c)}
-                    title={c.agentConfig.purpose}
-                  >
-                    <div className={styles.savedChatInfo}>
-                      <span className={styles.savedChatName}>Agent {c.agentName}</span>
-                      {c.agentConfig.persona?.traits?.length ? (
-                        <span className={styles.savedChatTraits}>
-                          {c.agentConfig.persona.traits.join(' · ')}
+          <div className={styles.tabPanel} role="tabpanel">
+            {activeSavedTab === 'searches' && (
+              visibleSaved.length > 0 ? (
+                <div className={styles.savedList}>
+                  {visibleSaved.map(s => (
+                    <div key={s.id} className={styles.savedRow} onClick={() => loadSearch(s)}>
+                      <div className={styles.savedChips}>
+                        {s.keywords.map(kw => (
+                          <span key={kw} className={styles.savedChip}>{kw}</span>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.savedDelete}
+                        onClick={ev => { ev.stopPropagation(); deleteSearch(s.id) }}
+                        aria-label="Delete saved search"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.savedEmpty}>No saved searches for {getTemplate(agentType).label} yet.</p>
+              )
+            )}
+
+            {activeSavedTab === 'chats' && (
+              visibleSavedChats.length > 0 ? (
+                <div className={styles.savedList}>
+                  {visibleSavedChats.map(c => (
+                    <div
+                      key={c.id}
+                      className={styles.savedRow}
+                      onClick={() => loadSavedChatQuery(c)}
+                      title={c.agentConfig.purpose}
+                    >
+                      <div className={styles.savedChatInfo}>
+                        <span className={styles.savedChatName}>Agent {c.agentName}</span>
+                        {c.agentConfig.persona?.traits?.length ? (
+                          <span className={styles.savedChatTraits}>
+                            {c.agentConfig.persona.traits.join(' · ')}
+                          </span>
+                        ) : null}
+                        {c.agentConfig.keywords?.length ? (
+                          <div className={styles.savedChips}>
+                            {c.agentConfig.keywords.map(kw => (
+                              <span key={kw} className={styles.savedChip}>{kw}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className={styles.savedChatMeta}>No keywords saved</span>
+                        )}
+                        <span className={styles.savedChatMeta}>
+                          {c.agentConfig.location || 'No location'} · {formatModelLabel(c.agentConfig)} ·{' '}
+                          {c.messages.length} message{c.messages.length !== 1 ? 's' : ''} · {formatSavedAt(c.savedAt)}
                         </span>
-                      ) : null}
-                      {c.agentConfig.keywords?.length ? (
-                        <div className={styles.savedChips}>
-                          {c.agentConfig.keywords.map(kw => (
-                            <span key={kw} className={styles.savedChip}>{kw}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className={styles.savedChatMeta}>No keywords saved</span>
-                      )}
-                      <span className={styles.savedChatMeta}>
-                        {c.agentConfig.location || 'No location'} · {formatModelLabel(c.agentConfig)} ·{' '}
-                        {c.messages.length} message{c.messages.length !== 1 ? 's' : ''} · {formatSavedAt(c.savedAt)}
-                      </span>
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.savedResume}
+                        onClick={ev => { ev.stopPropagation(); onResumeChat(c) }}
+                        aria-label={`Continue chat with Agent ${c.agentName}`}
+                        title="Continue this chat"
+                      >
+                        →
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.savedDelete}
+                        onClick={ev => { ev.stopPropagation(); removeSavedChat(c.id) }}
+                        aria-label="Delete saved chat"
+                      >
+                        ×
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className={styles.savedResume}
-                      onClick={ev => { ev.stopPropagation(); onResumeChat(c) }}
-                      aria-label={`Continue chat with Agent ${c.agentName}`}
-                      title="Continue this chat"
-                    >
-                      →
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.savedDelete}
-                      onClick={ev => { ev.stopPropagation(); removeSavedChat(c.id) }}
-                      aria-label="Delete saved chat"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-              )}
-            </div>
-          )}
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.savedEmpty}>No saved chats for {getTemplate(agentType).label} yet.</p>
+              )
+            )}
 
-          {publishedAgents.length > 0 && (
-            <div className={styles.savedSection}>
-              <button
-                type="button"
-                className={styles.savedHeadingBtn}
-                onClick={() => setMcpToolsOpen(o => !o)}
-                aria-expanded={mcpToolsOpen}
-              >
-                <span className={styles.savedHeadingArrow}>{mcpToolsOpen ? '▾' : '▸'}</span>
-                Published as MCP tools ({publishedAgents.length})
-              </button>
-              {mcpToolsOpen && (
-              <div className={styles.savedList}>
-                {publishedAgents.map(a => (
-                  <div key={a.id} className={styles.savedRow} title={a.description}>
-                    <div className={styles.savedChatInfo}>
-                      <span className={styles.savedChatName}>{a.name}</span>
-                      <span className={styles.savedChatMeta}>
-                        Tool name: {a.tool_name}{a.description ? ` · ${a.description}` : ''}
-                      </span>
+            {activeSavedTab === 'mcp' && (
+              publishedAgents.length > 0 ? (
+                <div className={styles.savedList}>
+                  {publishedAgents.map(a => (
+                    <div key={a.id} className={styles.savedRow} title={a.description}>
+                      <div className={styles.savedChatInfo}>
+                        <span className={styles.savedChatName}>{a.name}</span>
+                        <span className={styles.savedChatMeta}>
+                          Tool name: {a.tool_name}{a.description ? ` · ${a.description}` : ''}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.savedDelete}
+                        onClick={ev => { ev.stopPropagation(); removePublishedAgent(a.id) }}
+                        aria-label={`Unpublish ${a.name}`}
+                        title="Unpublish (stop exposing as an MCP tool)"
+                      >
+                        ×
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className={styles.savedDelete}
-                      onClick={ev => { ev.stopPropagation(); removePublishedAgent(a.id) }}
-                      aria-label={`Unpublish ${a.name}`}
-                      title="Unpublish (stop exposing as an MCP tool)"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-              )}
-            </div>
-          )}
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.savedEmpty}>No agents published as MCP tools yet.</p>
+              )
+            )}
+          </div>
           </div>
 
           <div className={styles.actions}>

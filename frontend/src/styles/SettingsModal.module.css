@@ -94,21 +94,27 @@
 }
 
 .locationInput {
-  background: #ffffff;
+  background: #f7f5f0;
   border: 1px solid #ddd9cd;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #33475a;
   font-family: inherit;
   font-size: 0.9rem;
   outline: none;
-  padding: 0.5rem 0.7rem;
+  padding: 0.55rem 0.75rem;
   width: 100%;
   box-sizing: border-box;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+
+.locationInput:hover:not(:disabled) {
+  border-color: #bcdbd8;
 }
 
 .locationInput:focus {
+  background: #ffffff;
   border-color: #1f6f73;
+  box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.12);
 }
 
 .locationSuggestions {
@@ -163,20 +169,22 @@
 }
 
 .providerSelect {
-  background-color: #ffffff;
+  background-color: #f7f5f0;
   border: 1px solid #ddd9cd;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #33475a;
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 500;
   outline: none;
-  padding: 0.5rem 1.75rem 0.5rem 0.7rem;
+  padding: 0.55rem 1.9rem 0.55rem 0.75rem;
   width: 100%;
   box-sizing: border-box;
-  transition: border-color 0.15s;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
   -webkit-appearance: none;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%236b7785' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%231f6f73' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   background-size: 11px;
@@ -187,8 +195,19 @@
   margin-top: 0;
 }
 
+.providerSelect:hover:not(:disabled) {
+  border-color: #bcdbd8;
+}
+
 .providerSelect:focus {
+  background-color: #ffffff;
   border-color: #1f6f73;
+  box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.12);
+}
+
+.providerSelect:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .providerHint {
