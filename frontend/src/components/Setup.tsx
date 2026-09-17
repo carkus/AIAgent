@@ -101,16 +101,17 @@ function joinNatural(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
 }
 
-function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], loc: string): string {
+function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], loc: string, agentName: string): string {
   const topics = joinNatural(keywords)
-  const beat = loc ? ` out of ${loc}` : ''
+  const beat = loc ? ` in ${loc}` : ''
+  const name = `Agent ${agentName}`
   switch (agentType) {
     case 'research':
-      return `This agent's got a case open on ${topics}${beat} — doesn't stop digging till the data confesses.`
+      return `${name} reads these specialties as a mandate to research and analyze ${topics}${beat}. If commissioned, it will search, cross-reference sources, and report back with findings and key data points.`
     case 'job_search':
-      return `This agent's working the leads on ${topics}${beat} — won't quit till it tracks down the right fit.`
+      return `${name} reads these specialties as a mandate to find roles in ${topics}${beat}. If commissioned, it will search listings, screen them against your criteria, and report back the strongest matches.`
     default:
-      return `This agent's got a file open on ${topics}${beat} — doesn't leave a stone unturned.`
+      return `${name} reads these specialties as a mandate to track ${topics}${beat}. If commissioned, it will monitor developments and report back on what's most relevant.`
   }
 }
 
@@ -503,7 +504,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Brief</span>
             <p className={styles.agentSummaryText}>
               {keywords.length > 0
-                ? buildAgentBrief(agentType, keywords, location.trim())
+                ? buildAgentBrief(agentType, keywords, location.trim(), agentName)
                 : 'Add specialties above to generate this agent’s brief.'}
             </p>
           </div>
