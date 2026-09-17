@@ -412,80 +412,82 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         <img src={splashLogo} alt="Agent One" className={styles.brandLogo} />
 
         <div className={styles.agentCard}>
-          <div className={styles.agentCardInfo}>
-            <h1 className={styles.title}>Agent {agentName}</h1>
-            <p className={styles.locationLiner}>📍 {location || 'No location set'}</p>
-            <p className={styles.agentTypeLiner}>{getTemplate(agentType).label}</p>
-          </div>
-          <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
-            {AGENT_TEMPLATES.map(t => (
-              <button
-                key={t.id}
-                type="button"
-                role="radio"
-                aria-checked={agentType === t.id}
-                aria-label={t.label}
-                title={t.label}
-                className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
-                onClick={() => handleAgentTypeChange(t.id)}
-                disabled={bootstrapping}
-              >
-                <span className={styles.agentTypePillIcon} aria-hidden="true">
-                  <AgentTypeIcon id={t.id} />
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className={styles.form}>
-          <p className={styles.keywordHint}>What should this agent work on? Add keywords, skills, or topics…</p>
-          <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
-            {keywords.map(kw => (
-              <span key={kw} className={styles.chip}>
-                {kw}
+          <div className={styles.agentCardMain}>
+            <div className={styles.agentCardInfo}>
+              <h1 className={styles.title}>Agent {agentName}</h1>
+              <p className={styles.locationLiner}>📍 {location || 'No location set'}</p>
+              <p className={styles.agentTypeLiner}>{getTemplate(agentType).label}</p>
+            </div>
+            <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
+              {AGENT_TEMPLATES.map(t => (
                 <button
+                  key={t.id}
                   type="button"
-                  className={styles.chipX}
-                  onClick={ev => { ev.stopPropagation(); removeKeyword(kw) }}
-                  aria-label={`Remove ${kw}`}
+                  role="radio"
+                  aria-checked={agentType === t.id}
+                  aria-label={t.label}
+                  title={t.label}
+                  className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
+                  onClick={() => handleAgentTypeChange(t.id)}
                   disabled={bootstrapping}
                 >
-                  ×
+                  <span className={styles.agentTypePillIcon} aria-hidden="true">
+                    <AgentTypeIcon id={t.id} />
+                  </span>
                 </button>
-              </span>
-            ))}
-            <input
-              ref={inputRef}
-              className={styles.chipInput}
-              value={draft}
-              onChange={e => setDraft(e.target.value.slice(0, 50))}
-              onKeyDown={handleKeyDown}
-              onBlur={() => { if (draft.trim()) addKeyword() }}
-              placeholder={keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : 'Add another…'}
-              disabled={bootstrapping}
-              maxLength={50}
-            />
-            {keywords.length > 0 && (
-              <span
-                className={styles.keywordTally}
-                title={`${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} added`}
-                aria-hidden="true"
-              >
-                {keywords.length}
-              </span>
-            )}
+              ))}
+            </div>
           </div>
 
-          <div className={styles.hintRow}>
+          <div className={styles.specialtiesRow}>
+            <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Specialties</span>
+            <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
+              {keywords.map(kw => (
+                <span key={kw} className={styles.chip}>
+                  {kw}
+                  <button
+                    type="button"
+                    className={styles.chipX}
+                    onClick={ev => { ev.stopPropagation(); removeKeyword(kw) }}
+                    aria-label={`Remove ${kw}`}
+                    disabled={bootstrapping}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                ref={inputRef}
+                className={styles.chipInput}
+                value={draft}
+                onChange={e => setDraft(e.target.value.slice(0, 50))}
+                onKeyDown={handleKeyDown}
+                onBlur={() => { if (draft.trim()) addKeyword() }}
+                placeholder={keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : 'Add another…'}
+                disabled={bootstrapping}
+                maxLength={50}
+              />
+              {keywords.length > 0 && (
+                <span
+                  className={styles.keywordTally}
+                  title={`${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} added`}
+                  aria-hidden="true"
+                >
+                  {keywords.length}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className={styles.profileActionsRow}>
             <p className={styles.charHint}>
               {draft.length > 0 ? `${50 - draft.length} chars remaining` : ''}
             </p>
-            <div className={styles.hintActions}>
+            <div className={styles.profileActions}>
               {keywords.length > 0 && (
                 <button
                   type="button"
-                  className={styles.startBtn}
+                  className={styles.profileSaveBtn}
                   onClick={saveSearch}
                   disabled={bootstrapping}
                 >
@@ -494,7 +496,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               )}
               <button
                 type="button"
-                className={styles.resetBtn}
+                className={styles.profileResetBtn}
                 onClick={() => {
                   setKeywords([])
                   setDraft('')
@@ -507,11 +509,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               </button>
             </div>
           </div>
+        </div>
 
+        <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.dossierWrap}>
           <span className={styles.dossierTab} aria-hidden="true">Agent Dossier</span>
-          <div className={styles.savedSectionsScroll}>
           <span className={styles.dossierStamp} aria-hidden="true">On file</span>
+          <div className={styles.savedSectionsScroll}>
 
           <div className={styles.savedAccordion}>
             <div className={styles.savedSection}>
@@ -524,7 +528,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 <span className={styles.savedSectionCaret} aria-hidden="true">
                   {openSavedSections.searches ? '▾' : '▸'}
                 </span>
-                <span className={styles.savedSectionTitle}>Search Directives</span>
+                <span className={styles.savedSectionTitle}>Select Specialties</span>
                 <span className={styles.savedSectionCount}>{visibleSaved.length}</span>
               </button>
               {openSavedSections.searches && (
@@ -532,7 +536,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   {visibleSaved.length > 0 ? (
                     <div className={styles.savedList}>
                       {visibleSaved.map(s => (
-                        <div key={s.id} className={styles.savedRow} onClick={() => loadSearch(s)} title="Load this directive">
+                        <div key={s.id} className={styles.savedRow} onClick={() => loadSearch(s)} title="Load these specialties">
                           <div className={styles.savedChips}>
                             {s.keywords.map(kw => (
                               <span key={kw} className={styles.savedChip}>{kw}</span>
@@ -542,8 +546,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                             type="button"
                             className={styles.savedDelete}
                             onClick={ev => { ev.stopPropagation(); deleteSearch(s.id) }}
-                            aria-label="Delete directive"
-                            title="Delete directive"
+                            aria-label="Delete specialties"
+                            title="Delete specialties"
                           >
                             ×
                           </button>
@@ -551,7 +555,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       ))}
                     </div>
                   ) : (
-                    <p className={styles.savedEmpty}>No directives logged for {getTemplate(agentType).label} yet.</p>
+                    <p className={styles.savedEmpty}>No specialties logged for {getTemplate(agentType).label} yet.</p>
                   )}
                 </div>
               )}

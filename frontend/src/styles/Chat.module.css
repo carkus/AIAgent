@@ -84,10 +84,15 @@
 .headerActions {
   display: flex;
   flex-basis: 100%;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: 0.6rem;
+}
+
+.headerActions button {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .resetBtn {
