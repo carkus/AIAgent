@@ -1,4 +1,4 @@
-# CLAUDE.md — AI Agent Project
+# CLAUDE.md — Agent One (formerly "AI Agent")
 
 ## What This Project Is
 
@@ -166,6 +166,28 @@ tool-usage basics:
   zero), then from a "default, not exception" wording to an explicit MUST
   after the softer phrasing still let the model quietly handle a second or
   third keyword itself instead of spinning up a worker for it.
+- **Delegated workers run concurrently, not one at a time.** When the main
+  agent's turn includes several `delegate_to_worker` calls,
+  `agent_stream.py` used to execute them in a plain sequential `for` loop —
+  each `run_worker()` is its own blocking bootstrap + agent-loop network
+  round trip, so N workers cost N times as long as one. Workers have no
+  shared state, so they're now dispatched to a
+  `concurrent.futures.ThreadPoolExecutor` (sized to
+  `MAX_DELEGATIONS_PER_REQUEST`) and streamed back via
+  `concurrent.futures.as_completed()` — each worker's `tool_result` is
+  yielded as soon as *that* worker finishes, not in submission order, so a
+  fast worker's card shows up without waiting behind a slow one. Every
+  other tool type (`fetch_page`, `search_jobs`, MCP, generated) is
+  untouched — still one at a time, in order, exactly as before. This
+  required adding `call_index` to the `tool_start`/`tool_result` stream
+  events (`StreamEvent` in `types.ts`): the old frontend matching logic in
+  `Chat.tsx` paired a `tool_result` with the *first* `liveToolCalls` entry
+  of the same tool name still missing a result, which was only correct
+  because tool calls used to resolve strictly one at a time. With several
+  `delegate_to_worker` calls genuinely pending at once, that would have
+  attached one worker's result to every pending worker card with the same
+  tool name; matching by `call_index` (each call's position in that turn's
+  `message.tool_calls`) is what keeps results attached to the right card.
 - **The main agent's own reply must not re-dump each worker's findings.**
   A new rule 7 in the same addendum tells the main agent that once workers
   report back, its own reply should be a short synthesis/comparison at
@@ -258,6 +280,84 @@ mirroring jobfit's own `/mcp` endpoint.
 ---
 
 ## Frontend Patterns
+
+### Branding — "Agent One"
+
+The site's product name and visual theme are now **Agent One**, matching the
+logo/wordmark at `frontend/src/assets/splash.jpg` (copied in from a
+previously-untracked `frontend/dist/assets/` build artifact — no other
+source or git history for it exists). `index.html`'s `<title>` and the
+`package.json` `name` field were updated accordingly; this is a display/brand
+rename only — no route, component name, or class name changed, per an
+explicit "keep the functionality exact" instruction.
+
+**Note:** `splash_diagram.jpg` (the architecture-diagram reference) was
+permanently lost mid-restyle — an `npm run build` empties `dist/` before
+writing new output, and that file only ever existed in the gitignored
+`frontend/dist/assets/` folder with no other copy or git history. Only
+`splash.jpg` (safely copied into `frontend/src/assets/` beforehand) remains
+as ground truth for the palette. This mattered: an initial restyle pass
+invented a gold secondary accent (extrapolated from memory of the
+now-deleted diagram) that turned out to have no basis in the surviving
+reference image, and had to be corrected — see below.
+
+The color palette across every `.module.css` file (plus `App.tsx`'s inline
+page-background style and `MermaidDiagram.tsx`'s mermaid theme config) was
+remapped from the original cyberpunk cyan+magenta/purple-on-black theme to a
+**light cream/white theme with navy text and teal/steel-blue accents** —
+grounded entirely in `splash.jpg`'s actual colors (cream/paper background
+`#f2efe9`, dark navy wordmark `#16324a`, a teal→steel-blue gradient icon) —
+not an invented palette. This went through two corrective passes before it
+matched the reference image:
+
+- **Pass 1 (hex-swap only) — corrected.** The first restyle pass kept the
+  original dark-navy-black page structure and only swapped accent hex
+  values, including inventing a gold secondary accent extrapolated from
+  memory of a since-lost `splash_diagram.jpg` reference. Corrected: gold was
+  dropped (no basis in the surviving `splash.jpg`) in favor of steel-blue
+  (`#3f7ea0`/`#eaf3f7`/`#cfe3ea`, taken directly from the logo's own
+  gradient), and neon-glow `box-shadow`/`text-shadow` effects (zero-offset,
+  blur-only halos) were audited out — removed outright, or replaced with a
+  plain `opacity` transition on hover. Genuine elevation shadows (real
+  offset, e.g. `0 20px 48px rgba(0,0,0,0.5)`) were kept but recolored to
+  neutral black/gray. The one deliberately-kept exception is
+  `Chat.module.css`'s `.input:focus` ring (a zero-blur, spread-only focus
+  ring — a standard accessibility pattern, not a glow).
+- **Pass 2 (actual light-theme flip) — the real fix.** Even after Pass 1,
+  the UI still looked dark, because the page's actual background was never
+  set by any `.module.css` file — it came from `App.tsx`'s inline
+  `styles.root` object (`React.CSSProperties`, outside the CSS Modules
+  entirely), which still had the original dark cyberpunk radial-gradient +
+  scanline background. This is now a flat `#f2efe9` cream background with
+  `#16324a` navy text. Every `.module.css` file (`Setup`, `Chat`,
+  `ToolActivity`, `PdfPreviewModal`, `ContinuePanel`) was then rewritten
+  color-by-color from dark-on-black to light-on-cream/white: white/cream
+  card and panel backgrounds, warm neutral borders (`#ddd9cd`/`#e2dfd5`),
+  navy headings (`#16324a`), body text (`#33475a`), secondary/meta text
+  (`#6b7785`), and one unified teal (`#1f6f73`) for primary accents/links/
+  buttons, with steel-blue (`#3f7ea0`) as the secondary accent. The one
+  intentional dark element left in the whole theme is the user chat bubble
+  (`.userBubble`, navy gradient `#1c3a52`→`#16324a`) — a deliberate accent
+  echoing the wordmark's own navy, not a leftover. `MermaidDiagram.tsx`'s
+  mermaid theme was switched from `theme: 'dark'` to `theme: 'base'` with
+  matching light `themeVariables`. Success/error semantic colors were
+  re-picked for contrast on a light background (e.g. error text `#b91c1c`
+  on `#fee2e2`, not the old light-red-on-dark values) rather than reused
+  as-is.
+- The font stack (`Orbitron`/`Rajdhani`/`Share Tech Mono`, a cyberpunk-terminal
+  look) was replaced with `Space Grotesk`/`Inter` for headings/UI text and the
+  system monospace stack for code-like content (tool call args/results),
+  matching the splash logo's clean geometric wordmark instead of a
+  hacker-terminal aesthetic.
+
+The splash logo itself is shown once, at the top of the Setup screen's card
+(`Setup.tsx`, above the existing per-session "Agent {randomSurname}" heading
+— that heading is a different, functional thing: the bootstrapped agent's own
+invented/random display name, not the product's brand name, and was left
+unchanged). The card's own background is a short top-to-bottom gradient from
+the logo's cream tone (`#f2efe9`) to pure white (`#ffffff`, reached by
+~130px, before the title) rather than a flat white fill, so the logo's own
+cream background blends into the card instead of showing a visible box edge.
 
 ### Phase transitions
 

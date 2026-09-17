@@ -1,4 +1,4 @@
-﻿.overlay {
+.overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
@@ -10,15 +10,15 @@
 }
 
 .modal {
-  background: #0d1015;
-  border: 1px solid rgba(34, 211, 238, 0.3);
+  background: #ffffff;
+  border: 1px solid rgba(31, 111, 115, 0.3);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   width: min(820px, 100%);
   height: min(90vh, 1000px);
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 0 50px rgba(34, 211, 238, 0.12);
+  box-shadow: 0 20px 48px rgba(28, 40, 51, 0.18);
 }
 
 .header {
@@ -26,14 +26,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(34, 211, 238, 0.2);
+  border-bottom: 1px solid rgba(31, 111, 115, 0.2);
   flex-shrink: 0;
 }
 
 .title {
-  color: #67e8f9;
+  color: #1f6f73;
   font-size: 0.85rem;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -42,7 +42,7 @@
 .closeBtn {
   background: transparent;
   border: none;
-  color: #9aa0af;
+  color: #6b7785;
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
@@ -52,14 +52,14 @@
 }
 
 .closeBtn:hover {
-  background: #232833;
-  color: #eceef2;
+  background: #eef1f0;
+  color: #16324a;
 }
 
 .frame {
   flex: 1;
   border: none;
-  background: #3a3d44;
+  background: #e9e7e0;
 }
 
 .actions {
@@ -67,15 +67,15 @@
   justify-content: flex-end;
   gap: 0.6rem;
   padding: 0.75rem 1rem;
-  border-top: 1px solid rgba(34, 211, 238, 0.2);
+  border-top: 1px solid rgba(31, 111, 115, 0.2);
   flex-shrink: 0;
 }
 
 .cancelBtn {
   background: transparent;
-  border: 1px solid #2a2f3a;
+  border: 1px solid #ddd9cd;
   border-radius: 8px;
-  color: #9aa0af;
+  color: #6b7785;
   cursor: pointer;
   font-size: 0.88rem;
   font-weight: 600;
@@ -83,26 +83,25 @@
 }
 
 .cancelBtn:hover {
-  background: #1f232c;
-  color: #dfe2e8;
+  background: #f0efe9;
+  color: #33475a;
 }
 
 .downloadBtn {
-  background: #22d3ee;
+  background: #1f6f73;
   border: none;
   border-radius: 8px;
-  color: #05070a;
+  color: #ffffff;
   cursor: pointer;
-  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   padding: 0.55rem 1.3rem;
-  box-shadow: 0 0 14px rgba(34, 211, 238, 0.4);
-  transition: box-shadow 0.15s;
+  transition: opacity 0.15s;
 }
 
 .downloadBtn:hover {
-  box-shadow: 0 0 20px rgba(34, 211, 238, 0.6);
+  opacity: 0.9;
 }

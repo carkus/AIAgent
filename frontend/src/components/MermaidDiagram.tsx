@@ -9,15 +9,15 @@ function ensureInitialized() {
   initialized = true
   mermaid.initialize({
     startOnLoad: false,
-    theme: 'dark',
+    theme: 'base',
     themeVariables: {
-      background: '#171a21',
-      primaryColor: '#182348',
-      primaryTextColor: '#dfe2e8',
-      primaryBorderColor: '#22d3ee',
-      lineColor: '#67e8f9',
-      secondaryColor: '#20242f',
-      tertiaryColor: '#0a0d13',
+      background: '#f5f6f4',
+      primaryColor: '#e6f2f1',
+      primaryTextColor: '#16324a',
+      primaryBorderColor: '#1f6f73',
+      lineColor: '#3f7ea0',
+      secondaryColor: '#eaf3f7',
+      tertiaryColor: '#f0efe9',
       fontSize: '13px',
     },
   })

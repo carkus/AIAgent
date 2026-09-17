@@ -4,6 +4,8 @@ import type { PublishedAgent, SavedSearch } from '../api'
 import { deleteSavedChat, loadSavedChats } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
 import styles from '../styles/Setup.module.css'
+import splashLogo from '../assets/splash_logo.png'
+import SettingsModal from './SettingsModal'
 
 // Each template controls both the purpose text sent to bootstrap (which
 // determines what tools/behaviour Claude designs) and what the keyword
@@ -21,7 +23,7 @@ interface AgentTemplate {
 const AGENT_TEMPLATES: AgentTemplate[] = [
   {
     id: 'research',
-    label: 'Research agent',
+    label: 'Researcher',
     keywordPlaceholder: 'Type a keyword, press Enter…',
     buildPurpose: (keywords, loc) =>
       `Research agent for the following keywords: ${keywords.join(', ')}` +
@@ -31,7 +33,7 @@ const AGENT_TEMPLATES: AgentTemplate[] = [
   },
   {
     id: 'job_search',
-    label: 'Job search agent',
+    label: 'Job search',
     keywordPlaceholder: 'Type a job title or skill, press Enter…',
     buildPurpose: (keywords, loc) =>
       `Job search agent for the following roles or skills: ${keywords.join(', ')}` +
@@ -143,6 +145,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([])
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
+  const [locationDetecting, setLocationDetecting] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const locationDebounceRef = useRef<number | undefined>(undefined)
   const locationAbortRef = useRef<AbortController | null>(null)
@@ -206,6 +210,43 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setLocationSuggestions([])
     setShowLocationSuggestions(false)
   }
+
+  // Browser geolocation + the same Nominatim host, just its reverse-geocode
+  // endpoint (coords -> place name) instead of the forward one above. `force`
+  // distinguishes the auto-run-on-mount call (only replaces the untouched
+  // 'Melbourne, Australia' default) from the Settings screen's "Detect my
+  // location" button (always overwrites, since the user explicitly asked).
+  function detectLocation(force: boolean) {
+    if (!navigator.geolocation) return
+    setLocationDetecting(true)
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        try {
+          const { latitude, longitude } = pos.coords
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=0`,
+          )
+          if (res.ok) {
+            const data = await res.json()
+            const name: string | undefined = data?.display_name
+            if (name) setLocation(prev => (force || prev === 'Melbourne, Australia' ? name : prev))
+          }
+        } catch {
+          // Offline or Nominatim unreachable — keep whatever location is set.
+        } finally {
+          setLocationDetecting(false)
+        }
+      },
+      () => setLocationDetecting(false),
+      { timeout: 8000 },
+    )
+  }
+
+  useEffect(() => {
+    detectLocation(false)
+    // Mount-only: auto-detect once, falling back to the 'Melbourne, Australia' default on denial/failure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function addKeyword() {
     if (bootstrapping) return
@@ -317,8 +358,19 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   return (
     <div className={styles.container}>
       <div className={styles.card}>
+        <button
+          type="button"
+          className={styles.settingsIconBtn}
+          onClick={() => setSettingsOpen(true)}
+          aria-haspopup="dialog"
+          aria-label="Settings"
+          title="Settings"
+        >
+          ⚙
+        </button>
+        <img src={splashLogo} alt="Agent One" className={styles.brandLogo} />
         <h1 className={styles.title}>Agent {agentName}</h1>
-        <p className={styles.subtitle}>Add keywords, then deploy Agent {agentName}. The agent will compose dedicated agents for your request.</p>
+        <p className={styles.locationLiner}>📍 {location || 'No location set'}</p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.agentTypeRow}>
@@ -340,7 +392,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
           </div>
 
-          <p className={styles.keywordHint}>Type a keyword, press Enter to add it</p>
+          <p className={styles.keywordHint}>Define agent roles:</p>
           <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
             {keywords.map(kw => (
               <span key={kw} className={styles.chip}>
@@ -384,105 +436,37 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </button>
           )}
 
-          <div className={styles.locationRow}>
-            <span className={styles.locationLabel}>Location</span>
-            <div className={styles.locationInputWrap}>
-              <input
-                className={styles.locationInput}
-                value={location}
-                onChange={e => handleLocationChange(e.target.value)}
-                onFocus={() => { if (locationSuggestions.length > 0) setShowLocationSuggestions(true) }}
-                onBlur={() => window.setTimeout(() => setShowLocationSuggestions(false), 150)}
-                placeholder="e.g. Melbourne, Australia"
-                disabled={bootstrapping}
-                autoComplete="off"
-              />
-              {showLocationSuggestions && locationSuggestions.length > 0 && (
-                <ul className={styles.locationSuggestions}>
-                  {locationSuggestions.map(name => (
-                    <li key={name} onMouseDown={() => selectLocation(name)}>
-                      {name}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-
-          <div className={styles.locationRow}>
-            <span className={styles.locationLabel}>Model</span>
-            <select
-              className={styles.providerSelect}
-              value={provider ?? ''}
-              onChange={e => setProvider((e.target.value || null) as LlmProvider)}
-              disabled={bootstrapping}
-            >
-              <option value="">Auto (cloud, falls back to local)</option>
-              <option value="gemini">Cloud only (Gemini)</option>
-              <option value="ollama">Local only (Ollama) — free, needs `ollama serve` running</option>
-            </select>
-          </div>
-          {provider === 'ollama' && (
-            <>
-              <div className={styles.locationRow}>
-                <span className={styles.locationLabel}>Local model</span>
-                {availableModels.length > 0 ? (
-                  <select
-                    className={styles.providerSelect}
-                    value={ollamaModel ?? ''}
-                    onChange={e => setOllamaModel(e.target.value || null)}
-                    disabled={bootstrapping}
-                  >
-                    {availableModels.map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <select className={styles.providerSelect} disabled>
-                    <option>{modelsLoaded ? 'No local models found' : 'Loading…'}</option>
-                  </select>
-                )}
-              </div>
-              <p className={styles.providerHint}>
-                {availableModels.length > 0
-                  ? 'Different local models vary a lot in tool-calling/JSON reliability — worth trying a few.'
-                  : 'No pulled models detected — is `ollama serve` running? Try `ollama pull qwen2.5:7b`.'}
-                {' '}Only works with `sam local` / the local dev server, not a deployed agent.
-              </p>
-            </>
-          )}
-
           <div className={styles.hintRow}>
             <p className={styles.charHint}>
               {draft.length > 0
                 ? `${50 - draft.length} chars remaining`
                 : `${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} added`}
             </p>
-            {keywords.length > 0 && (
-              <div className={styles.hintActions}>
+            <div className={styles.hintActions}>
+              {keywords.length > 0 && (
                 <button
                   type="button"
-                  className={styles.saveSmallBtn}
+                  className={styles.startBtn}
                   onClick={saveSearch}
                   disabled={bootstrapping}
                 >
                   Save Search
                 </button>
-                <button
-                  type="button"
-                  className={styles.clearSmallBtn}
-                  onClick={() => {
-                    setKeywords([])
-                    setDraft('')
-                    onNewAgent()
-                    inputRef.current?.focus()
-                  }}
-                  disabled={bootstrapping}
-                >
-                  New Agent
-                </button>
-              </div>
-            )}
+              )}
+              <button
+                type="button"
+                className={styles.resetBtn}
+                onClick={() => {
+                  setKeywords([])
+                  setDraft('')
+                  onNewAgent()
+                  inputRef.current?.focus()
+                }}
+                disabled={bootstrapping}
+              >
+                Reset
+              </button>
+            </div>
           </div>
 
           <div className={styles.savedSectionsScroll}>
@@ -662,6 +646,27 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
         )}
       </div>
+
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        location={location}
+        onLocationChange={handleLocationChange}
+        locationSuggestions={locationSuggestions}
+        showLocationSuggestions={showLocationSuggestions}
+        onLocationFocus={() => { if (locationSuggestions.length > 0) setShowLocationSuggestions(true) }}
+        onLocationBlur={() => window.setTimeout(() => setShowLocationSuggestions(false), 150)}
+        onSelectLocation={selectLocation}
+        onDetectLocation={() => detectLocation(true)}
+        detectingLocation={locationDetecting}
+        provider={provider}
+        onProviderChange={setProvider}
+        ollamaModel={ollamaModel}
+        onOllamaModelChange={setOllamaModel}
+        availableModels={availableModels}
+        modelsLoaded={modelsLoaded}
+        disabled={bootstrapping}
+      />
     </div>
   )
 }

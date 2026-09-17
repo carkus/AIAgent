@@ -10,12 +10,14 @@ import ContinuePanel from './ContinuePanel'
 import PdfPreviewModal from './PdfPreviewModal'
 import type { AgentConfig, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import styles from '../styles/Chat.module.css'
+import splashLogo from '../assets/splash_logo.png'
 
 interface LiveToolCall {
   tool: string
   inputs: Record<string, unknown>
   result?: string
   source?: ToolCall['source']
+  callIndex: number
 }
 
 interface ChatMessage {
@@ -192,16 +194,21 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
               ...msg,
               liveToolCalls: [
                 ...(msg.liveToolCalls ?? []),
-                { tool: event.tool, inputs: event.inputs, source: event.source },
+                { tool: event.tool, inputs: event.inputs, source: event.source, callIndex: event.call_index },
               ],
             }))
             break
 
           case 'tool_result':
+            // Delegated workers now run concurrently on the backend, so
+            // several tool_start entries for the same tool name (e.g. two
+            // pending delegate_to_worker calls) can be pending at once —
+            // matching by call_index (not "first pending same-named entry")
+            // is what keeps each result attached to the right card.
             updateLastMessage(msg => ({
               ...msg,
               liveToolCalls: (msg.liveToolCalls ?? []).map(tc =>
-                tc.tool === event.tool && tc.result === undefined
+                tc.callIndex === event.call_index
                   ? { ...tc, result: event.result, source: tc.source ?? event.source }
                   : tc
               ),
@@ -256,19 +263,24 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
   return (
     <div className={styles.root}>
       <header className={styles.header}>
-        <div>
-          <span className={styles.headerTitle}>Agent {agentName}</span>
-          {agentConfig.persona?.traits && agentConfig.persona.traits.length > 0 && (
-            <span className={styles.personaTraits} title={agentConfig.persona.rationale}>
-              {agentConfig.persona.traits.join(' · ')}
-            </span>
-          )}
-          <span className={styles.headerPurpose}>{agentConfig.purpose}</span>
-          {agentConfig.provider === 'ollama' && (
-            <span className={styles.localBadge}>
-              Local (Ollama{agentConfig.ollama_model ? `: ${agentConfig.ollama_model}` : ''})
-            </span>
-          )}
+        <div className={styles.headerIdentity}>
+          <img src={splashLogo} alt="Agent One" className={styles.headerLogo} />
+          <div>
+            <span className={styles.headerTitle}>Agent {agentName}</span>
+            {agentConfig.location && (
+              <span className={styles.locationBadge}>📍 {agentConfig.location}</span>
+            )}
+            {agentConfig.persona?.traits && agentConfig.persona.traits.length > 0 && (
+              <span className={styles.personaTraits} title={agentConfig.persona.rationale}>
+                {agentConfig.persona.traits.join(' · ')}
+              </span>
+            )}
+            {agentConfig.provider === 'ollama' && (
+              <span className={styles.localBadge}>
+                Local (Ollama{agentConfig.ollama_model ? `: ${agentConfig.ollama_model}` : ''})
+              </span>
+            )}
+          </div>
         </div>
         <div className={styles.headerActions}>
           <button
@@ -296,6 +308,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
           </button>
           <button type="button" className={styles.resetBtn} onClick={onReset}>New agent</button>
         </div>
+        <span className={styles.headerPurpose}>{agentConfig.purpose}</span>
         <ContinuePanel isOpen={continueOpen} onToggle={() => setContinueOpen(!continueOpen)} />
       </header>
 

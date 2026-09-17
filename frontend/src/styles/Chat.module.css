@@ -1,4 +1,4 @@
-﻿.root {
+.root {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -7,53 +7,71 @@
 
 .header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem 0.75rem;
   padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid rgba(34, 211, 238, 0.25);
+  border-bottom: 1px solid rgba(31, 111, 115, 0.25);
   flex-shrink: 0;
   position: relative;
 }
 
+.headerIdentity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.headerLogo {
+  height: 60px;
+  width: auto;
+  border-radius: 8px;
+  margin-right: 0.9rem;
+  flex-shrink: 0;
+}
+
 .headerTitle {
-  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-weight: 700;
   font-size: 0.9rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #67e8f9;
-  text-shadow: 0 0 10px rgba(34, 211, 238, 0.45);
+  color: #1f6f73;
   margin-right: 0.75rem;
+}
+
+.locationBadge {
+  display: block;
+  color: #6b7785;
+  font-size: 0.72rem;
+  margin: 0.15rem 0 0;
 }
 
 .personaTraits {
   display: block;
-  color: #a5f3fc;
-  font-family: 'Share Tech Mono', monospace;
+  color: #3f7ea0;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.7rem;
   font-style: italic;
   letter-spacing: 0.02em;
   margin: 0.15rem 0 0.3rem;
   cursor: help;
   width: fit-content;
-  border-bottom: 1px dotted rgba(34, 211, 238, 0.4);
+  border-bottom: 1px dotted rgba(31, 111, 115, 0.4);
 }
 
 .headerPurpose {
-  color: #9aa0af;
+  color: #6b7785;
   font-size: 0.8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 480px;
-  display: inline-block;
-  vertical-align: middle;
+  flex-basis: 100%;
+  margin-top: 0.15rem;
 }
 
 .localBadge {
-  color: #22d3ee;
-  background: #161d2e;
-  border: 1px solid #222c44;
+  color: #1f6f73;
+  background: #eaf3f7;
+  border: 1px solid #cfe3ea;
   border-radius: 5px;
   font-size: 0.7rem;
   font-weight: 600;
@@ -65,19 +83,20 @@
 
 .headerActions {
   display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.6rem;
-  margin-left: auto;
-  flex-shrink: 0;
 }
 
 .resetBtn {
-  background: #22d3ee;
+  background: #1f6f73;
   border: none;
   border-radius: 10px;
-  color: #05070a;
+  color: #ffffff;
   cursor: pointer;
-  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -85,25 +104,25 @@
   padding: 0.65rem 1.5rem;
   flex-shrink: 0;
   transition: transform 0.12s, box-shadow 0.15s, opacity 0.15s;
-  box-shadow: 0 3px 10px rgba(34, 211, 238, 0.35);
+  box-shadow: 0 2px 6px rgba(28, 40, 51, 0.15);
 }
 
 .resetBtn:hover {
   opacity: 0.92;
-  box-shadow: 0 4px 14px rgba(34, 211, 238, 0.5);
+  box-shadow: 0 3px 8px rgba(28, 40, 51, 0.2);
   transform: translateY(-1px);
 }
 
 .resetBtn:active {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(34, 211, 238, 0.4);
+  box-shadow: 0 1px 3px rgba(28, 40, 51, 0.15);
 }
 
 .saveBtn {
-  background: rgba(74, 222, 128, 0.12);
-  border: 1px solid rgba(74, 222, 128, 0.4);
+  background: rgba(22, 101, 52, 0.08);
+  border: 1px solid rgba(22, 101, 52, 0.35);
   border-radius: 10px;
-  color: #6ee7b7;
+  color: #166534;
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 600;
@@ -113,7 +132,7 @@
 }
 
 .saveBtn:hover:not(:disabled) {
-  background: rgba(74, 222, 128, 0.22);
+  background: rgba(22, 101, 52, 0.16);
   transform: translateY(-1px);
 }
 
@@ -123,10 +142,10 @@
 }
 
 .exportBtn {
-  background: rgba(34, 211, 238, 0.12);
-  border: 1px solid rgba(34, 211, 238, 0.4);
+  background: rgba(31, 111, 115, 0.08);
+  border: 1px solid rgba(31, 111, 115, 0.35);
   border-radius: 10px;
-  color: #22d3ee;
+  color: #1f6f73;
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 600;
@@ -136,7 +155,7 @@
 }
 
 .exportBtn:hover:not(:disabled) {
-  background: rgba(34, 211, 238, 0.22);
+  background: rgba(31, 111, 115, 0.16);
   transform: translateY(-1px);
 }
 
@@ -146,10 +165,10 @@
 }
 
 .publishBtn {
-  background: rgba(192, 132, 252, 0.12);
-  border: 1px solid rgba(192, 132, 252, 0.4);
+  background: rgba(63, 126, 160, 0.08);
+  border: 1px solid rgba(63, 126, 160, 0.35);
   border-radius: 10px;
-  color: #d8b4fe;
+  color: #3f7ea0;
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 600;
@@ -159,7 +178,7 @@
 }
 
 .publishBtn:hover {
-  background: rgba(192, 132, 252, 0.22);
+  background: rgba(63, 126, 160, 0.16);
   transform: translateY(-1px);
 }
 
@@ -169,16 +188,16 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.65rem 1.25rem;
-  border-bottom: 1px solid rgba(192, 132, 252, 0.25);
-  background: rgba(192, 132, 252, 0.05);
+  border-bottom: 1px solid rgba(63, 126, 160, 0.25);
+  background: rgba(63, 126, 160, 0.05);
   flex-shrink: 0;
 }
 
 .publishInput {
-  background: #171a21;
-  border: 1px solid #2a2f3a;
+  background: #ffffff;
+  border: 1px solid #ddd9cd;
   border-radius: 6px;
-  color: #eceef2;
+  color: #16324a;
   flex: 1;
   min-width: 180px;
   font-family: inherit;
@@ -188,14 +207,14 @@
 }
 
 .publishInput:focus {
-  border-color: #c084fc;
+  border-color: #3f7ea0;
 }
 
 .publishConfirmBtn {
-  background: #c084fc;
+  background: #3f7ea0;
   border: none;
   border-radius: 6px;
-  color: #1a0a2a;
+  color: #ffffff;
   cursor: pointer;
   font-size: 0.82rem;
   font-weight: 700;
@@ -210,9 +229,9 @@
 
 .publishCancelBtn {
   background: transparent;
-  border: 1px solid #333846;
+  border: 1px solid #ddd9cd;
   border-radius: 6px;
-  color: #9aa0af;
+  color: #6b7785;
   cursor: pointer;
   font-size: 0.82rem;
   padding: 0.5rem 1rem;
@@ -220,7 +239,7 @@
 }
 
 .publishFeedback {
-  color: #d8b4fe;
+  color: #3f7ea0;
   font-size: 0.78rem;
   margin: 0;
   padding: 0.4rem 1.25rem 0;
@@ -245,16 +264,16 @@
   flex-wrap: wrap;
   gap: 0.4rem;
   padding: 0.5rem 1.25rem;
-  border-bottom: 1px solid rgba(34, 211, 238, 0.25);
+  border-bottom: 1px solid rgba(31, 111, 115, 0.25);
   flex-shrink: 0;
 }
 
 .badge {
-  background: #0d1015;
-  border: 1px solid rgba(34, 211, 238, 0.3);
+  background: #eef1f0;
+  border: 1px solid rgba(31, 111, 115, 0.3);
   border-radius: 4px;
-  color: #67e8f9;
-  font-family: 'Share Tech Mono', monospace;
+  color: #1f6f73;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.68rem;
   padding: 0.1rem 0.4rem;
 }
@@ -269,7 +288,7 @@
 }
 
 .emptyHint {
-  color: #7d8393;
+  color: #6b7785;
   font-size: 0.85rem;
   margin: auto;
   text-align: center;
@@ -277,8 +296,8 @@
 
 .userBubble {
   align-self: flex-end;
-  background: linear-gradient(135deg, #0d2230 0%, #1a1030 100%);
-  border: 1px solid rgba(34, 211, 238, 0.3);
+  background: linear-gradient(135deg, #1c3a52 0%, #16324a 100%);
+  border: 1px solid rgba(31, 111, 115, 0.3);
   border-radius: 10px 10px 2px 10px;
   max-width: 70%;
   padding: 0.6rem 0.9rem;
@@ -291,7 +310,7 @@
 }
 
 .bubbleText {
-  color: #dfe2e8;
+  color: #f2f5f6;
   font-size: 0.88rem;
   line-height: 1.55;
   margin: 0;
@@ -301,7 +320,7 @@
 /* Markdown renderer for assistant messages */
 
 .markdown {
-  color: #dfe2e8;
+  color: #33475a;
   font-size: 0.88rem;
   line-height: 1.6;
 }
@@ -315,20 +334,20 @@
 }
 
 .markdown h1 {
-  color: #eceef2;
+  color: #16324a;
   font-size: 1.05rem;
   font-weight: 700;
   margin: 1.2rem 0 0.5rem;
   padding-bottom: 0.3rem;
-  border-bottom: 1px solid #2a2f3a;
+  border-bottom: 1px solid #ddd9cd;
 }
 
 .markdown h2 {
-  background: rgba(34, 211, 238, 0.08);
-  border-left: 3px solid #22d3ee;
+  background: rgba(31, 111, 115, 0.08);
+  border-left: 3px solid #1f6f73;
   border-radius: 0 5px 5px 0;
-  color: #a5f3fc;
-  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  color: #1f6f73;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -338,7 +357,7 @@
 }
 
 .markdown h3 {
-  color: #d7dbe2;
+  color: #233240;
   font-size: 0.9rem;
   font-weight: 600;
   margin: 0.9rem 0 0.3rem;
@@ -347,7 +366,7 @@
 .markdown h4,
 .markdown h5,
 .markdown h6 {
-  color: #c9cdd6;
+  color: #33475a;
   font-size: 0.85rem;
   font-weight: 600;
   margin: 0.75rem 0 0.25rem;
@@ -385,8 +404,8 @@
 }
 
 .markdown ol li {
-  background: #191c26;
-  border: 1px solid #292d3a;
+  background: #f7f5f0;
+  border: 1px solid #ddd9cd;
   border-radius: 8px;
   counter-increment: md-item;
   padding: 0.7rem 0.9rem 0.7rem 2.9rem;
@@ -398,10 +417,10 @@
   position: absolute;
   left: 0.7rem;
   top: 0.7rem;
-  background: #182348;
-  border: 1px solid #24345a;
+  background: #e6f2f1;
+  border: 1px solid #bcdbd8;
   border-radius: 4px;
-  color: #22d3ee;
+  color: #1f6f73;
   font-size: 0.68rem;
   font-weight: 700;
   line-height: 1;
@@ -411,10 +430,10 @@
 }
 
 .markdown ol li a {
-  background: #1a2338;
-  border: 1px solid #24345a;
+  background: #e6f2f1;
+  border: 1px solid #bcdbd8;
   border-radius: 4px;
-  color: #67e8f9;
+  color: #1f6f73;
   font-size: 0.8rem;
   padding: 0.05rem 0.4rem;
   text-decoration: none;
@@ -422,34 +441,34 @@
 }
 
 .markdown ol li a:hover {
-  border-color: #2a3a5a;
-  color: #bdd4ee;
+  border-color: #a8cdd6;
+  color: #164a4e;
   text-decoration: none;
 }
 
 .markdown strong {
-  color: #f5f6f8;
+  color: #16324a;
   font-weight: 600;
 }
 
 .markdown em {
-  color: #c9cdd6;
+  color: #33475a;
   font-style: italic;
 }
 
 .markdown code {
-  background: #232833;
-  border: 1px solid #333846;
+  background: #eef1f0;
+  border: 1px solid #d7ddd8;
   border-radius: 3px;
-  color: #ff6ec7;
-  font-family: 'Share Tech Mono', 'Consolas', 'Courier New', monospace;
+  color: #1f5761;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.82rem;
   padding: 0.1rem 0.35rem;
 }
 
 .markdown pre {
-  background: #171a21;
-  border: 1px solid #2a2f3a;
+  background: #f5f6f4;
+  border: 1px solid #ddd9cd;
   border-radius: 6px;
   margin: 0.5rem 0;
   overflow-x: auto;
@@ -459,13 +478,13 @@
 .markdown pre code {
   background: none;
   border: none;
-  color: #d7dbe2;
+  color: #33475a;
   padding: 0;
 }
 
 .mermaidDiagram {
-  background: #171a21;
-  border: 1px solid #2a2f3a;
+  background: #f5f6f4;
+  border: 1px solid #ddd9cd;
   border-radius: 6px;
   margin: 0.6rem 0 0.9rem;
   max-height: 800px;
@@ -479,21 +498,21 @@
 }
 
 .mermaidLoading {
-  color: #8b90a0;
+  color: #6b7785;
   font-size: 0.8rem;
   font-style: italic;
   margin: 0.5rem 0;
 }
 
 .mermaidError {
-  color: #ff8a8a;
+  color: #b91c1c;
   font-size: 0.75rem;
   margin: 0.5rem 0 0.25rem;
 }
 
 .markdown hr {
   border: none;
-  border-top: 1px solid #2a2f3a;
+  border-top: 1px solid #ddd9cd;
   margin: 0.9rem 0;
 }
 
@@ -513,10 +532,10 @@
 }
 
 .markdown ul:has(li > a:only-child) li > a {
-  background: #182348;
-  border: 1px solid #24345a;
+  background: #e6f2f1;
+  border: 1px solid #bcdbd8;
   border-radius: 5px;
-  color: #22d3ee;
+  color: #1f6f73;
   font-size: 0.78rem;
   padding: 0.2rem 0.6rem;
   text-decoration: none;
@@ -525,14 +544,14 @@
 }
 
 .markdown ul:has(li > a:only-child) li > a:hover {
-  border-color: #2a3a6a;
-  color: #67e8f9;
+  border-color: #a8cdd6;
+  color: #164a4e;
   text-decoration: none;
 }
 
 .markdown blockquote {
-  border-left: 3px solid #22d3ee;
-  color: #b7bcc7;
+  border-left: 3px solid #1f6f73;
+  color: #5a6773;
   margin: 0.5rem 0;
   padding: 0 0 0 0.75rem;
 }
@@ -547,47 +566,47 @@
 }
 
 .markdown th {
-  background: #20242f;
-  border: 1px solid #333846;
-  color: #c9cdd6;
+  background: #f0efe9;
+  border: 1px solid #ddd9cd;
+  color: #33475a;
   font-weight: 600;
   padding: 0.35rem 0.65rem;
   text-align: left;
 }
 
 .markdown td {
-  border: 1px solid #292d3a;
-  color: #d7dbe2;
+  border: 1px solid #e2dfd5;
+  color: #33475a;
   padding: 0.3rem 0.65rem;
 }
 
 .markdown tr:nth-child(even) td {
-  background: #191c26;
+  background: #f7f5f0;
 }
 
 .workingText {
-  color: #8b90a0;
+  color: #6b7785;
   font-size: 0.8rem;
   font-style: italic;
   margin: 0.5rem 0 0;
 }
 
 .duration {
-  color: #9aa0af;
+  color: #6b7785;
   font-size: 0.68rem;
   margin: 0.35rem 0 0;
 }
 
 .tokenBreakdown {
-  color: #8b90a0;
+  color: #6b7785;
 }
 
 .rateLimit {
-  color: #8b90a0;
+  color: #6b7785;
 }
 
 .error {
-  color: #f87171;
+  color: #b91c1c;
   font-size: 0.82rem;
   margin: 0;
   padding: 0.5rem 0;
@@ -597,15 +616,15 @@
   display: flex;
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
-  border-top: 1px solid #2a2f3a;
+  border-top: 1px solid #ddd9cd;
   flex-shrink: 0;
 }
 
 .input {
-  background: #171a21;
-  border: 1px solid #2a2f3a;
+  background: #ffffff;
+  border: 1px solid #ddd9cd;
   border-radius: 8px;
-  color: #eceef2;
+  color: #16324a;
   flex: 1;
   font-family: inherit;
   font-size: 0.92rem;
@@ -615,28 +634,27 @@
 }
 
 .input:focus {
-  border-color: #22d3ee;
-  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+  border-color: #1f6f73;
+  box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.15);
 }
 
 .sendBtn {
-  background: #22d3ee;
+  background: #1f6f73;
   border: none;
   border-radius: 8px;
-  color: #05070a;
+  color: #ffffff;
   cursor: pointer;
-  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   padding: 0.65rem 1.25rem;
-  box-shadow: 0 0 14px rgba(34, 211, 238, 0.4);
-  transition: opacity 0.15s, box-shadow 0.15s;
+  transition: opacity 0.15s;
 }
 
 .sendBtn:hover:not(:disabled) {
-  box-shadow: 0 0 20px rgba(34, 211, 238, 0.6);
+  opacity: 0.9;
 }
 
 .sendBtn:disabled {
@@ -646,9 +664,9 @@
 
 .stopBtn {
   background: transparent;
-  border: 1px solid #5a2020;
+  border: 1px solid #e3a3a3;
   border-radius: 8px;
-  color: #f87171;
+  color: #b91c1c;
   cursor: pointer;
   font-size: 0.92rem;
   font-weight: 600;
@@ -658,6 +676,6 @@
 }
 
 .stopBtn:hover {
-  background: #2a0f0f;
-  border-color: #7a2020;
+  background: #fdecec;
+  border-color: #d97a7a;
 }

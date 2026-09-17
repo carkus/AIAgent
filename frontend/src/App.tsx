@@ -1,17 +1,18 @@
 import { useState } from 'react'
 import Setup from './components/Setup'
 import Chat from './components/Chat'
+import SplashScreen from './components/SplashScreen'
 import type { AgentConfig, SavedChat } from './types'
 import { SURNAMES } from './surnames'
 
-type Phase = 'setup' | 'bootstrapping' | 'chat'
+type Phase = 'splash' | 'setup' | 'bootstrapping' | 'chat'
 
 function randomSurname(): string {
   return SURNAMES[Math.floor(Math.random() * SURNAMES.length)]
 }
 
 export default function App() {
-  const [phase, setPhase] = useState<Phase>('setup')
+  const [phase, setPhase] = useState<Phase>('splash')
   const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null)
   const [bootstrapError, setBootstrapError] = useState<string | null>(null)
   // Picked once per agent (re-rolled on "New agent") so this instance has a
@@ -71,7 +72,9 @@ export default function App() {
 
   return (
     <div style={styles.root}>
-      {phase === 'setup' || phase === 'bootstrapping' ? (
+      {phase === 'splash' ? (
+        <SplashScreen onDone={() => setPhase('setup')} />
+      ) : phase === 'setup' || phase === 'bootstrapping' ? (
         <Setup
           agentName={agentName}
           onAgentNameChange={setAgentName}
@@ -100,9 +103,9 @@ export default function App() {
 const styles: Record<string, React.CSSProperties> = {
   root: {
     height: '100%',
-    background: 'radial-gradient(ellipse 1200px 800px at 15% -10%, rgba(34, 211, 238, 0.14) 0%, transparent 55%), radial-gradient(ellipse 1000px 700px at 100% 110%, rgba(255, 47, 214, 0.10) 0%, transparent 55%), repeating-linear-gradient(180deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 3px), #090b10',
-    color: '#e4faff',
-    fontFamily: "'Segoe UI', system-ui, sans-serif",
+    background: '#f2efe9',
+    color: '#16324a',
+    fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
     display: 'flex',
     flexDirection: 'column',
   },

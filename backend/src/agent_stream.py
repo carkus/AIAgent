@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import time
 from llm_client import create_chat_completion
@@ -261,9 +262,36 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                 }
                 return
 
-            # Execute each tool call and collect results
+            # Execute each tool call and collect results. delegate_to_worker
+            # calls are independent of each other (separate bootstrapped
+            # workers, no shared state) and are dispatched to a thread pool
+            # instead of run one at a time — each is a blocking bootstrap +
+            # agent-loop round trip over the network, so N of them used to
+            # cost N times as long as the slowest one. Every other tool call
+            # still runs synchronously in submission order, unchanged.
             tool_result_messages = []
-            for tc in message.tool_calls:
+            pending_workers: dict[int, tuple] = {}  # idx -> (future, tc, tool_name, tool_inputs, source)
+            executor = None
+
+            def _finish(tc, tool_name, tool_inputs, result, source):
+                try:
+                    result_str = json.dumps(result, default=str)
+                except Exception:
+                    result_str = str(result)
+                tool_calls_log.append({
+                    "tool": tool_name,
+                    "inputs": tool_inputs,
+                    "result": result_str,
+                    "source": source,
+                })
+                tool_result_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result_str,
+                })
+                return result_str
+
+            for idx, tc in enumerate(message.tool_calls):
                 tool_name = tc.function.name
                 try:
                     tool_inputs = json.loads(tc.function.arguments)
@@ -274,7 +302,39 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                 source = "mcp" if tool_def and tool_def.get("source") == "mcp" else (
                     "primitive" if tool_name in ("fetch_page", "search_jobs", "delegate_to_worker") else "generated"
                 )
-                yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs, "source": source}
+                yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs, "source": source, "call_index": idx}
+
+                if tool_name == "delegate_to_worker":
+                    if delegation_count >= MAX_DELEGATIONS_PER_REQUEST:
+                        result = {
+                            "error": (
+                                f"Delegation limit ({MAX_DELEGATIONS_PER_REQUEST}) reached "
+                                "for this turn — finish the task yourself with the tools "
+                                "you already have."
+                            )
+                        }
+                        result_str = _finish(tc, tool_name, tool_inputs, result, source)
+                        yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source, "call_index": idx}
+                    else:
+                        delegation_count += 1
+                        # Deferred import: orchestrator imports run_agent_stream from
+                        # this module, so importing it back at module load time would
+                        # be circular. Safe here since it's only needed once this
+                        # branch actually runs.
+                        from orchestrator import run_worker
+                        if executor is None:
+                            executor = concurrent.futures.ThreadPoolExecutor(
+                                max_workers=MAX_DELEGATIONS_PER_REQUEST
+                            )
+                        future = executor.submit(
+                            run_worker,
+                            task=tool_inputs.get("task", ""),
+                            context=tool_inputs.get("context", ""),
+                            provider=provider,
+                            model=model,
+                        )
+                        pending_workers[idx] = (future, tc, tool_name, tool_inputs, source)
+                    continue
 
                 if tool_name == "fetch_page":
                     result = fetch_page(tool_inputs.get("url", ""))
@@ -286,28 +346,6 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                         results_per_page=tool_inputs.get("results_per_page") or 20,
                         page=tool_inputs.get("page") or 1,
                     )
-                elif tool_name == "delegate_to_worker":
-                    if delegation_count >= MAX_DELEGATIONS_PER_REQUEST:
-                        result = {
-                            "error": (
-                                f"Delegation limit ({MAX_DELEGATIONS_PER_REQUEST}) reached "
-                                "for this turn — finish the task yourself with the tools "
-                                "you already have."
-                            )
-                        }
-                    else:
-                        delegation_count += 1
-                        # Deferred import: orchestrator imports run_agent_stream from
-                        # this module, so importing it back at module load time would
-                        # be circular. Safe here since it's only needed once this
-                        # branch actually runs.
-                        from orchestrator import run_worker
-                        result = run_worker(
-                            task=tool_inputs.get("task", ""),
-                            context=tool_inputs.get("context", ""),
-                            provider=provider,
-                            model=model,
-                        )
                 elif tool_name in _SEARCH_TOOL_NAMES:
                     result = {
                         "error": (
@@ -325,25 +363,25 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                     implementation = tool_def["implementation"] if tool_def else "result = 'Unknown tool'"
                     result = execute_tool(implementation, tool_inputs)
 
-                try:
-                    result_str = json.dumps(result, default=str)
-                except Exception:
-                    result_str = str(result)
+                result_str = _finish(tc, tool_name, tool_inputs, result, source)
+                yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source, "call_index": idx}
 
-                tool_calls_log.append({
-                    "tool": tool_name,
-                    "inputs": tool_inputs,
-                    "result": result_str,
-                    "source": source,
-                })
-
-                yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source}
-
-                tool_result_messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result_str,
-                })
+            # Stream each delegated worker's result as soon as it finishes —
+            # not in submission order — since running them concurrently only
+            # helps the UI if a fast worker's card doesn't wait behind a slow
+            # one.
+            if pending_workers:
+                future_to_idx = {info[0]: idx for idx, info in pending_workers.items()}
+                for future in concurrent.futures.as_completed(future_to_idx):
+                    idx = future_to_idx[future]
+                    _, tc, tool_name, tool_inputs, source = pending_workers[idx]
+                    try:
+                        result = future.result()
+                    except Exception as e:
+                        result = {"error": f"Worker crashed: {e}"}
+                    result_str = _finish(tc, tool_name, tool_inputs, result, source)
+                    yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source, "call_index": idx}
+                executor.shutdown(wait=False)
 
             current_messages.extend(tool_result_messages)
 

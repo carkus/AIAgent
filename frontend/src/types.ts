@@ -62,8 +62,8 @@ export interface Message {
 
 // Stream events emitted by the agent loop
 export type StreamEvent =
-  | { type: 'tool_start'; tool: string; inputs: Record<string, unknown>; source?: ToolCall['source'] }
-  | { type: 'tool_result'; tool: string; result: string; source?: ToolCall['source'] }
+  | { type: 'tool_start'; tool: string; inputs: Record<string, unknown>; source?: ToolCall['source']; call_index: number }
+  | { type: 'tool_result'; tool: string; result: string; source?: ToolCall['source']; call_index: number }
   | {
       type: 'done';
       response: string;

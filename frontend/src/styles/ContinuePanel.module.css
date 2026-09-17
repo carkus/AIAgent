@@ -1,7 +1,7 @@
-﻿.toggleBtn {
+.toggleBtn {
   background: transparent;
   border: none;
-  color: #a7acb9;
+  color: #6b7785;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -14,13 +14,13 @@
 }
 
 .toggleBtn:hover {
-  color: #d7dbe2;
+  color: #16324a;
 }
 
 .panel {
   width: 300px;
-  background: #0d1015;
-  border-left: 1px solid rgba(34, 211, 238, 0.2);
+  background: #ffffff;
+  border-left: 1px solid rgba(31, 111, 115, 0.2);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -32,24 +32,24 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(34, 211, 238, 0.2);
+  border-bottom: 1px solid rgba(31, 111, 115, 0.2);
   flex-shrink: 0;
 }
 
 .panelTitle {
-  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: #67e8f9;
+  color: #1f6f73;
   margin: 0;
 }
 
 .closeBtn {
   background: transparent;
   border: none;
-  color: #a7acb9;
+  color: #6b7785;
   cursor: pointer;
   font-size: 1rem;
   padding: 0;
@@ -62,7 +62,7 @@
 }
 
 .closeBtn:hover {
-  color: #d7dbe2;
+  color: #16324a;
 }
 
 .panelContent {
@@ -72,7 +72,7 @@
 }
 
 .placeholder {
-  color: #a7acb9;
+  color: #6b7785;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -87,12 +87,12 @@
 }
 
 .placeholder p:first-child {
-  color: #d7dbe2;
+  color: #16324a;
   font-weight: 500;
 }
 
 .hint {
   font-size: 0.75rem;
-  color: #8b90a0;
+  color: #6b7785;
   max-width: 90%;
 }
