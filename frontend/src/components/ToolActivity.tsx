@@ -391,6 +391,20 @@ function MarketTrendCard({ data }: { data: Record<string, unknown> }) {
 
 // ─── Delegated worker result (multi-agent orchestration, first scaffold) ─────
 
+// Strips the most common markdown markers and collapses whitespace so a
+// worker's response reads as a plain one-line teaser under its task while
+// the card is still collapsed.
+function summarizeText(text: string, maxLen = 160): string {
+  const plain = text
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/[*_`]/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^[-*]\s+/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return plain.length > maxLen ? `${plain.slice(0, maxLen).trimEnd()}…` : plain
+}
+
 function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
   const [open, setOpen] = useState(false)
   const name = data.worker_name as string
@@ -421,6 +435,9 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
         )}
       </button>
       {task && <p className={styles.workerTask}>Prompted: {task}</p>}
+      {!open && response && (
+        <p className={styles.workerSummary}>{summarizeText(response)}</p>
+      )}
       {open && (
         <>
           {response && (

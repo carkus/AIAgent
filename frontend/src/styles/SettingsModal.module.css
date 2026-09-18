@@ -113,7 +113,7 @@
 
 .sectionLabel::before {
   content: '◆';
-  color: #05384b;
+  color: #0b495e;
   font-size: 0.58rem;
 }
 
@@ -150,7 +150,7 @@
 
 .locationInput:focus {
   background: #ffffff;
-  border-color: #05384b;
+  border-color: #0b495e;
   box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.12);
 }
 
@@ -184,7 +184,7 @@
 }
 
 .detectBtn {
-  background: #05384b;
+  background: #0b495e;
   border: none;
   border-radius: 6px;
   color: #fff;
@@ -238,7 +238,7 @@
 
 .providerSelect:focus {
   background-color: #ffffff;
-  border-color: #05384b;
+  border-color: #0b495e;
   box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.12);
 }
 
@@ -262,7 +262,7 @@
 }
 
 .doneBtn {
-  background: #05384b;
+  background: #0b495e;
   border: none;
   border-radius: 8px;
   color: #fff;

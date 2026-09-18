@@ -1068,12 +1068,20 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             )}
             {bootstrapping ? (
               <>
-                <p>
-                  {progress ??
-                    (provider === 'ollama'
-                      ? `${ollamaModel ?? 'Your local model'} is designing your agent's tools and behaviour. This may take longer than the cloud default.`
-                      : 'Designing your agent\'s tools and behaviour…')}
-                </p>
+                {(() => {
+                  const groundingMatch = progress?.match(/^Found (\d+) similar past agent/i)
+                  if (groundingMatch) {
+                    return <p><span className={styles.groundingBadge}>🧠 grounded ×{groundingMatch[1]}</span></p>
+                  }
+                  return (
+                    <p>
+                      {progress ??
+                        (provider === 'ollama'
+                          ? `${ollamaModel ?? 'Your local model'} is designing your agent's tools and behaviour. This may take longer than the cloud default.`
+                          : 'Designing your agent\'s tools and behaviour…')}
+                    </p>
+                  )
+                })()}
                 {toolsSoFar.length > 0 && (
                   <ul className={styles.loadingTools}>
                     {toolsSoFar.map(name => (

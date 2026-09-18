@@ -47,7 +47,7 @@
 }
 
 .headingArrow {
-  color: #05384b;
+  color: #0b495e;
   flex-shrink: 0;
   font-size: 0.7rem;
 }
@@ -75,7 +75,7 @@
 }
 
 .mcpBadge {
-  color: #05384b;
+  color: #0b495e;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-weight: 700;
   font-size: 0.65rem;
@@ -267,12 +267,12 @@
 .barMeter::-webkit-meter-optimum-value,
 .barMeter::-webkit-meter-suboptimum-value,
 .barMeter::-webkit-meter-even-less-good-value {
-  background: #05384b;
+  background: #0b495e;
   border-radius: 2px;
 }
 
 .barMeter::-moz-meter-bar {
-  background: #05384b;
+  background: #0b495e;
   border-radius: 2px;
 }
 
@@ -384,7 +384,7 @@
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 4px;
-  color: #05384b;
+  color: #0b495e;
   display: inline-flex;
   font-size: 0.72rem;
   gap: 0.3rem;
@@ -449,7 +449,7 @@
 }
 
 .kvValLink {
-  color: #05384b;
+  color: #0b495e;
   padding: 0.15rem 0.4rem;
   max-width: 240px;
   overflow: hidden;
@@ -464,7 +464,7 @@
 }
 
 .kwLink {
-  color: #05384b;
+  color: #0b495e;
   text-decoration: none;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.78rem;
@@ -553,7 +553,7 @@
 }
 
 .agentsSummaryHeading {
-  color: #05384b;
+  color: #0b495e;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -571,7 +571,7 @@
   align-items: baseline;
   background: #f7f5f0;
   border: 1px solid #cfe3ea;
-  border-left: 2px solid #05384b;
+  border-left: 2px solid #0b495e;
   border-radius: 5px;
   display: inline-flex;
   flex-wrap: wrap;
@@ -581,7 +581,7 @@
 }
 
 .agentPillName {
-  color: #05384b;
+  color: #0b495e;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-weight: 700;
   font-size: 0.75rem;
@@ -610,7 +610,7 @@
 .workerCard {
   background: #f7f5f0;
   border: 1px solid #cfe3ea;
-  border-left: 2px solid #05384b;
+  border-left: 2px solid #0b495e;
   border-radius: 6px;
   margin-top: 0.5rem;
   padding: 0.65rem 0.75rem;
@@ -633,13 +633,13 @@
 }
 
 .workerHeadingArrow {
-  color: #05384b;
+  color: #0b495e;
   flex-shrink: 0;
   font-size: 0.7rem;
 }
 
 .workerName {
-  color: #05384b;
+  color: #0b495e;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-weight: 700;
   font-size: 0.8rem;
@@ -670,8 +670,17 @@
   margin: 0 0 0.5rem;
 }
 
+.workerSummary {
+  color: #33475a;
+  font-family: 'Courier Prime', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  margin: 0 0 0.5rem;
+}
+
 .workerResponse {
   color: #33475a;
+  font-family: 'Courier Prime', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.78rem;
   line-height: 1.5;
   margin: 0 0 0.5rem;
@@ -699,7 +708,7 @@
 }
 
 .workerResponse a {
-  color: #05384b;
+  color: #0b495e;
 }
 
 .workerTools {
@@ -765,7 +774,7 @@
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 3px;
-  color: #05384b;
+  color: #0b495e;
   font-size: 0.66rem;
   padding: 0.05rem 0.35rem;
   flex-shrink: 0;
@@ -794,7 +803,7 @@
 .savedFileBtn {
   background: none;
   border: none;
-  color: #05384b;
+  color: #0b495e;
   cursor: pointer;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.78rem;

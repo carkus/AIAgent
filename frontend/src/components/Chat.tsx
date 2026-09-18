@@ -149,6 +149,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
           content: m.content,
           contentEl: m.role === 'assistant' ? markdownRefs.current.get(i) ?? null : null,
           toolCallCount: m.toolCalls?.length,
+          toolCalls: m.toolCalls,
           durationSeconds: m.durationSeconds,
           usage: m.usage,
         }))

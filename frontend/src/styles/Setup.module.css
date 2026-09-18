@@ -34,7 +34,7 @@
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #05384b;
+  color: #0b495e;
 }
 
 .subtitle {
@@ -75,7 +75,7 @@
 }
 
 .chipArea:focus-within {
-  border-color: #05384b;
+  border-color: #0b495e;
   box-shadow: inset 0 1px 4px rgba(28, 40, 51, 0.07), 0 0 0 3px rgba(31, 111, 115, 0.12);
 }
 
@@ -84,7 +84,7 @@
   background: #f7f5f0;
   border: 1px solid #ddd9cd;
   border-radius: 5px;
-  color: #05384b;
+  color: #0b495e;
   display: inline-flex;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.76rem;
@@ -106,7 +106,7 @@
 }
 
 .chipX:hover {
-  color: #05384b;
+  color: #0b495e;
 }
 
 .chipInput {
@@ -114,7 +114,7 @@
   border: 1px solid #bcdbd8;
   border-radius: 6px;
   box-sizing: border-box;
-  color: #05384b;
+  color: #0b495e;
   flex: 0 0 220px;
   width: 220px;
   font-size: 0.75rem;
@@ -128,7 +128,7 @@
 }
 
 .chipInput:focus {
-  border-color: #05384b;
+  border-color: #0b495e;
   box-shadow: 0 0 0 2px rgba(31, 111, 115, 0.15);
 }
 
@@ -145,7 +145,7 @@
   border: 1px solid #cfbf94;
   border-radius: 999px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  color: #05384b;
+  color: #0b495e;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.85rem;
   font-weight: 400;
@@ -207,7 +207,7 @@
 }
 
 .agentTypeLabel {
-  color: #05384b;
+  color: #0b495e;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.6rem;
   font-weight: 400;
@@ -227,8 +227,8 @@
 }
 
 .profileCommissionBtn {
-  background: #05384b;
-  border: 1px solid #05384b;
+  background: #0b495e;
+  border: 1px solid #0b495e;
   border-radius: 6px;
   box-sizing: border-box;
   color: #ffffff;
@@ -261,10 +261,10 @@
 
 .profileSaveBtn {
   background: #f7f5f0;
-  border: 1px solid #05384b;
+  border: 1px solid #0b495e;
   border-radius: 4px;
   box-sizing: border-box;
-  color: #05384b;
+  color: #0b495e;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.66rem;
@@ -289,7 +289,7 @@
 }
 
 .profileSaveBtn:hover:not(:disabled) {
-  background: #05384b;
+  background: #0b495e;
   color: #fff;
 }
 
@@ -403,7 +403,7 @@
 }
 
 .saveFeedbackSuccess {
-  color: #05384b;
+  color: #0b495e;
 }
 
 .saveFeedbackError {
@@ -457,7 +457,7 @@
 }
 
 .specialInstructionsInput:focus {
-  border-color: #05384b;
+  border-color: #0b495e;
 }
 
 .fieldLabel {
@@ -473,7 +473,7 @@
 }
 
 .fieldLabel span {
-  color: #05384b;
+  color: #0b495e;
   font-size: 0.6rem;
 }
 
@@ -498,7 +498,7 @@
 }
 
 .fieldLabelCaret {
-  color: #05384b;
+  color: #0b495e;
   font-size: 0.65rem;
   flex-shrink: 0;
 }
@@ -506,7 +506,7 @@
 .fieldLabelCount {
   background: #eef1f0;
   border-radius: 999px;
-  color: #05384b;
+  color: #0b495e;
   font-size: 0.68rem;
   font-weight: 600;
   padding: 0.05rem 0.45rem;
@@ -520,7 +520,7 @@
   background: none;
   border: 1px solid #ddd9cd;
   border-radius: 999px;
-  color: #05384b;
+  color: #0b495e;
   cursor: pointer;
   font-size: 0.95rem;
   line-height: 1;
@@ -533,7 +533,7 @@
 }
 
 .settingsIconBtn:hover {
-  border-color: #05384b;
+  border-color: #0b495e;
   background: rgba(31, 111, 115, 0.08);
 }
 
@@ -573,7 +573,7 @@
 }
 
 .agentTypePill:hover:not(:disabled) {
-  border-color: #05384b;
+  border-color: #0b495e;
   color: #33475a;
   transform: translateY(-1px);
 }
@@ -585,9 +585,9 @@
 
 .agentTypePillActive,
 .agentTypePillActive:hover:not(:disabled) {
-  background: rgba(5, 56, 75, 0.1);
-  border-color: #05384b;
-  color: #05384b;
+  background: rgba(11, 73, 94, 0.1);
+  border-color: #0b495e;
+  color: #0b495e;
   transform: none;
 }
 
@@ -612,7 +612,7 @@
 }
 
 .locationInput:focus {
-  border-color: #05384b;
+  border-color: #0b495e;
 }
 
 .locationSuggestions {
@@ -665,7 +665,7 @@
 }
 
 .providerSelect:focus {
-  border-color: #05384b;
+  border-color: #0b495e;
 }
 
 .providerHint {
@@ -741,8 +741,8 @@
   right: 0.4rem;
   z-index: 1;
   background: #f2efe4;
-  color: #05384b;
-  border: 2.25px solid #05384b;
+  color: #0b495e;
+  border: 2.25px solid #0b495e;
   border-radius: 6px;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.9rem;
@@ -807,7 +807,7 @@
 .savedSectionCount {
   background: #eef1f0;
   border-radius: 999px;
-  color: #05384b;
+  color: #0b495e;
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.1rem 0.5rem;
@@ -849,7 +849,7 @@
 }
 
 .savedKeywordChip:hover {
-  border-color: #05384b;
+  border-color: #0b495e;
 }
 
 .savedKeywordAdd {
@@ -857,7 +857,7 @@
   border: none;
   padding: 0;
   margin: 0;
-  color: #05384b;
+  color: #0b495e;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.76rem;
@@ -893,7 +893,7 @@
   background: none;
   border: 1px dashed #9fb3ab;
   border-radius: 5px;
-  color: #05384b;
+  color: #0b495e;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.75rem;
@@ -902,7 +902,7 @@
 }
 
 .savedKeywordAddNew:hover:not(:disabled) {
-  border-color: #05384b;
+  border-color: #0b495e;
   background: #e6f2f1;
 }
 
@@ -924,7 +924,7 @@
 }
 
 .savedRow:hover {
-  border-color: #05384b;
+  border-color: #0b495e;
 }
 
 .savedRowDisabled {
@@ -945,12 +945,16 @@
 }
 
 .savedChip {
-  background: #e6f2f1;
-  border: 1px solid #bcdbd8;
-  border-radius: 999px;
-  color: #05384b;
-  font-size: 0.75rem;
-  padding: 0.15rem 0.6rem;
+  background: #f7f5f0;
+  border: 1px solid #ddd9cd;
+  border-radius: 5px;
+  color: #0b495e;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.55rem;
 }
 
 .savedChatInfo {
@@ -962,7 +966,7 @@
 }
 
 .savedChatName {
-  color: #05384b;
+  color: #0b495e;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.82rem;
   font-weight: 700;
@@ -971,7 +975,7 @@
 }
 
 .savedChatTraits {
-  color: #05384b;
+  color: #0b495e;
   font-size: 0.72rem;
   font-style: italic;
 }
@@ -995,7 +999,7 @@
 }
 
 .savedResume:hover:not(:disabled) {
-  color: #05384b;
+  color: #0b495e;
 }
 
 .savedResume:disabled {
@@ -1066,9 +1070,23 @@
 }
 
 .modelInfoLine {
-  color: #05384b !important;
+  color: #0b495e !important;
   font-weight: 600;
   margin-bottom: 0.5rem !important;
+}
+
+.groundingBadge {
+  display: inline-flex;
+  align-items: center;
+  background: #e6f2f1;
+  border: 1px solid #bcdbd8;
+  border-radius: 999px;
+  color: #0b495e;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.2rem 0.65rem;
 }
 
 .loadingTools {

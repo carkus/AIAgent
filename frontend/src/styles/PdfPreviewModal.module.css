@@ -31,7 +31,7 @@
 }
 
 .title {
-  color: #05384b;
+  color: #0b495e;
   font-size: 0.85rem;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   overflow: hidden;
@@ -88,7 +88,7 @@
 }
 
 .downloadBtn {
-  background: #05384b;
+  background: #0b495e;
   border: none;
   border-radius: 8px;
   color: #ffffff;

@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf'
+import type { ToolCall } from './types'
 
 /**
  * Text-based chat PDF export. Unlike a DOM screenshot, this draws real
@@ -23,6 +24,44 @@ export interface PdfMessage {
   toolCallCount?: number
   durationSeconds?: number
   usage?: { input_tokens: number; output_tokens: number }
+  /** Full tool-call log for this message, used to surface delegated worker agents in the PDF. */
+  toolCalls?: ToolCall[]
+}
+
+interface WorkerPdfData {
+  name: string
+  task?: string
+  response: string
+  toolsUsed?: string[]
+}
+
+function parseWorkerResult(raw: string): unknown {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return raw
+  }
+}
+
+function isWorkerResult(v: unknown): v is Record<string, unknown> & { worker_name: string; response: string } {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false
+  const o = v as Record<string, unknown>
+  return typeof o.worker_name === 'string' && typeof o.response === 'string'
+}
+
+/** Every delegated worker's full result, regardless of whether the main reply quoted it. */
+function extractWorkers(toolCalls: ToolCall[] | undefined): WorkerPdfData[] {
+  if (!toolCalls) return []
+  return toolCalls
+    .filter(tc => tc.tool === 'delegate_to_worker' && tc.result !== '…')
+    .map(tc => parseWorkerResult(tc.result))
+    .filter(isWorkerResult)
+    .map(w => ({
+      name: w.worker_name,
+      task: typeof w.task === 'string' ? w.task : undefined,
+      response: w.response,
+      toolsUsed: Array.isArray(w.tools_used) ? (w.tools_used as string[]) : undefined,
+    }))
 }
 
 type Run = { text: string; bold?: boolean; italic?: boolean; code?: boolean; href?: string }
@@ -125,7 +164,8 @@ const LINK_COLOR: [number, number, number] = [37, 99, 235]
 const TEXT_COLOR: [number, number, number] = [20, 20, 20]
 const META_COLOR: [number, number, number] = [120, 120, 120]
 const LABEL_COLOR_USER: [number, number, number] = [79, 110, 247]
-const LABEL_COLOR_ASSISTANT: [number, number, number] = [16, 130, 100]
+const LABEL_COLOR_ASSISTANT: [number, number, number] = [31, 111, 115]
+const WORKER_LABEL_COLOR: [number, number, number] = [63, 126, 160]
 
 const PAGE_MARGIN = 48
 const HEADING_SIZE: Record<number, number> = { 1: 16, 2: 14, 3: 12.5, 4: 11.5, 5: 11, 6: 11 }
@@ -195,6 +235,41 @@ class PdfLayout {
     this.cursor.y += META_SIZE
     this.pdf.text(text, PAGE_MARGIN, this.cursor.y)
     this.cursor.y += 6
+  }
+
+  /** One delegated worker's task + full response, indented as a sub-block under "Agents employed". */
+  workerBlock(worker: { name: string; task?: string; response: string; toolsUsed?: string[] }) {
+    const x = PAGE_MARGIN + 12
+    const width = this.contentWidth - 12
+
+    this.ensureRoom(LABEL_SIZE * 1.4)
+    this.pdf.setFont(FONT_BODY, 'bold')
+    this.pdf.setFontSize(BODY_SIZE)
+    this.pdf.setTextColor(...WORKER_LABEL_COLOR)
+    this.cursor.y += BODY_SIZE
+    this.pdf.text(`Agent: ${worker.name}`, x, this.cursor.y)
+    this.cursor.y += 5
+
+    if (worker.task) {
+      this.pdf.setFont(FONT_BODY, 'italic')
+      this.pdf.setFontSize(META_SIZE)
+      this.pdf.setTextColor(...META_COLOR)
+      const lines: string[] = this.pdf.splitTextToSize(`Task: ${worker.task}`, width)
+      const lineHeight = META_SIZE * 1.4
+      for (const line of lines) {
+        this.ensureRoom(lineHeight)
+        this.cursor.y += lineHeight
+        this.pdf.text(line, x, this.cursor.y)
+      }
+      this.cursor.y += 4
+    }
+
+    this.plainText(worker.response, x, width, BODY_SIZE)
+
+    if (worker.toolsUsed?.length) {
+      this.meta(`Tools used: ${worker.toolsUsed.join(', ')}`)
+    }
+    this.cursor.y += 4
   }
 
   plainText(text: string, x: number, width: number, fontSize: number) {
@@ -374,6 +449,12 @@ export function buildChatPdf(title: string, messages: PdfMessage[]): jsPDF {
       } else if (msg.content) {
         layout.plainText(msg.content, PAGE_MARGIN, layout.contentWidth, BODY_SIZE)
       }
+      const workers = extractWorkers(msg.toolCalls)
+      if (workers.length) {
+        layout.meta(`Agents employed (${workers.length}): ${workers.map(w => w.name).join(', ')}`)
+        for (const worker of workers) layout.workerBlock(worker)
+      }
+
       const metaText = formatMeta(msg)
       if (metaText) layout.meta(metaText)
     }

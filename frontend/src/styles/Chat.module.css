@@ -37,10 +37,10 @@
 .headerTitle {
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.99rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #05384b;
+  color: #0b495e;
   margin-right: 0.75rem;
 }
 
@@ -83,8 +83,11 @@
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 5px;
-  color: #05384b;
-  font-size: 0.75rem;
+  color: #0b495e;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   padding: 0.15rem 0.5rem;
 }
 
@@ -113,7 +116,7 @@
   margin-top: 0.5rem;
   background: #e9e6dc;
   border: 1px solid #ddd9cd;
-  border-radius: 999px;
+  border-radius: 9px;
   padding: 0.3rem;
 }
 
@@ -132,29 +135,29 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: #e6f2f1;
-  border: 1px solid #05384b;
-  border-radius: 999px;
-  color: #05384b;
+  background: #e9f3f2;
+  border: 1px solid #a8cdd6;
+  border-radius: 7px;
+  color: #0b495e;
   cursor: pointer;
   transition: background-color 0.12s, border-color 0.12s, opacity 0.12s;
 }
 
 button.resetBtn {
-  background: #05384b;
-  border-color: #05384b;
+  background: #0b495e;
+  border-color: #0b495e;
   color: #ffffff;
   font-weight: 700;
 }
 
 button.resetBtn:hover {
-  background: #0a4d66;
-  border-color: #0a4d66;
+  background: #135a72;
+  border-color: #135a72;
 }
 
 button.resetBtn:active {
-  background: #032a38;
-  border-color: #032a38;
+  background: #083342;
+  border-color: #083342;
 }
 
 .exportBtn:hover:not(:disabled) {
@@ -274,7 +277,7 @@ button.resetBtn:active {
   background: #eef1f0;
   border: 1px solid rgba(31, 111, 115, 0.3);
   border-radius: 4px;
-  color: #05384b;
+  color: #0b495e;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.68rem;
   padding: 0.1rem 0.4rem;
@@ -313,6 +316,7 @@ button.resetBtn:active {
 
 .bubbleText {
   color: #f2f5f6;
+  font-family: Arial, Helvetica, sans-serif;
   font-size: 0.79rem;
   line-height: 1.55;
   margin: 0;
@@ -323,6 +327,7 @@ button.resetBtn:active {
 
 .markdown {
   color: #33475a;
+  font-family: 'Courier Prime', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.79rem;
   line-height: 1.6;
 }
@@ -346,9 +351,9 @@ button.resetBtn:active {
 
 .markdown h2 {
   background: rgba(31, 111, 115, 0.08);
-  border-left: 3px solid #05384b;
+  border-left: 3px solid #0b495e;
   border-radius: 0 5px 5px 0;
-  color: #05384b;
+  color: #0b495e;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.82rem;
   font-weight: 700;
@@ -553,7 +558,7 @@ button.resetBtn:active {
 }
 
 .markdown blockquote {
-  border-left: 3px solid #05384b;
+  border-left: 3px solid #0b495e;
   color: #5a6773;
   margin: 0.5rem 0;
   padding: 0 0 0 0.75rem;
@@ -625,24 +630,25 @@ button.resetBtn:active {
 
 .input {
   background: #ffffff;
-  border: 1px solid #ddd9cd;
-  border-radius: 8px;
+  border: 1px solid #a8cdd6;
+  border-radius: 7px;
   color: #16324a;
   flex: 1;
-  font-family: inherit;
-  font-size: 0.92rem;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
   outline: none;
   padding: 0.65rem 0.9rem;
   transition: border-color 0.15s;
 }
 
 .input:focus {
-  border-color: #05384b;
+  border-color: #0b495e;
   box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.15);
 }
 
 .sendBtn {
-  background: #05384b;
+  background: #0b495e;
   border: none;
   border-radius: 8px;
   color: #ffffff;
