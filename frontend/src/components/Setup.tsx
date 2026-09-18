@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, listAgentDrafts, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
 import type { AgentDraft, PublishedAgent, SavedSearch } from '../api'
-import { deleteSavedChat, loadSavedChats } from '../chatStorage'
+import { hideSavedChat, loadHiddenChatIds, loadSavedChats } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
@@ -237,7 +237,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // Saved chats — full bootstrapped conversations, client-side only (see
   // chatStorage.ts). Read once on mount like the other saved-* lists above;
   // resuming one skips bootstrap entirely (App.tsx's onResumeChat).
-  const [savedChats, setSavedChats] = useState<SavedChat[]>(() => loadSavedChats())
+  const [savedChats] = useState<SavedChat[]>(() => loadSavedChats())
+  // Tucks a chat out of the dossier list without touching its underlying
+  // localStorage entry — distinct from an actual delete.
+  const [hiddenChatIds, setHiddenChatIds] = useState<string[]>(() => loadHiddenChatIds())
+  const visibleChats = savedChats.filter(c => !hiddenChatIds.includes(c.id))
   // Only show saved searches that match the currently selected agent type —
   // a "Job search agent" list of keywords isn't a useful preset when you're
   // building a "Research agent". Pre-existing saves have no agentType and
@@ -524,8 +528,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     onResumeChat(chat)
   }
 
-  function deleteChat(id: string) {
-    setSavedChats(deleteSavedChat(id))
+  function hideChat(id: string) {
+    setHiddenChatIds(hideSavedChat(id))
   }
 
   function handleAgentTypeChange(type: AgentTemplateId) {
@@ -745,8 +749,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             {commissionHint && (
               <p className={styles.commissionHint} role="status">{commissionHint}</p>
             )}
-            {keywords.length > 0 && (
-              <div className={styles.saveAgentGroup}>
+            <div className={styles.commissionGroup}>
+              {keywords.length > 0 && (
                 <button
                   type="button"
                   className={`${styles.profileSaveBtn} ${styles.profileSaveBtnCommissionRow}`}
@@ -754,29 +758,30 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   disabled={bootstrapping}
                   title="Save this whole profile — name, type, location and specialties"
                 >
-                  Save Agent
+                  Save<br />Agent
                 </button>
-              </div>
-            )}
-            <div className={styles.commissionGroup}>
-              <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
-                {AGENT_TEMPLATES.map(t => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={agentType === t.id}
-                    aria-label={t.label}
-                    title={t.label}
-                    className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
-                    onClick={() => handleAgentTypeChange(t.id)}
-                    disabled={bootstrapping}
-                  >
-                    <span className={styles.agentTypePillIcon} aria-hidden="true">
-                      <AgentTypeIcon id={t.id} />
-                    </span>
-                  </button>
-                ))}
+              )}
+              <div className={styles.agentTypeSelector}>
+                <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
+                  {AGENT_TEMPLATES.map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={agentType === t.id}
+                      aria-label={t.label}
+                      title={t.label}
+                      className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
+                      onClick={() => handleAgentTypeChange(t.id)}
+                      disabled={bootstrapping}
+                    >
+                      <span className={styles.agentTypePillIcon} aria-hidden="true">
+                        <AgentTypeIcon id={t.id} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <span className={styles.agentTypeLabel}>{getTemplate(agentType).label}</span>
               </div>
               <button
                 type="submit"
@@ -785,7 +790,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 disabled={bootstrapping}
                 aria-disabled={keywords.length === 0}
               >
-                {bootstrapping ? 'Configuring…' : 'Commission Agent >'}
+                {bootstrapping ? 'Configuring…' : 'Commission >'}
               </button>
             </div>
           </div>
@@ -947,13 +952,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   {openSavedSections.chats ? '▾' : '▸'}
                 </span>
                 <span className={styles.savedSectionTitle}>Saved Chats</span>
-                <span className={styles.savedSectionCount}>{savedChats.length}</span>
+                <span className={styles.savedSectionCount}>{visibleChats.length}</span>
               </button>
               {openSavedSections.chats && (
                 <div className={styles.savedSectionBody}>
-                  {savedChats.length > 0 ? (
+                  {visibleChats.length > 0 ? (
                     <div className={styles.savedList}>
-                      {savedChats.map(c => (
+                      {visibleChats.map(c => (
                         <div
                           key={c.id}
                           className={`${styles.savedRow} ${bootstrapping ? styles.savedRowDisabled : ''}`}
@@ -989,9 +994,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                           <button
                             type="button"
                             className={styles.savedDelete}
-                            onClick={ev => { ev.stopPropagation(); deleteChat(c.id) }}
-                            aria-label={`Delete saved chat with Agent ${c.agentName}`}
-                            title="Delete saved chat"
+                            onClick={ev => { ev.stopPropagation(); hideChat(c.id) }}
+                            aria-label={`Remove Agent ${c.agentName}'s chat from this list`}
+                            title="Remove from this list (keeps the saved chat itself)"
                           >
                             ×
                           </button>

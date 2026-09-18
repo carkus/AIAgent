@@ -34,7 +34,7 @@
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #1f6f73;
+  color: #05384b;
 }
 
 .subtitle {
@@ -75,7 +75,7 @@
 }
 
 .chipArea:focus-within {
-  border-color: #1f6f73;
+  border-color: #05384b;
   box-shadow: inset 0 1px 4px rgba(28, 40, 51, 0.07), 0 0 0 3px rgba(31, 111, 115, 0.12);
 }
 
@@ -85,7 +85,7 @@
   border: 1px solid #bcdbd8;
   border-radius: 5px;
   box-shadow: 0 1px 2px rgba(28, 40, 51, 0.1);
-  color: #1f6f73;
+  color: #05384b;
   display: inline-flex;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.76rem;
@@ -107,7 +107,7 @@
 }
 
 .chipX:hover {
-  color: #1f6f73;
+  color: #05384b;
 }
 
 .chipInput {
@@ -115,7 +115,7 @@
   border: 1px solid #bcdbd8;
   border-radius: 6px;
   box-sizing: border-box;
-  color: #1f6f73;
+  color: #05384b;
   flex: 0 0 220px;
   width: 220px;
   font-size: 0.75rem;
@@ -129,7 +129,7 @@
 }
 
 .chipInput:focus {
-  border-color: #1f6f73;
+  border-color: #05384b;
   box-shadow: 0 0 0 2px rgba(31, 111, 115, 0.15);
 }
 
@@ -146,7 +146,7 @@
   border: 1px solid #cfbf94;
   border-radius: 999px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  color: #1f6f73;
+  color: #05384b;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.85rem;
   font-weight: 400;
@@ -173,9 +173,10 @@
 
 .profileCommissionRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: 0.6rem;
   padding-top: calc(0.6rem - 10px);
   flex-shrink: 0;
 }
@@ -194,16 +195,30 @@
   padding: 0.4rem;
 }
 
-/* Same boxed treatment as .commissionGroup, just for Save Agent on its own
-   — keeps the row reading as a set of distinct grouped actions rather than
-   one lone button next to a boxed one. */
-.saveAgentGroup {
+/* Stacks the type pills above the currently-selected type's name — the
+   pills alone only show selection via a subtle border/background shift on
+   one small icon, easy to miss at a glance. */
+.agentTypeSelector {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  background: #f2efe4;
-  border: 1px solid #ddd9cd;
-  border-radius: 8px;
-  padding: 0.4rem;
+  gap: 0.3rem;
+  width: 8.5rem;
+  flex-shrink: 0;
+}
+
+.agentTypeLabel {
+  color: #05384b;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  width: 100%;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .commissionHint {
@@ -213,8 +228,8 @@
 }
 
 .profileCommissionBtn {
-  background: #1f6f73;
-  border: 1px solid #1f6f73;
+  background: #05384b;
+  border: 1px solid #05384b;
   border-radius: 6px;
   box-sizing: border-box;
   color: #ffffff;
@@ -247,10 +262,10 @@
 
 .profileSaveBtn {
   background: #f7f5f0;
-  border: 1px solid #1f6f73;
+  border: 1px solid #05384b;
   border-radius: 4px;
   box-sizing: border-box;
-  color: #1f6f73;
+  color: #05384b;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.66rem;
@@ -263,12 +278,19 @@
 
 .profileSaveBtnCommissionRow {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  width: 2.6rem;
   height: 2.6rem;
+  padding: 0;
+  line-height: 1.15;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .profileSaveBtn:hover:not(:disabled) {
-  background: #1f6f73;
+  background: #05384b;
   color: #fff;
 }
 
@@ -382,7 +404,7 @@
 }
 
 .saveFeedbackSuccess {
-  color: #1f6f73;
+  color: #05384b;
 }
 
 .saveFeedbackError {
@@ -436,7 +458,7 @@
 }
 
 .specialInstructionsInput:focus {
-  border-color: #1f6f73;
+  border-color: #05384b;
 }
 
 .fieldLabel {
@@ -452,7 +474,7 @@
 }
 
 .fieldLabel span {
-  color: #1f6f73;
+  color: #05384b;
   font-size: 0.6rem;
 }
 
@@ -477,7 +499,7 @@
 }
 
 .fieldLabelCaret {
-  color: #1f6f73;
+  color: #05384b;
   font-size: 0.65rem;
   flex-shrink: 0;
 }
@@ -485,7 +507,7 @@
 .fieldLabelCount {
   background: #eef1f0;
   border-radius: 999px;
-  color: #1f6f73;
+  color: #05384b;
   font-size: 0.68rem;
   font-weight: 600;
   padding: 0.05rem 0.45rem;
@@ -499,7 +521,7 @@
   background: none;
   border: 1px solid #ddd9cd;
   border-radius: 999px;
-  color: #1f6f73;
+  color: #05384b;
   cursor: pointer;
   font-size: 0.95rem;
   line-height: 1;
@@ -512,14 +534,15 @@
 }
 
 .settingsIconBtn:hover {
-  border-color: #1f6f73;
+  border-color: #05384b;
   background: rgba(31, 111, 115, 0.08);
 }
 
 .agentTypePills {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0.5rem;
+  justify-content: space-evenly;
+  width: 100%;
   flex-shrink: 0;
 }
 
@@ -532,8 +555,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 1.4rem;
+  height: 1.4rem;
   padding: 0;
   flex-shrink: 0;
   transition: border-color 0.15s, background-color 0.15s, color 0.15s, transform 0.15s;
@@ -541,8 +564,8 @@
 
 .agentTypePillIcon {
   display: inline-flex;
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 0.8rem;
+  height: 0.8rem;
 }
 
 .agentTypePillIcon svg {
@@ -551,7 +574,7 @@
 }
 
 .agentTypePill:hover:not(:disabled) {
-  border-color: #1f6f73;
+  border-color: #05384b;
   color: #33475a;
   transform: translateY(-1px);
 }
@@ -563,9 +586,9 @@
 
 .agentTypePillActive,
 .agentTypePillActive:hover:not(:disabled) {
-  background: rgba(31, 111, 115, 0.1);
-  border-color: #1f6f73;
-  color: #1f6f73;
+  background: rgba(5, 56, 75, 0.1);
+  border-color: #05384b;
+  color: #05384b;
   transform: none;
 }
 
@@ -590,7 +613,7 @@
 }
 
 .locationInput:focus {
-  border-color: #1f6f73;
+  border-color: #05384b;
 }
 
 .locationSuggestions {
@@ -643,7 +666,7 @@
 }
 
 .providerSelect:focus {
-  border-color: #1f6f73;
+  border-color: #05384b;
 }
 
 .providerHint {
@@ -719,8 +742,8 @@
   right: 0.4rem;
   z-index: 1;
   background: #f2efe4;
-  color: #1f6f73;
-  border: 2.25px solid #1f6f73;
+  color: #05384b;
+  border: 2.25px solid #05384b;
   border-radius: 6px;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.9rem;
@@ -785,7 +808,7 @@
 .savedSectionCount {
   background: #eef1f0;
   border-radius: 999px;
-  color: #1f6f73;
+  color: #05384b;
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.1rem 0.5rem;
@@ -827,7 +850,7 @@
 }
 
 .savedKeywordChip:hover {
-  border-color: #1f6f73;
+  border-color: #05384b;
 }
 
 .savedKeywordAdd {
@@ -835,7 +858,7 @@
   border: none;
   padding: 0;
   margin: 0;
-  color: #1f6f73;
+  color: #05384b;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.75rem;
@@ -869,7 +892,7 @@
   background: none;
   border: 1px dashed #9fb3ab;
   border-radius: 5px;
-  color: #1f6f73;
+  color: #05384b;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.75rem;
@@ -878,7 +901,7 @@
 }
 
 .savedKeywordAddNew:hover:not(:disabled) {
-  border-color: #1f6f73;
+  border-color: #05384b;
   background: #e6f2f1;
 }
 
@@ -900,7 +923,7 @@
 }
 
 .savedRow:hover {
-  border-color: #1f6f73;
+  border-color: #05384b;
 }
 
 .savedRowDisabled {
@@ -924,7 +947,7 @@
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 5px;
-  color: #1f6f73;
+  color: #05384b;
   font-size: 0.75rem;
   padding: 0.15rem 0.5rem;
 }
@@ -944,7 +967,7 @@
 }
 
 .savedChatTraits {
-  color: #1f6f73;
+  color: #05384b;
   font-size: 0.72rem;
   font-style: italic;
 }
@@ -968,7 +991,7 @@
 }
 
 .savedResume:hover:not(:disabled) {
-  color: #1f6f73;
+  color: #05384b;
 }
 
 .savedResume:disabled {
@@ -1039,7 +1062,7 @@
 }
 
 .modelInfoLine {
-  color: #1f6f73 !important;
+  color: #05384b !important;
   font-weight: 600;
   margin-bottom: 0.5rem !important;
 }
@@ -1109,4 +1132,46 @@
 .panelCollapsed .specialtiesActionsRow,
 .panelCollapsed .profileCommissionRow {
   display: none;
+}
+
+/* First breakpoint in this file — .commissionGroup's content (label + 3
+   type pills + Save Agent + Commission Agent) is wide enough on its own to
+   overflow the card at narrow phone widths even though .profileCommissionRow
+   itself wraps its top-level children fine. Rather than stacking these onto
+   separate lines, everything shrinks to stay on one row — Commission Agent
+   belongs on the same row as the rest of the controls, not pushed below
+   them — and the group scrolls horizontally as a last resort if it still
+   doesn't fit at the very narrowest widths. */
+@media (max-width: 520px) {
+  .commissionGroup {
+    max-width: 100%;
+    box-sizing: border-box;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 0.4rem;
+  }
+
+  .agentTypeSelector {
+    width: 6rem;
+    flex-shrink: 0;
+  }
+
+  .agentTypePills {
+    flex-shrink: 0;
+    gap: 0.35rem;
+  }
+
+  .agentTypePill {
+    flex-shrink: 0;
+  }
+
+  .profileSaveBtnCommissionRow {
+    flex-shrink: 0;
+  }
+
+  .profileCommissionBtn {
+    flex-shrink: 0;
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
+  }
 }

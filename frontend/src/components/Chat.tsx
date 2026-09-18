@@ -293,30 +293,41 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
             className={styles.saveBtn}
             onClick={handleSaveChat}
             disabled={messages.length === 0}
-            title="Save this conversation locally so it can be reopened later"
+            aria-label={saveFeedback ?? 'Save chat'}
+            title={saveFeedback ?? 'Save this conversation locally so it can be reopened later'}
           >
-            {saveFeedback ?? 'Save chat'}
+            {saveFeedback ? saveFeedback : '💾'}
           </button>
           <button
             type="button"
             className={styles.rosterBtn}
             onClick={() => setRosterOpen(o => !o)}
             disabled={messages.length === 0}
+            aria-label="Add to Roster"
             title="Save this agent and deploy them as a callable tool on the roster"
           >
-            Add to Roster
+            🪪
           </button>
           <button
             type="button"
             className={styles.exportBtn}
             onClick={handleExportPdf}
             disabled={messages.length === 0 || exporting}
+            aria-label={exporting ? 'Exporting…' : 'Export PDF'}
+            title="Export PDF"
           >
-            {exporting ? 'Exporting…' : 'Export PDF'}
+            {exporting ? '…' : '⬇️'}
           </button>
-          <button type="button" className={styles.resetBtn} onClick={onReset}>New agent {'>'}</button>
+          <button
+            type="button"
+            className={styles.resetBtn}
+            onClick={onReset}
+            aria-label="New agent"
+            title="New agent"
+          >
+            ➕
+          </button>
         </div>
-        <span className={styles.headerPurpose}>{agentConfig.purpose}</span>
         {agentConfig.keywords && agentConfig.keywords.length > 0 && (
           <div className={styles.headerKeywords}>
             {[...agentConfig.keywords].sort((a, b) => a.localeCompare(b)).map(kw => (

@@ -33,3 +33,22 @@ export function deleteSavedChat(id: string): SavedChat[] {
   writeSavedChats(updated)
   return updated
 }
+
+// "Hiding" a chat only affects what the dossier list renders — the entry
+// stays in `aiagent_saved_chats` untouched, so it isn't lost, just tucked
+// out of view (distinct from deleteSavedChat, which is a real delete).
+const HIDDEN_KEY = 'aiagent_hidden_chats'
+
+export function loadHiddenChatIds(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? '[]')
+  } catch {
+    return []
+  }
+}
+
+export function hideSavedChat(id: string): string[] {
+  const updated = [...new Set([...loadHiddenChatIds(), id])]
+  localStorage.setItem(HIDDEN_KEY, JSON.stringify(updated))
+  return updated
+}
