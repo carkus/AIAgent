@@ -4,7 +4,6 @@
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: 1rem 0.5rem;
   width: 100%;
 }
 
@@ -686,6 +685,18 @@
     0 8px 0 -3px #e2d6b3,
     0 8px 1px -3px #cfbf94,
     0 14px 24px rgba(28, 40, 51, 0.12);
+}
+
+/* Scrolling happens in this inner wrapper, not on .savedSectionsScroll
+   itself — an absolutely-positioned child of a scrolling element scrolls
+   along with it (the containing block's scrollable overflow area includes
+   out-of-flow descendants), so .dossierStamp has to live on the
+   non-scrolling frame instead to stay pinned while the list scrolls. */
+.savedSectionsScrollInner {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
 }
 
@@ -709,8 +720,9 @@
 
 .dossierStamp {
   position: absolute;
-  top: -0.3rem;
-  right: calc(0.75rem + 10px);
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 2;
   background: #f2efe4;
   color: #1f6f73;
   border: 2.25px solid #1f6f73;
@@ -727,14 +739,12 @@
 }
 
 .savedAccordion {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
 .savedSection {
-  position: relative;
   background: #f8f4e7;
   border: 1px solid #ddd0a5;
   border-radius: 6px;
@@ -1025,4 +1035,65 @@
   flex-direction: column;
   gap: 0.25rem;
   color: #5a6773;
+}
+
+/* Mobile-only expanding stack: the setup form (.agentCard) and the
+   dossier (<form>, wrapping .dossierWrap) are too tall to both fit on a
+   small screen, so below the breakpoint they stack vertically and
+   whichever one the user taps into expands to ~70% of the available
+   height while the other collapses to a peek strip — no separate toggle
+   buttons, tapping the panel itself is the control. On desktop
+   .mobileStack is `display: contents` so it has zero effect on .card's
+   flex layout — its two children lay out exactly as if this wrapper
+   didn't exist. Placed at the end of the file so these overrides win any
+   specificity ties against the unconditional .agentCard/.form rules
+   declared earlier. */
+.mobileStack {
+  display: contents;
+}
+
+@media (max-width: 640px) {
+  .mobileStack {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 0.6rem;
+  }
+
+  .mobileStack .agentCard,
+  .mobileStack .form {
+    margin: 0;
+    max-height: none;
+    overflow-y: auto;
+    min-height: 0;
+    transition: flex-basis 0.35s ease, opacity 0.35s ease;
+  }
+
+  .mobilePanelActive {
+    flex: 1 1 70%;
+    opacity: 1;
+  }
+
+  .mobilePanelCollapsed {
+    flex: 1 1 30%;
+    opacity: 0.55;
+    cursor: pointer;
+    overflow: hidden;
+  }
+
+  /* Collapsed content stays visible (cropped) but inert — a tap anywhere
+     on the panel should just expand it, not fire the button/link
+     underneath the user's thumb. */
+  .mobilePanelCollapsed > * {
+    pointer-events: none;
+  }
+
+  /* Save Agent / Commission Agent don't make sense while the setup panel
+     is only a collapsed peek strip — hide them entirely (not just inert)
+     so the limited peek space shows more of the actual name/specialties
+     instead. They reappear as soon as the panel is tapped back to active. */
+  .mobilePanelCollapsed .profileCommissionRow {
+    display: none;
+  }
 }

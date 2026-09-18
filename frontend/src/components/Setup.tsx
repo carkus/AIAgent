@@ -263,6 +263,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
   const [locationDetecting, setLocationDetecting] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Mobile-only: the setup form and the dossier are too tall to both fit on
+  // a small screen, so on narrow viewports tapping into either one expands
+  // it to ~70% height and collapses the other (see .mobileStack in
+  // Setup.module.css). Ignored entirely on desktop, where both panels
+  // render normally.
+  const [mobileFace, setMobileFace] = useState<'setup' | 'dossier'>('setup')
   const [specialtiesOpen, setSpecialtiesOpen] = useState(true)
   const [briefOpen, setBriefOpen] = useState(true)
   const [specialInstructionsOpen, setSpecialInstructionsOpen] = useState(false)
@@ -547,7 +553,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         </button>
         <img src={splashLogo} alt="Agent One" className={styles.brandLogo} />
 
-        <div className={styles.agentCard}>
+        <div className={styles.mobileStack}>
+        <div
+          className={`${styles.agentCard} ${mobileFace === 'setup' ? styles.mobilePanelActive : styles.mobilePanelCollapsed}`}
+          onClick={() => setMobileFace('setup')}
+        >
           <div className={styles.agentCardMain}>
             <div className={styles.agentCardInfo}>
               <h1 className={styles.title}>Agent {agentName}</h1>
@@ -748,12 +758,18 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
         </div>
 
-        <form id="agentSetupForm" onSubmit={handleSubmit} className={styles.form}>
+        <form
+          id="agentSetupForm"
+          onSubmit={handleSubmit}
+          onClick={() => setMobileFace('dossier')}
+          className={`${styles.form} ${mobileFace === 'dossier' ? styles.mobilePanelActive : styles.mobilePanelCollapsed}`}
+        >
           <div className={styles.dossierWrap}>
-          <span className={styles.dossierTab} aria-hidden="true">Agent Dossier</span>
           <div className={styles.savedSectionsScroll}>
+          <span className={styles.dossierTab} aria-hidden="true">Agent Dossier</span>
+          <span className={styles.dossierStamp} aria-hidden="true">On file</span>
+          <div className={styles.savedSectionsScrollInner}>
           <div className={styles.savedAccordion}>
-            <span className={styles.dossierStamp} aria-hidden="true">On file</span>
             <div className={styles.savedSection}>
               <button
                 type="button"
@@ -977,8 +993,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
           </div>
           </div>
+          </div>
 
         </form>
+        </div>
 
         {(bootstrapping || modelInfo || error) && (
           <div className={styles.loadingHint}>
