@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { bootstrap, createSavedSearch, deleteSavedSearch, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
-import type { PublishedAgent, SavedSearch } from '../api'
-import { deleteSavedChat, loadSavedChats } from '../chatStorage'
-import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
+import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, listAgentDrafts, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
+import type { AgentDraft, PublishedAgent, SavedSearch } from '../api'
+import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt } from '../types'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
 import SettingsModal from './SettingsModal'
@@ -115,18 +114,30 @@ function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], loc: st
   }
 }
 
-type SavedSectionId = 'searches' | 'chats' | 'mcp'
+// Flavor traits for a saved agent *profile* (pre-bootstrap — there's no real
+// persona yet, that's invented at bootstrap time). Deterministically picked
+// from the agent's name so the same draft always shows the same "character"
+// rather than re-rolling on every save, echoing the persona.traits shown for
+// saved chats (a real bootstrapped agent) without pretending these are that.
+const CHARACTER_TRAITS: Record<AgentTemplateId, string[]> = {
+  research: ['Inquisitive', 'Meticulous', 'Analytical', 'Methodical', 'Curious'],
+  job_search: ['Persistent', 'Sharp-eyed', 'Resourceful', 'Diligent', 'Discerning'],
+  general: ['Adaptable', 'Practical', 'Attentive', 'Versatile', 'Observant'],
+}
+
+function pickCharacterTraits(agentType: AgentTemplateId, seed: string): string[] {
+  const pool = CHARACTER_TRAITS[agentType] ?? CHARACTER_TRAITS.research
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
+  const first = hash % pool.length
+  const second = (Math.floor(hash / pool.length)) % pool.length
+  return second === first ? [pool[first]] : [pool[first], pool[second]]
+}
+
+type SavedSectionId = 'searches' | 'drafts' | 'mcp'
 
 function formatSavedAt(ts: number): string {
   return new Date(ts).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
-}
-
-function formatModelLabel(config: AgentConfig): string {
-  if (config.provider === 'ollama') {
-    return `Local (Ollama${config.ollama_model ? `: ${config.ollama_model}` : ''})`
-  }
-  if (config.provider === 'gemini') return 'Cloud (Gemini)'
-  return 'Auto (cloud → local)'
 }
 
 interface ModelInfo {
@@ -156,10 +167,9 @@ interface Props {
   onStart: () => void
   onDone: (config: AgentConfig) => void
   onError: (msg: string) => void
-  onResumeChat: (chat: SavedChat) => void
 }
 
-export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat }: Props) {
+export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError }: Props) {
   const [agentType, setAgentType] = useState<AgentTemplateId>('research')
   const [keywords, setKeywords] = useState<string[]>([])
   const [draft, setDraft] = useState('')
@@ -169,6 +179,14 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [saved, setSaved] = useState<SavedSearch[]>([])
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
+  // Shown next to the Commission Agent button when it's pressed with no
+  // specialties (and therefore no brief) yet — cleared as soon as the user
+  // adds one, so it never lingers stale.
+  const [commissionHint, setCommissionHint] = useState<string | null>(null)
+  useEffect(() => {
+    if (keywords.length > 0) setCommissionHint(null)
+  }, [keywords.length])
   // Saved searches live server-side now (see backend/src/saved_searches.py) —
   // fetch once on mount rather than reading localStorage synchronously.
   useEffect(() => {
@@ -186,16 +204,30 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setPublishedAgents(prev => prev.filter(a => a.id !== id))
     unpublishAgent(id).catch(() => {})
   }
+  // Saved agent profiles — the pre-bootstrap draft (name/type/location/
+  // specialties + character traits) captured by "Save Agent" below. Distinct
+  // from a saved search (keywords only) and a saved chat (a fully
+  // bootstrapped agent with real conversation history) — see
+  // backend/src/agent_drafts.py.
+  const [drafts, setDrafts] = useState<AgentDraft[]>([])
+  useEffect(() => {
+    listAgentDrafts().then(setDrafts)
+  }, [])
   // Only show saved searches that match the currently selected agent type —
   // a "Job search agent" list of keywords isn't a useful preset when you're
   // building a "Research agent". Pre-existing saves have no agentType and
   // are treated as 'research'.
-  const visibleSaved = saved.filter(s => (s.agentType ?? 'research') === agentType)
-  const [savedChats, setSavedChats] = useState<SavedChat[]>(loadSavedChats)
-  const visibleSavedChats = savedChats.filter(c => (c.agentConfig.template ?? 'research') === agentType)
+  const visibleDrafts = drafts.filter(d => (d.agentType ?? 'research') === agentType)
+  // Flattened, deduped, alphabetical pool of every keyword across every
+  // saved search, shared by all three agent types — each one is its own
+  // tap-to-add button rather than grouped by the entry it was originally
+  // saved under or scoped to whichever type it was saved from.
+  const savedKeywordPool = Array.from(
+    new Set(saved.flatMap(s => s.keywords))
+  ).sort((a, b) => a.localeCompare(b))
   const [openSavedSections, setOpenSavedSections] = useState<Record<SavedSectionId, boolean>>({
     searches: true,
-    chats: false,
+    drafts: false,
     mcp: false,
   })
   const [progress, setProgress] = useState<string | null>(null)
@@ -205,6 +237,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
   const [locationDetecting, setLocationDetecting] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [specialtiesOpen, setSpecialtiesOpen] = useState(true)
+  const [briefOpen, setBriefOpen] = useState(true)
+  const [specialInstructionsOpen, setSpecialInstructionsOpen] = useState(false)
+  const [specialInstructions, setSpecialInstructions] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const locationDebounceRef = useRef<number | undefined>(undefined)
   const locationAbortRef = useRef<AbortController | null>(null)
@@ -316,6 +352,39 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     inputRef.current?.focus()
   }
 
+  function addSavedKeyword(kw: string) {
+    if (bootstrapping) return
+    setKeywords(prev => prev.some(k => k.toLowerCase() === kw.toLowerCase()) ? prev : [...prev, kw])
+  }
+
+  // Saved searches persist as whole keyword groups (no partial-update API),
+  // so forgetting just one keyword means stripping it from every entry that
+  // has it, deleting each of those, and — for any entry with keywords left
+  // over — re-saving the remainder under a fresh entry, preserving its
+  // original agentType.
+  async function deleteSavedKeyword(kw: string) {
+    const lower = kw.toLowerCase()
+    const affected = saved.filter(s => s.keywords.some(k => k.toLowerCase() === lower))
+    if (affected.length === 0) return
+    setSaved(prev => prev
+      .map(s => s.keywords.some(k => k.toLowerCase() === lower)
+        ? { ...s, keywords: s.keywords.filter(k => k.toLowerCase() !== lower) }
+        : s)
+      .filter(s => s.keywords.length > 0))
+    for (const entry of affected) {
+      deleteSavedSearch(entry.id).catch(() => {})
+      const remaining = entry.keywords.filter(k => k.toLowerCase() !== lower)
+      if (remaining.length > 0) {
+        try {
+          const fresh = await createSavedSearch(remaining.join(', '), remaining, entry.agentType ?? 'research')
+          setSaved(prev => [fresh, ...prev.filter(s => s.id !== entry.id)])
+        } catch {
+          // Best effort — the keyword is already gone from local state either way.
+        }
+      }
+    }
+  }
+
   function removeKeyword(kw: string) {
     if (bootstrapping) return
     setKeywords(prev => prev.filter(k => k !== kw))
@@ -337,63 +406,73 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       // only collapse an exact (keywords, type) repeat — the backend does the
       // same collapse, this just keeps local state in sync with it.
       setSaved(prev => [entry, ...prev.filter(s => !(s.name === entry.name && s.agentType === entry.agentType))])
+      setOpenSavedSections(prev => ({ ...prev, searches: true }))
+      setSaveFeedback('Saved to Select Specialties ✓')
     } catch {
-      // Backend unreachable — the search just isn't saved; nothing else to do here.
+      setSaveFeedback('Save failed — backend unreachable')
     }
+    setTimeout(() => setSaveFeedback(null), 2500)
   }
 
-  // Keywords are scoped to one agent type (visibleSaved/visibleSavedChats
-  // already filter by it) — switching type manually clears them rather than
-  // carrying over keywords that don't apply to the new type; loadSearch/
-  // loadSavedChatQuery below set their own keywords right after switching
-  // type, so they don't go through this.
+  // Saves the whole draft — name, type, location, specialties, plus a
+  // deterministic character-trait pair — as a reusable agent profile,
+  // distinct from saveSearch() above (keywords only). Nothing is bootstrapped
+  // here; this only becomes a real running agent once Commission is clicked.
+  async function saveAgentDraft() {
+    if (keywords.length === 0) return
+    const traits = pickCharacterTraits(agentType, agentName)
+    try {
+      const entry = await createAgentDraft(agentName, agentType, [...keywords], location.trim(), traits)
+      setDrafts(prev => [
+        entry,
+        ...prev.filter(d => !(
+          d.agentName === entry.agentName &&
+          d.agentType === entry.agentType &&
+          d.location === entry.location &&
+          JSON.stringify(d.keywords) === JSON.stringify(entry.keywords)
+        )),
+      ])
+      setOpenSavedSections(prev => ({ ...prev, drafts: true }))
+      setSaveFeedback('Saved to Saved Agent Profiles ✓')
+    } catch {
+      setSaveFeedback('Save failed — backend unreachable')
+    }
+    setTimeout(() => setSaveFeedback(null), 2500)
+  }
+
+  function loadDraft(d: AgentDraft) {
+    setAgentType(d.agentType ?? 'research')
+    setKeywords([...d.keywords])
+    setDraft('')
+    if (d.location) setLocation(d.location)
+    onAgentNameChange(d.agentName)
+    inputRef.current?.focus()
+  }
+
+  function deleteDraft(id: string) {
+    setDrafts(prev => prev.filter(d => d.id !== id))
+    deleteAgentDraft(id).catch(() => {})
+  }
+
   function handleAgentTypeChange(type: AgentTemplateId) {
     setAgentType(type)
-    setKeywords([])
-    setDraft('')
   }
 
   function toggleSavedSection(section: SavedSectionId) {
     setOpenSavedSections(prev => ({ ...prev, [section]: !prev[section] }))
   }
 
-  function loadSearch(entry: SavedSearch) {
-    setAgentType(entry.agentType ?? 'research')
-    setKeywords([...entry.keywords])
-    setDraft('')
-    inputRef.current?.focus()
-  }
-
-  function deleteSearch(id: string) {
-    setSaved(prev => prev.filter(s => s.id !== id))
-    deleteSavedSearch(id).catch(() => {})
-  }
-
-  // Tapping the row repopulates the query form with the settings that
-  // produced this chat — same idea as "Saved searches" — for starting a
-  // fresh run with the same setup. The → button next to it instead jumps
-  // straight back into that old conversation (App.tsx's onResumeChat).
-  function loadSavedChatQuery(chat: SavedChat) {
-    const { keywords: kws, location: loc, provider: prov, ollama_model: model, template } = chat.agentConfig
-    setAgentType(template ?? 'research')
-    setKeywords(kws ? [...kws] : [])
-    setDraft('')
-    if (loc) setLocation(loc)
-    setProvider(prov ?? null)
-    setOllamaModel(model ?? null)
-    onAgentNameChange(chat.agentName)
-    inputRef.current?.focus()
-  }
-
-  function removeSavedChat(id: string) {
-    setSavedChats(deleteSavedChat(id))
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (keywords.length === 0 || bootstrapping) return
+    if (bootstrapping) return
+    if (keywords.length === 0) {
+      setCommissionHint('Add at least one specialty above — the brief needs it before this agent can be commissioned.')
+      return
+    }
     const loc = location.trim()
-    const purpose = getTemplate(agentType).buildPurpose(keywords, loc)
+    const extraInstructions = specialInstructions.trim()
+    const purpose = getTemplate(agentType).buildPurpose(keywords, loc) +
+      (extraInstructions ? ` Special instructions from the user, follow these exactly: ${extraInstructions}` : '')
     onStart()
     setProgress(null)
     setToolsSoFar([])
@@ -437,111 +516,203 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             <div className={styles.agentCardInfo}>
               <h1 className={styles.title}>Agent {agentName}</h1>
               <p className={styles.locationLiner}>📍 {location || 'No location set'}</p>
-              <p className={styles.agentTypeLiner}>{getTemplate(agentType).label}</p>
             </div>
-            <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
-              {AGENT_TEMPLATES.map(t => (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={agentType === t.id}
-                  aria-label={t.label}
-                  title={t.label}
-                  className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
-                  onClick={() => handleAgentTypeChange(t.id)}
-                  disabled={bootstrapping}
-                >
-                  <span className={styles.agentTypePillIcon} aria-hidden="true">
-                    <AgentTypeIcon id={t.id} />
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className={styles.specialtiesRow}>
-            <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Specialties</span>
-            <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
-              {keywords.map(kw => (
-                <span key={kw} className={styles.chip}>
-                  {kw}
+            <div className={styles.agentTypeColumn}>
+              <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
+                {AGENT_TEMPLATES.map(t => (
                   <button
+                    key={t.id}
                     type="button"
-                    className={styles.chipX}
-                    onClick={ev => { ev.stopPropagation(); removeKeyword(kw) }}
-                    aria-label={`Remove ${kw}`}
+                    role="radio"
+                    aria-checked={agentType === t.id}
+                    aria-label={t.label}
+                    title={t.label}
+                    className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
+                    onClick={() => handleAgentTypeChange(t.id)}
                     disabled={bootstrapping}
                   >
-                    ×
+                    <span className={styles.agentTypePillIcon} aria-hidden="true">
+                      <AgentTypeIcon id={t.id} />
+                    </span>
                   </button>
-                </span>
-              ))}
-              <input
-                ref={inputRef}
-                className={styles.chipInput}
-                value={draft}
-                onChange={e => setDraft(e.target.value.slice(0, 50))}
-                onKeyDown={handleKeyDown}
-                onBlur={() => { if (draft.trim()) addKeyword() }}
-                placeholder={keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : 'Add another…'}
-                disabled={bootstrapping}
-                maxLength={50}
-              />
-              {keywords.length > 0 && (
-                <span
-                  className={styles.keywordTally}
-                  title={`${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} added`}
-                  aria-hidden="true"
-                >
-                  {keywords.length}
-                </span>
-              )}
+                ))}
+              </div>
+              <p className={styles.agentTypeLiner}><span aria-hidden="true">◆</span> {getTemplate(agentType).label}</p>
             </div>
           </div>
 
-          <div className={styles.agentSummaryRow}>
-            <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Brief</span>
-            <p className={styles.agentSummaryText}>
-              {keywords.length > 0
-                ? buildAgentBrief(agentType, keywords, location.trim(), agentName)
-                : 'Add specialties above to generate this agent’s brief.'}
-            </p>
-          </div>
-
-          <div className={styles.profileActionsRow}>
-            <p className={styles.charHint}>
-              {draft.length > 0 ? `${50 - draft.length} chars remaining` : ''}
-            </p>
-            <div className={styles.profileActions}>
-              {keywords.length > 0 && (
-                <button
-                  type="button"
-                  className={styles.profileSaveBtn}
-                  onClick={saveSearch}
-                  disabled={bootstrapping}
-                >
-                  Save Agent
-                </button>
-              )}
+          <div className={styles.agentCardScroll}>
+            <div className={styles.specialtiesRow}>
               <button
                 type="button"
-                className={styles.profileResetBtn}
-                onClick={() => {
-                  setKeywords([])
-                  setDraft('')
-                  onNewAgent()
-                  inputRef.current?.focus()
-                }}
-                disabled={bootstrapping}
+                className={styles.fieldLabelToggle}
+                onClick={() => setSpecialtiesOpen(o => !o)}
+                aria-expanded={specialtiesOpen}
               >
-                Reset
+                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Specialties</span>
+                <span className={styles.fieldLabelRight}>
+                  {!specialtiesOpen && keywords.length > 0 && (
+                    <span className={styles.fieldLabelCount}>{keywords.length}</span>
+                  )}
+                  <span className={styles.fieldLabelCaret} aria-hidden="true">{specialtiesOpen ? '▾' : '▸'}</span>
+                </span>
               </button>
+              {specialtiesOpen && (
+                <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
+                  {keywords.map(kw => (
+                    <span key={kw} className={styles.chip}>
+                      {kw}
+                      <button
+                        type="button"
+                        className={styles.chipX}
+                        onClick={ev => { ev.stopPropagation(); removeKeyword(kw) }}
+                        aria-label={`Remove ${kw}`}
+                        disabled={bootstrapping}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    ref={inputRef}
+                    className={styles.chipInput}
+                    value={draft}
+                    onChange={e => setDraft(e.target.value.slice(0, 50))}
+                    onKeyDown={handleKeyDown}
+                    onBlur={() => { if (draft.trim()) addKeyword() }}
+                    placeholder={keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : '+ New Agent Specialty'}
+                    disabled={bootstrapping}
+                    maxLength={50}
+                  />
+                  {keywords.length > 0 && (
+                    <span
+                      className={styles.keywordTally}
+                      title={`${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} added`}
+                      aria-hidden="true"
+                    >
+                      {keywords.length}
+                    </span>
+                  )}
+                </div>
+              )}
+              {specialtiesOpen && (
+                <div className={styles.specialtiesActionsRow}>
+                  {saveFeedback ? (
+                    <p className={`${styles.saveFeedbackText} ${saveFeedback.includes('failed') ? styles.saveFeedbackError : styles.saveFeedbackSuccess}`}>
+                      {saveFeedback}
+                    </p>
+                  ) : (
+                    <p className={styles.charHint}>
+                      {draft.length > 0 ? `${50 - draft.length} chars remaining` : ''}
+                    </p>
+                  )}
+                  <div className={styles.profileActions}>
+                    {keywords.length > 0 && (
+                      <button
+                        type="button"
+                        className={styles.profileSaveBtn}
+                        onClick={saveSearch}
+                        disabled={bootstrapping}
+                        title="Save just these specialties for reuse"
+                      >
+                        Save Specialties
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={styles.profileResetBtn}
+                      onClick={() => {
+                        setKeywords([])
+                        setDraft('')
+                        setSpecialInstructions('')
+                        onNewAgent()
+                        inputRef.current?.focus()
+                      }}
+                      disabled={bootstrapping}
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
+
+            <div className={styles.agentSummaryRow}>
+              <button
+                type="button"
+                className={styles.fieldLabelToggle}
+                onClick={() => setBriefOpen(o => !o)}
+                aria-expanded={briefOpen}
+              >
+                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Brief</span>
+                <span className={styles.fieldLabelCaret} aria-hidden="true">{briefOpen ? '▾' : '▸'}</span>
+              </button>
+              {briefOpen && (
+                <p className={styles.agentSummaryText}>
+                  {keywords.length > 0
+                    ? buildAgentBrief(agentType, keywords, location.trim(), agentName)
+                    : 'Add specialties above to generate this agent’s brief.'}
+                </p>
+              )}
+            </div>
+
+            <div className={styles.specialInstructionsRow}>
+              <button
+                type="button"
+                className={styles.fieldLabelToggle}
+                onClick={() => setSpecialInstructionsOpen(o => !o)}
+                aria-expanded={specialInstructionsOpen}
+              >
+                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Special Instructions (Optional)</span>
+                <span className={styles.fieldLabelRight}>
+                  {!specialInstructionsOpen && specialInstructions.trim() && (
+                    <span className={styles.fieldLabelCount}>Set</span>
+                  )}
+                  <span className={styles.fieldLabelCaret} aria-hidden="true">{specialInstructionsOpen ? '▾' : '▸'}</span>
+                </span>
+              </button>
+              {specialInstructionsOpen && (
+                <textarea
+                  className={styles.specialInstructionsInput}
+                  value={specialInstructions}
+                  onChange={e => setSpecialInstructions(e.target.value.slice(0, 500))}
+                  placeholder="Anything specific this agent should always do or avoid — appended to its instructions as-is."
+                  disabled={bootstrapping}
+                  maxLength={500}
+                  rows={3}
+                />
+              )}
+            </div>
+          </div>
+
+          <div className={styles.profileCommissionRow}>
+            {commissionHint && (
+              <p className={styles.commissionHint} role="status">{commissionHint}</p>
+            )}
+            {keywords.length > 0 && (
+              <button
+                type="button"
+                className={`${styles.profileSaveBtn} ${styles.profileSaveBtnCommissionRow}`}
+                onClick={saveAgentDraft}
+                disabled={bootstrapping}
+                title="Save this whole profile — name, type, location and specialties"
+              >
+                Save Agent
+              </button>
+            )}
+            <button
+              type="submit"
+              form="agentSetupForm"
+              className={`${styles.profileCommissionBtn} ${keywords.length === 0 ? styles.profileCommissionBtnBlocked : ''}`}
+              disabled={bootstrapping}
+              aria-disabled={keywords.length === 0}
+            >
+              {bootstrapping ? 'Configuring…' : 'Commission Agent >'}
+            </button>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.form}>
+        <form id="agentSetupForm" onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.dossierWrap}>
           <span className={styles.dossierTab} aria-hidden="true">Agent Dossier</span>
           <span className={styles.dossierStamp} aria-hidden="true">On file</span>
@@ -558,34 +729,41 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 <span className={styles.savedSectionCaret} aria-hidden="true">
                   {openSavedSections.searches ? '▾' : '▸'}
                 </span>
-                <span className={styles.savedSectionTitle}>Select Specialties</span>
-                <span className={styles.savedSectionCount}>{visibleSaved.length}</span>
+                <span className={styles.savedSectionTitle}>Saved Specialties</span>
+                <span className={styles.savedSectionCount}>{savedKeywordPool.length}</span>
               </button>
               {openSavedSections.searches && (
                 <div className={styles.savedSectionBody}>
-                  {visibleSaved.length > 0 ? (
-                    <div className={styles.savedList}>
-                      {visibleSaved.map(s => (
-                        <div key={s.id} className={styles.savedRow} onClick={() => loadSearch(s)} title="Load these specialties">
-                          <div className={styles.savedChips}>
-                            {s.keywords.map(kw => (
-                              <span key={kw} className={styles.savedChip}>{kw}</span>
-                            ))}
+                  {savedKeywordPool.length > 0 ? (
+                    <div className={styles.savedKeywordPool}>
+                      {savedKeywordPool.map(kw => {
+                        const alreadyAdded = keywords.some(k => k.toLowerCase() === kw.toLowerCase())
+                        return (
+                          <div key={kw} className={styles.savedKeywordChip}>
+                            <button
+                              type="button"
+                              className={styles.savedKeywordAdd}
+                              onClick={() => addSavedKeyword(kw)}
+                              disabled={bootstrapping || alreadyAdded}
+                              title={alreadyAdded ? 'Already added' : 'Tap to add this specialty'}
+                            >
+                              {kw}
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.savedKeywordDelete}
+                              onClick={() => deleteSavedKeyword(kw)}
+                              aria-label={`Delete saved specialty ${kw}`}
+                              title="Delete saved specialty"
+                            >
+                              ×
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            className={styles.savedDelete}
-                            onClick={ev => { ev.stopPropagation(); deleteSearch(s.id) }}
-                            aria-label="Delete specialties"
-                            title="Delete specialties"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   ) : (
-                    <p className={styles.savedEmpty}>No specialties logged for {getTemplate(agentType).label} yet.</p>
+                    <p className={styles.savedEmpty}>No specialties saved yet.</p>
                   )}
                 </div>
               )}
@@ -595,61 +773,41 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               <button
                 type="button"
                 className={styles.savedSectionHeader}
-                aria-expanded={openSavedSections.chats}
-                onClick={() => toggleSavedSection('chats')}
+                aria-expanded={openSavedSections.drafts}
+                onClick={() => toggleSavedSection('drafts')}
               >
                 <span className={styles.savedSectionCaret} aria-hidden="true">
-                  {openSavedSections.chats ? '▾' : '▸'}
+                  {openSavedSections.drafts ? '▾' : '▸'}
                 </span>
-                <span className={styles.savedSectionTitle}>Saved Agents</span>
-                <span className={styles.savedSectionCount}>{visibleSavedChats.length}</span>
+                <span className={styles.savedSectionTitle}>Saved Agent Profiles</span>
+                <span className={styles.savedSectionCount}>{visibleDrafts.length}</span>
               </button>
-              {openSavedSections.chats && (
+              {openSavedSections.drafts && (
                 <div className={styles.savedSectionBody}>
-                  {visibleSavedChats.length > 0 ? (
+                  {visibleDrafts.length > 0 ? (
                     <div className={styles.savedList}>
-                      {visibleSavedChats.map(c => (
-                        <div
-                          key={c.id}
-                          className={styles.savedRow}
-                          onClick={() => loadSavedChatQuery(c)}
-                          title={c.agentConfig.purpose}
-                        >
+                      {visibleDrafts.map(d => (
+                        <div key={d.id} className={styles.savedRow} onClick={() => loadDraft(d)} title="Load this agent profile">
                           <div className={styles.savedChatInfo}>
-                            <span className={styles.savedChatName}>Agent {c.agentName}</span>
-                            {c.agentConfig.persona?.traits?.length ? (
-                              <span className={styles.savedChatTraits}>
-                                {c.agentConfig.persona.traits.join(' · ')}
-                              </span>
-                            ) : null}
-                            {c.agentConfig.keywords?.length ? (
-                              <div className={styles.savedChips}>
-                                {c.agentConfig.keywords.map(kw => (
-                                  <span key={kw} className={styles.savedChip}>{kw}</span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className={styles.savedChatMeta}>No directive on file</span>
+                            <span className={styles.savedChatName}>Agent {d.agentName}</span>
+                            {d.traits.length > 0 && (
+                              <span className={styles.savedChatTraits}>{d.traits.join(' · ')}</span>
                             )}
+                            <div className={styles.savedChips}>
+                              {d.keywords.map(kw => (
+                                <span key={kw} className={styles.savedChip}>{kw}</span>
+                              ))}
+                            </div>
                             <span className={styles.savedChatMeta}>
-                              {c.agentConfig.location || 'No location set'} · {formatModelLabel(c.agentConfig)} ·{' '}
-                              {c.messages.length} exchange{c.messages.length !== 1 ? 's' : ''} logged · {formatSavedAt(c.savedAt)}
+                              {d.location || 'No location set'} · {getTemplate(d.agentType ?? 'research').label} · {formatSavedAt(d.savedAt)}
                             </span>
                           </div>
                           <button
                             type="button"
-                            className={styles.savedResume}
-                            onClick={ev => { ev.stopPropagation(); onResumeChat(c) }}
-                            aria-label={`Resume Agent ${c.agentName}`}
-                            title="Resume this agent"
-                          >
-                            →
-                          </button>
-                          <button
-                            type="button"
                             className={styles.savedDelete}
-                            onClick={ev => { ev.stopPropagation(); removeSavedChat(c.id) }}
-                            aria-label="Remove saved agent"
+                            onClick={ev => { ev.stopPropagation(); deleteDraft(d.id) }}
+                            aria-label="Delete agent profile"
+                            title="Delete agent profile"
                           >
                             ×
                           </button>
@@ -657,7 +815,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       ))}
                     </div>
                   ) : (
-                    <p className={styles.savedEmpty}>No saved agents for {getTemplate(agentType).label} yet.</p>
+                    <p className={styles.savedEmpty}>No saved profiles for {getTemplate(agentType).label} yet.</p>
                   )}
                 </div>
               )}
@@ -710,15 +868,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
           </div>
 
-          <div className={styles.actions}>
-            <button
-              type="submit"
-              className={styles.createBtn}
-              disabled={bootstrapping || keywords.length === 0}
-            >
-              {bootstrapping ? 'Configuring agent…' : 'Commission Agent'}
-            </button>
-          </div>
         </form>
 
         {(bootstrapping || modelInfo || error) && (
@@ -743,7 +892,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 )}
               </>
             ) : error ? (
-              <p className={styles.error}>{error}</p>
+              <div className={styles.errorPanel}>
+                <span className={styles.errorIcon} aria-hidden="true">⚠</span>
+                <div>
+                  <p className={styles.errorHeadline}>Couldn't design this agent</p>
+                  <p className={styles.errorDetail}>{error}</p>
+                </div>
+              </div>
             ) : null}
           </div>
         )}

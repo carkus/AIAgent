@@ -163,6 +163,7 @@
   color: #8a94a0;
   font-size: 0.7rem;
   margin: 0;
+  text-align: right;
 }
 
 .profileActions {
@@ -374,9 +375,26 @@
 .specialtiesActionsRow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 0.6rem;
   margin-top: 0.5rem;
+}
+
+.saveFeedbackText {
+  margin: 0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-align: right;
+}
+
+.saveFeedbackSuccess {
+  color: #1f6f73;
+}
+
+.saveFeedbackError {
+  color: #b91c1c;
 }
 
 .agentSummaryRow {
@@ -783,6 +801,62 @@
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+}
+
+.savedKeywordPool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.savedKeywordChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #e6f2f1;
+  border: 1px solid #bcdbd8;
+  border-radius: 5px;
+  padding: 0.2rem 0.4rem 0.2rem 0.55rem;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.savedKeywordChip:hover {
+  border-color: #1f6f73;
+}
+
+.savedKeywordAdd {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: #1f6f73;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.savedKeywordAdd:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.savedKeywordAdd:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.savedKeywordDelete {
+  background: none;
+  border: none;
+  color: #6b7785;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.savedKeywordDelete:hover {
+  color: #b91c1c;
 }
 
 .savedRow {
