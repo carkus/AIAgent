@@ -39,6 +39,7 @@ from llm_client import list_ollama_models
 import rate_limit
 import saved_searches
 import agent_registry
+import agent_drafts
 
 app = Flask(__name__)
 
@@ -120,6 +121,32 @@ def saved_searches_item(search_id):
     if request.method == "OPTIONS":
         return "", 204
     saved_searches.delete_search(search_id)
+    return "", 204
+
+
+@app.route("/agent-drafts", methods=["GET", "POST", "OPTIONS"])
+def agent_drafts_collection():
+    if request.method == "OPTIONS":
+        return "", 204
+    if request.method == "GET":
+        return jsonify({"drafts": agent_drafts.list_drafts()})
+    body = request.get_json() or {}
+    agent_name = (body.get("agentName") or "").strip()
+    keywords = body.get("keywords") or []
+    if not agent_name or not isinstance(keywords, list):
+        return jsonify({"error": "agentName and keywords are required"}), 400
+    agent_type = body.get("agentType") or None
+    location = body.get("location") or ""
+    traits = body.get("traits") or []
+    entry = agent_drafts.add_draft(agent_name, agent_type, keywords, location, traits)
+    return jsonify(entry), 201
+
+
+@app.route("/agent-drafts/<draft_id>", methods=["DELETE", "OPTIONS"])
+def agent_drafts_item(draft_id):
+    if request.method == "OPTIONS":
+        return "", 204
+    agent_drafts.delete_draft(draft_id)
     return "", 204
 
 

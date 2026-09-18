@@ -129,6 +129,53 @@ export async function deleteSavedSearch(id: string): Promise<void> {
   await fetch(`${API_URL}/saved-searches/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
+export interface AgentDraft {
+  id: string;
+  agentName: string;
+  agentType?: AgentTemplateId | null;
+  keywords: string[];
+  location: string;
+  traits: string[];
+  savedAt: number;
+}
+
+/** Saved agent profiles — the pre-bootstrap draft (name, type, location,
+ * specialties + a flavor trait set) captured by Setup's "Save Agent" button
+ * (see backend/src/agent_drafts.py). Distinct from a saved search (keywords
+ * only) and from a saved chat (a fully bootstrapped agent with real
+ * conversation history). [] on any failure, same degrade-quietly shape as
+ * listSavedSearches(). */
+export async function listAgentDrafts(): Promise<AgentDraft[]> {
+  try {
+    const res = await fetch(`${API_URL}/agent-drafts`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.drafts) ? data.drafts : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function createAgentDraft(
+  agentName: string,
+  agentType: AgentTemplateId | null,
+  keywords: string[],
+  location: string,
+  traits: string[],
+): Promise<AgentDraft> {
+  const res = await fetch(`${API_URL}/agent-drafts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentName, agentType, keywords, location, traits }),
+  });
+  if (!res.ok) throw new Error('Failed to save agent profile');
+  return res.json();
+}
+
+export async function deleteAgentDraft(id: string): Promise<void> {
+  await fetch(`${API_URL}/agent-drafts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 export interface PublishedAgent {
   id: string;
   tool_name: string;

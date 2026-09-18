@@ -616,7 +616,12 @@ function RawResult({ result }: { result: string }) {
 
   if (typeof data === 'string') {
     if (data.startsWith('Tool execution error')) {
-      return <pre className={styles.errorText}>{data}</pre>
+      return (
+        <div className={styles.errorPanel}>
+          <span className={styles.errorIcon} aria-hidden="true">⚠</span>
+          <pre className={styles.errorText}>{data}</pre>
+        </div>
+      )
     }
     // Bare status-code string ("200", "403")
     if (/^\d{3}$/.test(data.trim())) {

@@ -943,10 +943,29 @@
   line-height: 1.4;
 }
 
+.errorPanel {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: #fdf2f2;
+  border: 1px solid #f3caca;
+  border-left: 3px solid #c0575c;
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+}
+
+.errorIcon {
+  flex-shrink: 0;
+  color: #c0575c;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .errorText {
-  color: #991b1b;
+  color: #8a3a3d;
   margin: 0;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.78rem;
   white-space: pre-wrap;
   word-break: break-all;
   line-height: 1.4;

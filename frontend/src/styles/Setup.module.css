@@ -4,7 +4,7 @@
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: 1rem;
+  padding: 1rem 0.5rem;
   width: 100%;
 }
 
@@ -69,7 +69,7 @@
   flex-wrap: wrap;
   gap: 0.45rem;
   min-height: 52px;
-  padding: 0.6rem 0.75rem;
+  padding: 0.6rem 2.5rem 0.6rem 0.75rem;
   align-items: center;
   position: relative;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -117,14 +117,15 @@
   border-radius: 6px;
   box-sizing: border-box;
   color: #1f6f73;
-  flex: 1 1 160px;
-  width: auto;
+  flex: 0 0 150px;
+  width: 150px;
   font-size: 0.75rem;
   font-weight: 500;
-  min-width: 120px;
+  min-width: 0;
   outline: none;
   font-family: inherit;
-  padding: 0.2rem 0.6rem;
+  padding: 0.25rem 0.6rem;
+  margin-left: 0.15rem;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
@@ -154,17 +155,8 @@
   min-width: 1.7rem;
   padding: 0 0.4rem;
   position: absolute;
-  top: -0.7rem;
-  right: -0.7rem;
-}
-
-.profileActionsRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  padding-top: 0.75rem;
-  border-top: 1px dashed #ddd9cd;
+  top: 0.5rem;
+  right: 0.5rem;
 }
 
 .charHint {
@@ -179,10 +171,59 @@
   flex-shrink: 0;
 }
 
+.profileCommissionRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: calc(0.6rem - 10px);
+  flex-shrink: 0;
+}
+
+.commissionHint {
+  color: #b45309;
+  font-size: 0.75rem;
+  margin: 0 auto 0 0;
+}
+
+.profileCommissionBtn {
+  background: #1f6f73;
+  border: 1px solid #1f6f73;
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  height: 2.6rem;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 1.5rem;
+  transition: opacity 0.15s;
+}
+
+.profileCommissionBtn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.profileCommissionBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.profileCommissionBtnBlocked {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .profileSaveBtn {
   background: #f7f5f0;
   border: 1px solid #1f6f73;
   border-radius: 4px;
+  box-sizing: border-box;
   color: #1f6f73;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
@@ -192,6 +233,12 @@
   text-transform: uppercase;
   padding: 0.4rem 0.75rem;
   transition: background-color 0.15s, color 0.15s;
+}
+
+.profileSaveBtnCommissionRow {
+  display: inline-flex;
+  align-items: center;
+  height: 2.6rem;
 }
 
 .profileSaveBtn:hover:not(:disabled) {
@@ -245,10 +292,36 @@
 }
 
 .agentTypeLiner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   margin: 0;
-  color: #6b7785;
-  font-size: 0.66rem;
-  text-align: left;
+  width: 100%;
+  box-sizing: border-box;
+  background: #f7f5f0;
+  border: 1px solid #ddd9cd;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  color: #3f7ea0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.agentTypeLiner span {
+  color: #1f6f73;
+  font-size: 0.55rem;
+}
+
+.agentTypeColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  flex-shrink: 0;
 }
 
 .agentCard {
@@ -262,6 +335,18 @@
   margin-bottom: 1rem;
   position: relative;
   box-shadow: 0 6px 18px rgba(28, 40, 51, 0.06);
+  max-height: 50vh;
+  flex-shrink: 0;
+}
+
+.agentCardScroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.6rem;
 }
 
 .agentCardMain {
@@ -269,6 +354,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  flex-shrink: 0;
 }
 
 .agentCardInfo {
@@ -285,6 +371,14 @@
   border-top: 1px dashed #ddd9cd;
 }
 
+.specialtiesActionsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
 .agentSummaryRow {
   display: flex;
   flex-direction: column;
@@ -296,8 +390,43 @@
 .agentSummaryText {
   margin: 0;
   color: #33475a;
-  font-size: 0.8rem;
-  line-height: 1.5;
+  font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  background: #f7f5f0;
+  border: 1px solid #e2ded2;
+  border-radius: 6px;
+  padding: 0.65rem 0.75rem;
+  box-shadow: inset 0 1px 3px rgba(22, 50, 74, 0.08);
+}
+
+.specialInstructionsRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed #ddd9cd;
+}
+
+.specialInstructionsInput {
+  margin: 0;
+  color: #33475a;
+  font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  background: #f7f5f0;
+  border: 1px solid #e2ded2;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  box-shadow: inset 0 1px 3px rgba(22, 50, 74, 0.08);
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.specialInstructionsInput:focus {
+  border-color: #1f6f73;
 }
 
 .fieldLabel {
@@ -315,6 +444,42 @@
 .fieldLabel span {
   color: #1f6f73;
   font-size: 0.6rem;
+}
+
+.fieldLabelToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.fieldLabelRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.fieldLabelCaret {
+  color: #1f6f73;
+  font-size: 0.65rem;
+  flex-shrink: 0;
+}
+
+.fieldLabelCount {
+  background: #eef1f0;
+  border-radius: 999px;
+  color: #1f6f73;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.05rem 0.45rem;
+  flex-shrink: 0;
 }
 
 .settingsIconBtn {
@@ -494,7 +659,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0.9rem 0.75rem 0.75rem;
+  padding: 0.9rem 1.1rem 0.75rem 0.75rem;
   background: #ede4cd;
   border: 1px solid #cfbf94;
   border-radius: 3px 10px 10px 10px;
@@ -710,41 +875,38 @@
 
 /* Action row */
 
-.actions {
+.errorPanel {
   display: flex;
+  align-items: flex-start;
   gap: 0.6rem;
-  margin-top: 0.25rem;
-}
-
-.createBtn {
-  background: #1f6f73;
-  border: none;
+  background: #fdf2f2;
+  border: 1px solid #f3caca;
+  border-left: 3px solid #c0575c;
   border-radius: 8px;
-  color: #ffffff;
-  cursor: pointer;
-  flex: 1;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 0.9rem;
-  font-weight: 400;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 0.875rem;
-  transition: opacity 0.15s;
+  padding: 0.75rem 0.9rem;
+  text-align: left;
 }
 
-.createBtn:hover:not(:disabled) {
-  opacity: 0.9;
+.errorIcon {
+  flex-shrink: 0;
+  color: #c0575c;
+  font-size: 0.95rem;
+  line-height: 1.4;
 }
 
-.createBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.errorHeadline {
+  margin: 0 0 0.2rem;
+  color: #8a3a3d;
+  font-weight: 600;
+  font-size: 0.85rem;
 }
 
-.error {
-  color: #b91c1c;
-  font-size: 0.875rem;
+.errorDetail {
   margin: 0;
+  color: #a15a5d;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  word-break: break-word;
 }
 
 .loadingHint {
