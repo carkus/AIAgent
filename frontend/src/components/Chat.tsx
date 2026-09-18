@@ -6,7 +6,6 @@ import { saveChat } from '../chatStorage'
 import { buildChatPdf, type PdfMessage } from '../chatPdf'
 import ToolActivity from './ToolActivity'
 import MermaidDiagram from './MermaidDiagram'
-import ContinuePanel from './ContinuePanel'
 import PdfPreviewModal from './PdfPreviewModal'
 import type { AgentConfig, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import styles from '../styles/Chat.module.css'
@@ -46,7 +45,6 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
   const [thinking, setThinking] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [continueOpen, setContinueOpen] = useState(false)
   // "Add to Roster" is one hiring-themed action that both keeps this
   // conversation (saveChat, local) and files the agent itself as a standing,
   // externally-callable MCP tool (publishAgent, server-side registry) — the
@@ -316,10 +314,16 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
           >
             {exporting ? 'Exporting…' : 'Export PDF'}
           </button>
-          <button type="button" className={styles.resetBtn} onClick={onReset}>New agent</button>
+          <button type="button" className={styles.resetBtn} onClick={onReset}>New agent {'>'}</button>
         </div>
         <span className={styles.headerPurpose}>{agentConfig.purpose}</span>
-        <ContinuePanel isOpen={continueOpen} onToggle={() => setContinueOpen(!continueOpen)} />
+        {agentConfig.keywords && agentConfig.keywords.length > 0 && (
+          <div className={styles.headerKeywords}>
+            {[...agentConfig.keywords].sort((a, b) => a.localeCompare(b)).map(kw => (
+              <span key={kw} className={styles.headerChip}>{kw}</span>
+            ))}
+          </div>
+        )}
       </header>
 
       {rosterOpen && (

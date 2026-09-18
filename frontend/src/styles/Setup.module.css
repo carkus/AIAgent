@@ -709,9 +709,8 @@
 
 .dossierStamp {
   position: absolute;
-  top: 0.55rem;
+  top: -0.3rem;
   right: calc(0.75rem + 10px);
-  z-index: 2;
   background: #f2efe4;
   color: #1f6f73;
   border: 2.25px solid #1f6f73;
@@ -728,12 +727,14 @@
 }
 
 .savedAccordion {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
 .savedSection {
+  position: relative;
   background: #f8f4e7;
   border: 1px solid #ddd0a5;
   border-radius: 6px;

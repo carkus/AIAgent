@@ -68,6 +68,23 @@
   margin-top: 0.15rem;
 }
 
+.headerKeywords {
+  display: flex;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+.headerChip {
+  background: #e6f2f1;
+  border: 1px solid #bcdbd8;
+  border-radius: 5px;
+  color: #1f6f73;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+}
+
 .localBadge {
   color: #1f6f73;
   background: #eaf3f7;

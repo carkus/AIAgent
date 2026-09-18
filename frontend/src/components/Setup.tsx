@@ -751,10 +751,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         <form id="agentSetupForm" onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.dossierWrap}>
           <span className={styles.dossierTab} aria-hidden="true">Agent Dossier</span>
-          <span className={styles.dossierStamp} aria-hidden="true">On file</span>
           <div className={styles.savedSectionsScroll}>
-
           <div className={styles.savedAccordion}>
+            <span className={styles.dossierStamp} aria-hidden="true">On file</span>
             <div className={styles.savedSection}>
               <button
                 type="button"
