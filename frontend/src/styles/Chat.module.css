@@ -146,6 +146,29 @@
   cursor: default;
 }
 
+.saveBtn {
+  background: rgba(28, 40, 51, 0.05);
+  border: 1px solid rgba(28, 40, 51, 0.2);
+  border-radius: 10px;
+  color: #33475a;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.12s, opacity 0.15s;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: rgba(28, 40, 51, 0.1);
+  transform: translateY(-1px);
+}
+
+.saveBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .rosterBtn {
   background: rgba(63, 126, 160, 0.08);
   border: 1px solid rgba(63, 126, 160, 0.35);

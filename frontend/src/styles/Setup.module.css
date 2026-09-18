@@ -22,7 +22,7 @@
 .brandLogo {
   display: block;
   align-self: center;
-  height: 106px;
+  height: 127px;
   width: auto;
   margin: -20px 0 1rem;
   border-radius: 10px;
@@ -117,8 +117,8 @@
   border-radius: 6px;
   box-sizing: border-box;
   color: #1f6f73;
-  flex: 0 0 150px;
-  width: 150px;
+  flex: 0 0 220px;
+  width: 220px;
   font-size: 0.75rem;
   font-weight: 500;
   min-width: 0;
@@ -677,7 +677,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0.9rem 1.1rem 0.75rem 0.75rem;
+  padding: 1.9rem 1.1rem 0.75rem 0.75rem;
   background: #ede4cd;
   border: 1px solid #cfbf94;
   border-radius: 3px 10px 10px 10px;
@@ -709,19 +709,19 @@
 
 .dossierStamp {
   position: absolute;
-  top: -0.55rem;
-  right: 0.75rem;
+  top: 0.55rem;
+  right: calc(0.75rem + 10px);
   z-index: 2;
   background: #f2efe4;
   color: #1f6f73;
-  border: 1.5px solid #1f6f73;
-  border-radius: 4px;
+  border: 2.25px solid #1f6f73;
+  border-radius: 6px;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.6rem;
+  font-size: 0.9rem;
   font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 0.15rem 0.4rem;
+  padding: 0.225rem 0.6rem;
   opacity: 0.8;
   transform: rotate(-6deg);
   pointer-events: none;
@@ -812,11 +812,11 @@
 .savedKeywordChip {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.45rem;
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 5px;
-  padding: 0.2rem 0.4rem 0.2rem 0.55rem;
+  padding: 0.2rem 0.55rem 0.2rem 0.75rem;
   transition: background-color 0.15s, border-color 0.15s;
 }
 
@@ -875,6 +875,15 @@
   border-color: #1f6f73;
 }
 
+.savedRowDisabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.savedRowDisabled:hover {
+  border-color: #ddd9cd;
+}
+
 .savedChips {
   display: flex;
   flex-wrap: wrap;
@@ -918,6 +927,8 @@
 }
 
 .savedResume {
+  display: inline-flex;
+  align-items: center;
   background: none;
   border: none;
   color: #6b7785;
@@ -928,8 +939,13 @@
   flex-shrink: 0;
 }
 
-.savedResume:hover {
+.savedResume:hover:not(:disabled) {
   color: #1f6f73;
+}
+
+.savedResume:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .savedDelete {

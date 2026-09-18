@@ -8,7 +8,7 @@ import ToolActivity from './ToolActivity'
 import MermaidDiagram from './MermaidDiagram'
 import ContinuePanel from './ContinuePanel'
 import PdfPreviewModal from './PdfPreviewModal'
-import type { AgentConfig, SavedChat, StreamEvent, ToolCall } from '../types'
+import type { AgentConfig, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/splash_logo.png'
 
@@ -34,10 +34,14 @@ interface Props {
   agentConfig: AgentConfig
   agentName: string
   onReset: () => void
+  // Present when jumping straight in from a saved chat (App.tsx's
+  // onResumeChat), bypassing bootstrap entirely.
+  initialMessages?: SavedChatMessage[]
+  chatId?: string
 }
 
-export default function Chat({ agentConfig, agentName, onReset }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+export default function Chat({ agentConfig, agentName, onReset, initialMessages, chatId }: Props) {
+  const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages ?? [])
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -56,6 +60,7 @@ export default function Chat({ agentConfig, agentName, onReset }: Props) {
   const [rosterDescription, setRosterDescription] = useState(agentConfig.purpose ?? '')
   const [addingToRoster, setAddingToRoster] = useState(false)
   const [rosterFeedback, setRosterFeedback] = useState<string | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [pdfPreview, setPdfPreview] = useState<{ blobUrl: string; filename: string; doc: ReturnType<typeof buildChatPdf> } | null>(null)
   // Rendered markdown DOM per assistant message index, so PDF export can
@@ -64,8 +69,10 @@ export default function Chat({ agentConfig, agentName, onReset }: Props) {
   const markdownRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   // Stable identity for this conversation so re-saving it (after more
   // messages) updates the same localStorage entry instead of duplicating it.
-  const chatIdRef = useRef(crypto.randomUUID())
-  const autoSentRef = useRef(false)
+  const chatIdRef = useRef(chatId ?? crypto.randomUUID())
+  // A resumed chat already has its history — don't re-fire the initial
+  // auto-search that a fresh bootstrap triggers.
+  const autoSentRef = useRef(Boolean(initialMessages && initialMessages.length > 0))
   const abortRef = useRef<AbortController | null>(null)
 
   // Auto-send initial search when keywords are available
@@ -90,6 +97,13 @@ export default function Chat({ agentConfig, agentName, onReset }: Props) {
       savedAt: Date.now(),
     }
     saveChat(chat)
+  }
+
+  function handleSaveChat() {
+    if (messages.length === 0) return
+    saveChatLocally()
+    setSaveFeedback('Saved ✓')
+    window.setTimeout(() => setSaveFeedback(null), 2000)
   }
 
   async function handleAddToRoster() {
@@ -276,6 +290,15 @@ export default function Chat({ agentConfig, agentName, onReset }: Props) {
           </div>
         </div>
         <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={styles.saveBtn}
+            onClick={handleSaveChat}
+            disabled={messages.length === 0}
+            title="Save this conversation locally so it can be reopened later"
+          >
+            {saveFeedback ?? 'Save chat'}
+          </button>
           <button
             type="button"
             className={styles.rosterBtn}

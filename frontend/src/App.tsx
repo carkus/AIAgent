@@ -2,7 +2,7 @@ import { useState } from 'react'
 import Setup from './components/Setup'
 import Chat from './components/Chat'
 import SplashScreen from './components/SplashScreen'
-import type { AgentConfig } from './types'
+import type { AgentConfig, SavedChat } from './types'
 import { SURNAMES } from './surnames'
 
 type Phase = 'splash' | 'setup' | 'bootstrapping' | 'chat'
@@ -21,9 +21,14 @@ export default function App() {
   // Bumped on every bootstrap so Chat remounts with fresh internal
   // state (messages, chatIdRef) instead of reusing a stale instance.
   const [chatKey, setChatKey] = useState(0)
+  // Set only when jumping straight into Chat from a saved chat (skipping
+  // bootstrap entirely) — cleared on the next fresh bootstrap or reset so a
+  // resumed conversation's history doesn't leak into an unrelated agent.
+  const [resumedChat, setResumedChat] = useState<SavedChat | null>(null)
 
   function handleBootstrapStart() {
     setBootstrapError(null)
+    setResumedChat(null)
     setPhase('bootstrapping')
   }
 
@@ -50,7 +55,19 @@ export default function App() {
   function handleReset() {
     setAgentConfig(null)
     setAgentName(randomSurname())
+    setResumedChat(null)
     setPhase('setup')
+  }
+
+  // Drop straight back into Chat with a saved conversation's full history,
+  // bypassing bootstrap entirely — the saved AgentConfig already has
+  // everything the agent loop needs (see types.ts's SavedChat).
+  function handleResumeChat(chat: SavedChat) {
+    setAgentConfig(chat.agentConfig)
+    setAgentName(chat.agentName)
+    setResumedChat(chat)
+    setChatKey(k => k + 1)
+    setPhase('chat')
   }
 
   return (
@@ -67,6 +84,7 @@ export default function App() {
           onStart={handleBootstrapStart}
           onDone={handleBootstrapDone}
           onError={handleBootstrapError}
+          onResumeChat={handleResumeChat}
         />
       ) : agentConfig ? (
         <Chat
@@ -74,6 +92,8 @@ export default function App() {
           agentConfig={agentConfig}
           agentName={agentName}
           onReset={handleReset}
+          initialMessages={resumedChat?.messages}
+          chatId={resumedChat?.id}
         />
       ) : null}
     </div>

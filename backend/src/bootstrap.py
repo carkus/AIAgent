@@ -83,10 +83,48 @@ def _extract_text(response) -> str:
     return text
 
 
+# Matches a `\uXXXX` unicode escape, or a backslash plus the single character
+# after it — used to walk a JSON text one escape-or-literal-backslash at a
+# time without re-matching a backslash that was already consumed as part of
+# the previous pair (a naive `\\(?!...)` lookahead miscounts runs of `\\`).
+_ESCAPE_RE = re.compile(r'\\u[0-9a-fA-F]{4}|\\.', re.DOTALL)
+_VALID_ESCAPE_CHARS = set('"\\/bfnrtu')
+
+
+def _repair_invalid_escapes(text: str) -> str:
+    # Local models (Ollama) frequently emit a JSON string containing a raw
+    # Windows path or regex pattern (e.g. "C:\Users\...", "\d+", "\s*") with
+    # a bare backslash in front of a character that isn't one of JSON's valid
+    # escapes ("\", "/", b, f, n, r, t, u) — json.loads rejects the whole
+    # payload as "Invalid \escape" even though it's otherwise well-formed.
+    # Doubling any such backslash turns it into an escaped literal backslash
+    # instead of an error, with no LLM round-trip needed.
+    def fix(m: re.Match) -> str:
+        s = m.group(0)
+        if s.startswith("\\u"):
+            return s
+        if s[1] in _VALID_ESCAPE_CHARS:
+            return s
+        return "\\\\" + s[1]
+
+    return _ESCAPE_RE.sub(fix, text)
+
+
 def _try_parse(text: str) -> tuple[dict | None, json.JSONDecodeError | None]:
     try:
-        return json.loads(text), None
+        # strict=False allows raw control characters (literal newlines/tabs)
+        # inside JSON string values instead of requiring \n/\t escapes. Local
+        # models (Ollama) very often emit multi-line Python `implementation`
+        # or system_prompt strings with literal newlines rather than escaping
+        # them, which json.loads' default strict mode rejects as "Invalid
+        # control character" — even though the payload is otherwise well-formed.
+        return json.loads(text, strict=False), None
     except json.JSONDecodeError as e:
+        if "Invalid \\escape" in e.msg:
+            try:
+                return json.loads(_repair_invalid_escapes(text), strict=False), None
+            except json.JSONDecodeError:
+                pass
         return None, e
 
 

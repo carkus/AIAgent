@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, listAgentDrafts, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
 import type { AgentDraft, PublishedAgent, SavedSearch } from '../api'
-import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt } from '../types'
+import { deleteSavedChat, loadSavedChats } from '../chatStorage'
+import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
 import SettingsModal from './SettingsModal'
@@ -134,7 +135,7 @@ function pickCharacterTraits(agentType: AgentTemplateId, seed: string): string[]
   return second === first ? [pool[first]] : [pool[first], pool[second]]
 }
 
-type SavedSectionId = 'searches' | 'drafts' | 'mcp'
+type SavedSectionId = 'searches' | 'drafts' | 'chats' | 'mcp'
 
 function formatSavedAt(ts: number): string {
   return new Date(ts).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
@@ -167,15 +168,35 @@ interface Props {
   onStart: () => void
   onDone: (config: AgentConfig) => void
   onError: (msg: string) => void
+  onResumeChat: (chat: SavedChat) => void
 }
 
-export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError }: Props) {
+export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat }: Props) {
   const [agentType, setAgentType] = useState<AgentTemplateId>('research')
   const [keywords, setKeywords] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [location, setLocation] = useState('Melbourne, Australia')
-  const [provider, setProvider] = useState<LlmProvider>(null)
-  const [ollamaModel, setOllamaModel] = useState<string | null>(null)
+  // Persisted across "New agent"/reset (which fully remounts Setup — see
+  // App.tsx's phase-conditional render) and page reloads, same
+  // localStorage idiom as chatStorage.ts/aiagent_saved_chats — otherwise the
+  // provider choice silently reverted to Auto (Gemini-first) on every new
+  // agent, with no visible indicator on the main screen that it had reset.
+  const [provider, setProvider] = useState<LlmProvider>(
+    () => (localStorage.getItem('aiagent_provider') as LlmProvider) || null
+  )
+  const [ollamaModel, setOllamaModel] = useState<string | null>(
+    () => localStorage.getItem('aiagent_ollama_model') || null
+  )
+  function handleProviderChange(p: LlmProvider) {
+    setProvider(p)
+    if (p) localStorage.setItem('aiagent_provider', p)
+    else localStorage.removeItem('aiagent_provider')
+  }
+  function handleOllamaModelChange(m: string | null) {
+    setOllamaModel(m)
+    if (m) localStorage.setItem('aiagent_ollama_model', m)
+    else localStorage.removeItem('aiagent_ollama_model')
+  }
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [saved, setSaved] = useState<SavedSearch[]>([])
@@ -213,6 +234,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   useEffect(() => {
     listAgentDrafts().then(setDrafts)
   }, [])
+  // Saved chats — full bootstrapped conversations, client-side only (see
+  // chatStorage.ts). Read once on mount like the other saved-* lists above;
+  // resuming one skips bootstrap entirely (App.tsx's onResumeChat).
+  const [savedChats, setSavedChats] = useState<SavedChat[]>(() => loadSavedChats())
   // Only show saved searches that match the currently selected agent type —
   // a "Job search agent" list of keywords isn't a useful preset when you're
   // building a "Research agent". Pre-existing saves have no agentType and
@@ -228,6 +253,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [openSavedSections, setOpenSavedSections] = useState<Record<SavedSectionId, boolean>>({
     searches: true,
     drafts: false,
+    chats: false,
     mcp: false,
   })
   const [progress, setProgress] = useState<string | null>(null)
@@ -441,6 +467,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   }
 
   function loadDraft(d: AgentDraft) {
+    if (bootstrapping) return
     setAgentType(d.agentType ?? 'research')
     setKeywords([...d.keywords])
     setDraft('')
@@ -452,6 +479,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   function deleteDraft(id: string) {
     setDrafts(prev => prev.filter(d => d.id !== id))
     deleteAgentDraft(id).catch(() => {})
+  }
+
+  function resumeChat(chat: SavedChat) {
+    if (bootstrapping) return
+    onResumeChat(chat)
+  }
+
+  function deleteChat(id: string) {
+    setSavedChats(deleteSavedChat(id))
   }
 
   function handleAgentTypeChange(type: AgentTemplateId) {
@@ -787,7 +823,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   {visibleDrafts.length > 0 ? (
                     <div className={styles.savedList}>
                       {visibleDrafts.map(d => (
-                        <div key={d.id} className={styles.savedRow} onClick={() => loadDraft(d)} title="Load this agent profile">
+                        <div
+                          key={d.id}
+                          className={`${styles.savedRow} ${bootstrapping ? styles.savedRowDisabled : ''}`}
+                          onClick={() => loadDraft(d)}
+                          title={bootstrapping ? 'Agent is being commissioned — profiles can’t be loaded right now' : 'Load this agent profile'}
+                          aria-disabled={bootstrapping}
+                        >
                           <div className={styles.savedChatInfo}>
                             <span className={styles.savedChatName}>Agent {d.agentName}</span>
                             {d.traits.length > 0 && (
@@ -816,6 +858,75 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     </div>
                   ) : (
                     <p className={styles.savedEmpty}>No saved profiles for {getTemplate(agentType).label} yet.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.savedSection}>
+              <button
+                type="button"
+                className={styles.savedSectionHeader}
+                aria-expanded={openSavedSections.chats}
+                onClick={() => toggleSavedSection('chats')}
+              >
+                <span className={styles.savedSectionCaret} aria-hidden="true">
+                  {openSavedSections.chats ? '▾' : '▸'}
+                </span>
+                <span className={styles.savedSectionTitle}>Saved Chats</span>
+                <span className={styles.savedSectionCount}>{savedChats.length}</span>
+              </button>
+              {openSavedSections.chats && (
+                <div className={styles.savedSectionBody}>
+                  {savedChats.length > 0 ? (
+                    <div className={styles.savedList}>
+                      {savedChats.map(c => (
+                        <div
+                          key={c.id}
+                          className={`${styles.savedRow} ${bootstrapping ? styles.savedRowDisabled : ''}`}
+                          onClick={() => resumeChat(c)}
+                          title={bootstrapping ? 'Agent is being commissioned — chats can’t be resumed right now' : 'Continue this chat'}
+                          aria-disabled={bootstrapping}
+                        >
+                          <div className={styles.savedChatInfo}>
+                            <span className={styles.savedChatName}>Agent {c.agentName}</span>
+                            {c.agentConfig.keywords && c.agentConfig.keywords.length > 0 && (
+                              <div className={styles.savedChips}>
+                                {[...c.agentConfig.keywords].sort((a, b) => a.localeCompare(b)).map(kw => (
+                                  <span key={kw} className={styles.savedChip}>{kw}</span>
+                                ))}
+                              </div>
+                            )}
+                            <span className={styles.savedChatMeta}>
+                              {c.messages.length} message{c.messages.length === 1 ? '' : 's'} · {formatSavedAt(c.savedAt)}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className={styles.savedResume}
+                            onClick={ev => { ev.stopPropagation(); resumeChat(c) }}
+                            disabled={bootstrapping}
+                            aria-label={`Continue chat with Agent ${c.agentName}`}
+                            title="Continue this chat"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M9 18l6-6-6-6" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.savedDelete}
+                            onClick={ev => { ev.stopPropagation(); deleteChat(c.id) }}
+                            aria-label={`Delete saved chat with Agent ${c.agentName}`}
+                            title="Delete saved chat"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={styles.savedEmpty}>No saved chats yet — use "Save chat" in an active conversation.</p>
                   )}
                 </div>
               )}
@@ -917,9 +1028,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         onDetectLocation={() => detectLocation(true)}
         detectingLocation={locationDetecting}
         provider={provider}
-        onProviderChange={setProvider}
+        onProviderChange={handleProviderChange}
         ollamaModel={ollamaModel}
-        onOllamaModelChange={setOllamaModel}
+        onOllamaModelChange={handleOllamaModelChange}
         availableModels={availableModels}
         modelsLoaded={modelsLoaded}
         disabled={bootstrapping}

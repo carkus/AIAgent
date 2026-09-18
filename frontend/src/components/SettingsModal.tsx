@@ -70,6 +70,7 @@ export default function SettingsModal({
         aria-labelledby="settings-title"
         onClick={e => e.stopPropagation()}
       >
+        <span className={styles.dossierTab} aria-hidden="true">Settings File</span>
         <div className={styles.header}>
           <span id="settings-title" className={styles.title}>Settings</span>
           <button ref={closeBtnRef} type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close settings">
