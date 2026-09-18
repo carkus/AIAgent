@@ -11,6 +11,23 @@ import type { AgentConfig, SavedChat, SavedChatMessage, StreamEvent, ToolCall } 
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/splash_logo.png'
 
+// Mirrors backend/src/llm_client.py's cascade: Gemini first (cloud, cheap),
+// falling back to local Ollama on any provider error — unless the agent's
+// own provider choice pins it to just one link in that chain.
+const GEMINI_MODEL_NAME = 'gemini-3.6-flash'
+const DEFAULT_OLLAMA_MODEL = 'qwen2.5'
+
+function describeModel(provider: AgentConfig['provider'], ollamaModel?: string | null): string {
+  if (provider === 'ollama') return `Ollama: ${ollamaModel ?? DEFAULT_OLLAMA_MODEL}`
+  return `Gemini (${GEMINI_MODEL_NAME})`
+}
+
+function describeModelFallback(provider: AgentConfig['provider']): string {
+  if (provider === 'ollama') return 'Pinned to local Ollama — no cloud fallback for this agent'
+  if (provider === 'gemini') return 'Pinned to cloud Gemini — no local fallback for this agent'
+  return `Auto cascade: Gemini first, falls back to local Ollama (${DEFAULT_OLLAMA_MODEL}) if Gemini is unavailable`
+}
+
 interface LiveToolCall {
   tool: string
   inputs: Record<string, unknown>
@@ -272,19 +289,17 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
           <img src={splashLogo} alt="Agent One" className={styles.headerLogo} />
           <div>
             <span className={styles.headerTitle}>Agent {agentName}</span>
-            {agentConfig.location && (
-              <span className={styles.locationBadge}>📍 {agentConfig.location}</span>
-            )}
             {agentConfig.persona?.traits && agentConfig.persona.traits.length > 0 && (
               <span className={styles.personaTraits} title={agentConfig.persona.rationale}>
                 {agentConfig.persona.traits.join(' · ')}
               </span>
             )}
-            {agentConfig.provider === 'ollama' && (
-              <span className={styles.localBadge}>
-                Local (Ollama{agentConfig.ollama_model ? `: ${agentConfig.ollama_model}` : ''})
-              </span>
+            {agentConfig.location && (
+              <span className={styles.locationBadge}>📍 {agentConfig.location}</span>
             )}
+            <span className={styles.modelBadge} title={describeModelFallback(agentConfig.provider)}>
+              🧠 {describeModel(agentConfig.provider, agentConfig.ollama_model)}
+            </span>
           </div>
         </div>
         <div className={styles.headerActions}>

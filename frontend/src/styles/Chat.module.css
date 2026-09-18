@@ -85,17 +85,19 @@
   padding: 0.15rem 0.5rem;
 }
 
-.localBadge {
-  color: #05384b;
+.modelBadge {
+  display: block;
+  color: #3f7ea0;
   background: #eaf3f7;
   border: 1px solid #cfe3ea;
   border-radius: 5px;
   font-size: 0.7rem;
   font-weight: 600;
-  padding: 0.15rem 0.45rem;
-  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  margin: 0.25rem 0 0;
+  width: fit-content;
   white-space: nowrap;
-  flex-shrink: 0;
+  cursor: help;
 }
 
 .headerActions {
