@@ -81,10 +81,9 @@
 
 .chip {
   align-items: center;
-  background: linear-gradient(180deg, #ffffff, #e6f2f1);
-  border: 1px solid #bcdbd8;
+  background: #f7f5f0;
+  border: 1px solid #ddd9cd;
   border-radius: 5px;
-  box-shadow: 0 1px 2px rgba(28, 40, 51, 0.1);
   color: #05384b;
   display: inline-flex;
   font-family: 'Share Tech Mono', monospace;
@@ -841,11 +840,11 @@
 .savedKeywordChip {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  background: #e6f2f1;
-  border: 1px solid #bcdbd8;
+  gap: 0.3rem;
+  background: #f7f5f0;
+  border: 1px solid #ddd9cd;
   border-radius: 5px;
-  padding: 0.2rem 0.55rem 0.2rem 0.75rem;
+  padding: 0.25rem 0.5rem 0.25rem 0.65rem;
   transition: background-color 0.15s, border-color 0.15s;
 }
 
@@ -861,8 +860,10 @@
   color: #05384b;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.75rem;
+  font-size: 0.76rem;
   font-weight: 400;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .savedKeywordAdd:hover:not(:disabled) {
@@ -946,10 +947,10 @@
 .savedChip {
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
-  border-radius: 5px;
+  border-radius: 999px;
   color: #05384b;
   font-size: 0.75rem;
-  padding: 0.15rem 0.5rem;
+  padding: 0.15rem 0.6rem;
 }
 
 .savedChatInfo {
@@ -961,9 +962,12 @@
 }
 
 .savedChatName {
-  color: #16324a;
-  font-size: 0.85rem;
-  font-weight: 600;
+  color: #05384b;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .savedChatTraits {

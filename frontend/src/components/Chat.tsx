@@ -311,17 +311,17 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
             aria-label={saveFeedback ?? 'Save chat'}
             title={saveFeedback ?? 'Save this conversation locally so it can be reopened later'}
           >
-            {saveFeedback ? saveFeedback : '💾'}
+            {saveFeedback ? saveFeedback : 'Save'}
           </button>
           <button
             type="button"
             className={styles.rosterBtn}
             onClick={() => setRosterOpen(o => !o)}
             disabled={messages.length === 0}
-            aria-label="Add to Roster"
+            aria-label="Roster"
             title="Save this agent and deploy them as a callable tool on the roster"
           >
-            🪪
+            Roster
           </button>
           <button
             type="button"
@@ -331,16 +331,16 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
             aria-label={exporting ? 'Exporting…' : 'Export PDF'}
             title="Export PDF"
           >
-            {exporting ? '…' : '⬇️'}
+            {exporting ? 'Exporting…' : 'PDF'}
           </button>
           <button
             type="button"
             className={styles.resetBtn}
             onClick={onReset}
-            aria-label="New agent"
+            aria-label="New"
             title="New agent"
           >
-            ➕
+            New agent
           </button>
         </div>
         {agentConfig.keywords && agentConfig.keywords.length > 0 && (

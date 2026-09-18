@@ -25,7 +25,7 @@ function ensureInitialized() {
       lineColor: '#3f7ea0',
       secondaryColor: '#eaf3f7',
       tertiaryColor: '#f0efe9',
-      fontSize: '13px',
+      fontSize: '9px',
       fontFamily,
       pie1: '#05384b',
       pie2: '#3f7ea0',
@@ -59,6 +59,14 @@ function ensureInitialized() {
         plotColorPalette: '#05384b,#3f7ea0,#c98a2c,#6b8f71,#b6552c,#5c6b73',
       },
     },
+    // Without this, mermaid renders each diagram at its own natural
+    // (often large) pixel size and CSS max-width just clips it — labels
+    // end up overlapping nodes/slices instead of the whole chart shrinking
+    // to fit the chat bubble.
+    flowchart: { useMaxWidth: true },
+    pie: { useMaxWidth: true },
+    mindmap: { useMaxWidth: true },
+    xyChart: { useMaxWidth: true },
   })
 }
 
