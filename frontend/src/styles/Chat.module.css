@@ -2,6 +2,9 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
   overflow: hidden;
 }
 
@@ -24,7 +27,7 @@
 }
 
 .headerLogo {
-  height: 60px;
+  height: 88px;
   width: auto;
   border-radius: 8px;
   margin-right: 0.9rem;
@@ -105,6 +108,7 @@
   flex-basis: 100%;
   flex-wrap: nowrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.5rem;
 }
 
