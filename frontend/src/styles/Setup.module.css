@@ -23,7 +23,7 @@
   align-self: center;
   height: 127px;
   width: auto;
-  margin: -20px 0 1rem;
+  margin: -10px 0 1rem;
   border-radius: 10px;
 }
 
@@ -180,6 +180,32 @@
   flex-shrink: 0;
 }
 
+/* Groups the type selector with the Commission button in one visually
+   distinct unit — picking a type is the input, Commission is the action
+   that consumes it, so they read as a single control rather than two
+   unrelated buttons floating in the row next to Save Agent. */
+.commissionGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #f2efe4;
+  border: 1px solid #ddd9cd;
+  border-radius: 8px;
+  padding: 0.4rem;
+}
+
+/* Same boxed treatment as .commissionGroup, just for Save Agent on its own
+   — keeps the row reading as a set of distinct grouped actions rather than
+   one lone button next to a boxed one. */
+.saveAgentGroup {
+  display: flex;
+  align-items: center;
+  background: #f2efe4;
+  border: 1px solid #ddd9cd;
+  border-radius: 8px;
+  padding: 0.4rem;
+}
+
 .commissionHint {
   color: #b45309;
   font-size: 0.75rem;
@@ -289,39 +315,6 @@
   color: #6b7785;
   font-size: 0.66rem;
   text-align: left;
-}
-
-.agentTypeLiner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  margin: 0;
-  width: 100%;
-  box-sizing: border-box;
-  background: #f7f5f0;
-  border: 1px solid #ddd9cd;
-  border-radius: 4px;
-  padding: 0.2rem 0.5rem;
-  color: #3f7ea0;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 0.62rem;
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.agentTypeLiner span {
-  color: #1f6f73;
-  font-size: 0.55rem;
-}
-
-.agentTypeColumn {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.6rem;
-  flex-shrink: 0;
 }
 
 .agentCard {
@@ -688,11 +681,13 @@
 }
 
 /* Scrolling happens in this inner wrapper, not on .savedSectionsScroll
-   itself — an absolutely-positioned child of a scrolling element scrolls
-   along with it (the containing block's scrollable overflow area includes
-   out-of-flow descendants), so .dossierStamp has to live on the
-   non-scrolling frame instead to stay pinned while the list scrolls. */
+   itself — .dossierStamp lives on the non-scrolling outer frame so it
+   stays put while the list scrolls, but its own stacking context still
+   needs to lose to this wrapper's so the scrolling content visually
+   passes over the stamp rather than the stamp floating on top of it. */
 .savedSectionsScrollInner {
+  position: relative;
+  z-index: 3;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -720,9 +715,9 @@
 
 .dossierStamp {
   position: absolute;
-  top: 0.4rem;
+  top: calc(0.4rem + 5px);
   right: 0.4rem;
-  z-index: 2;
+  z-index: 1;
   background: #f2efe4;
   color: #1f6f73;
   border: 2.25px solid #1f6f73;
@@ -868,6 +863,28 @@
 
 .savedKeywordDelete:hover {
   color: #b91c1c;
+}
+
+.savedKeywordAddNew {
+  background: none;
+  border: 1px dashed #9fb3ab;
+  border-radius: 5px;
+  color: #1f6f73;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 400;
+  padding: 0.2rem 0.6rem;
+}
+
+.savedKeywordAddNew:hover:not(:disabled) {
+  border-color: #1f6f73;
+  background: #e6f2f1;
+}
+
+.savedKeywordAddNew:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .savedRow {
@@ -1037,63 +1054,59 @@
   color: #5a6773;
 }
 
-/* Mobile-only expanding stack: the setup form (.agentCard) and the
-   dossier (<form>, wrapping .dossierWrap) are too tall to both fit on a
-   small screen, so below the breakpoint they stack vertically and
-   whichever one the user taps into expands to ~70% of the available
-   height while the other collapses to a peek strip — no separate toggle
-   buttons, tapping the panel itself is the control. On desktop
-   .mobileStack is `display: contents` so it has zero effect on .card's
-   flex layout — its two children lay out exactly as if this wrapper
-   didn't exist. Placed at the end of the file so these overrides win any
-   specificity ties against the unconditional .agentCard/.form rules
-   declared earlier. */
-.mobileStack {
-  display: contents;
+/* Expanding stack, active at every width: the setup form (.agentCard) and
+   the dossier (<form>, wrapping .dossierWrap) are both tall enough that
+   showing both fully at once crowds the page, so whichever one the user
+   taps into expands to ~70% of the available height while the other
+   collapses to a read-only peek strip — no separate toggle buttons,
+   tapping the panel itself is the control. Placed at the end of the file
+   so these overrides win any specificity ties against the unconditional
+   .agentCard/.form rules declared earlier. */
+.focusStack {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 0.6rem;
 }
 
-@media (max-width: 640px) {
-  .mobileStack {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 auto;
-    min-height: 0;
-    gap: 0.6rem;
-  }
+.focusStack .agentCard,
+.focusStack .form {
+  margin: 0;
+  max-height: none;
+  overflow-y: auto;
+  min-height: 0;
+  transition: flex-basis 0.35s ease, opacity 0.35s ease;
+}
 
-  .mobileStack .agentCard,
-  .mobileStack .form {
-    margin: 0;
-    max-height: none;
-    overflow-y: auto;
-    min-height: 0;
-    transition: flex-basis 0.35s ease, opacity 0.35s ease;
-  }
+.panelActive {
+  flex: 1 1 70%;
+  opacity: 1;
+}
 
-  .mobilePanelActive {
-    flex: 1 1 70%;
-    opacity: 1;
-  }
+.panelCollapsed {
+  flex: 1 1 30%;
+  opacity: 0.55;
+  cursor: pointer;
+  overflow: hidden;
+}
 
-  .mobilePanelCollapsed {
-    flex: 1 1 30%;
-    opacity: 0.55;
-    cursor: pointer;
-    overflow: hidden;
-  }
+/* Collapsed content stays visible (cropped) but inert — a tap anywhere
+   on the panel should just expand it, not fire the button/link
+   underneath the user's thumb. */
+.panelCollapsed > * {
+  pointer-events: none;
+}
 
-  /* Collapsed content stays visible (cropped) but inert — a tap anywhere
-     on the panel should just expand it, not fire the button/link
-     underneath the user's thumb. */
-  .mobilePanelCollapsed > * {
-    pointer-events: none;
-  }
-
-  /* Save Agent / Commission Agent don't make sense while the setup panel
-     is only a collapsed peek strip — hide them entirely (not just inert)
-     so the limited peek space shows more of the actual name/specialties
-     instead. They reappear as soon as the panel is tapped back to active. */
-  .mobilePanelCollapsed .profileCommissionRow {
-    display: none;
-  }
+/* A collapsed setup panel is a read-only summary card — name, location,
+   and specialty chips only. Brief, special instructions, the specialty
+   edit controls (add/remove, Save Specialties, Reset) and the type/
+   Save/Commission actions row only make sense once the panel is tapped
+   back to active; hidden outright here rather than left to whatever the
+   30% peek height happens to crop, so the contract holds at any viewport. */
+.panelCollapsed .agentSummaryRow,
+.panelCollapsed .specialInstructionsRow,
+.panelCollapsed .specialtiesActionsRow,
+.panelCollapsed .profileCommissionRow {
+  display: none;
 }

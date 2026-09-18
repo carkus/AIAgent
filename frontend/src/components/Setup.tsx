@@ -250,6 +250,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const savedKeywordPool = Array.from(
     new Set(saved.flatMap(s => s.keywords))
   ).sort((a, b) => a.localeCompare(b))
+  const hasUnsavedSpecialties = keywords.some(
+    kw => !savedKeywordPool.some(pooled => pooled.toLowerCase() === kw.toLowerCase())
+  )
   const [openSavedSections, setOpenSavedSections] = useState<Record<SavedSectionId, boolean>>({
     searches: true,
     drafts: false,
@@ -263,12 +266,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
   const [locationDetecting, setLocationDetecting] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  // Mobile-only: the setup form and the dossier are too tall to both fit on
-  // a small screen, so on narrow viewports tapping into either one expands
-  // it to ~70% height and collapses the other (see .mobileStack in
-  // Setup.module.css). Ignored entirely on desktop, where both panels
-  // render normally.
-  const [mobileFace, setMobileFace] = useState<'setup' | 'dossier'>('setup')
+  // The setup form and the dossier are both too tall to show fully at once
+  // without crowding the page, so tapping into either one expands it to
+  // ~70% height and collapses the other, at every viewport width (see
+  // .focusStack in Setup.module.css).
+  const [focusPanel, setFocusPanel] = useState<'setup' | 'dossier'>('setup')
   const [specialtiesOpen, setSpecialtiesOpen] = useState(true)
   const [briefOpen, setBriefOpen] = useState(true)
   const [specialInstructionsOpen, setSpecialInstructionsOpen] = useState(false)
@@ -429,11 +431,19 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }
   }
 
+  // Only the specialties not already in the saved pool get saved — re-saving
+  // a mix of old + new keywords used to bundle all of them into one fresh
+  // SavedSearch entry every time, cluttering the saved list with duplicates
+  // of specialties that were already saved. Saving nothing but the new ones
+  // keeps each entry a genuinely new addition.
   async function saveSearch() {
-    if (keywords.length === 0) return
-    const name = keywords.join(', ')
+    const newKeywords = keywords.filter(
+      kw => !savedKeywordPool.some(pooled => pooled.toLowerCase() === kw.toLowerCase())
+    )
+    if (newKeywords.length === 0) return
+    const name = newKeywords.join(', ')
     try {
-      const entry = await createSavedSearch(name, [...keywords], agentType)
+      const entry = await createSavedSearch(name, newKeywords, agentType)
       // Same keywords saved under a different agent type is a distinct entry;
       // only collapse an exact (keywords, type) repeat — the backend does the
       // same collapse, this just keeps local state in sync with it.
@@ -444,6 +454,28 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       setSaveFeedback('Save failed — backend unreachable')
     }
     setTimeout(() => setSaveFeedback(null), 2500)
+  }
+
+  // Lets a brand-new specialty be added straight into the saved pool from
+  // the dossier itself, without first adding it to the live keyword chips
+  // above and clicking Save Specialties — e.g. stocking the pool with
+  // presets before starting a profile at all.
+  const [addingSavedKeyword, setAddingSavedKeyword] = useState(false)
+  const [newSavedKeywordDraft, setNewSavedKeywordDraft] = useState('')
+  const newSavedKeywordRef = useRef<HTMLInputElement>(null)
+
+  async function addNewSavedKeyword() {
+    const kw = newSavedKeywordDraft.trim()
+    setNewSavedKeywordDraft('')
+    setAddingSavedKeyword(false)
+    if (!kw || savedKeywordPool.some(pooled => pooled.toLowerCase() === kw.toLowerCase())) return
+    try {
+      const entry = await createSavedSearch(kw, [kw], agentType)
+      setSaved(prev => [entry, ...prev.filter(s => !(s.name === entry.name && s.agentType === entry.agentType))])
+    } catch {
+      // Best effort — a failed dossier add just means the pool doesn't
+      // grow this time, nothing else in the form is affected.
+    }
   }
 
   // Saves the whole draft — name, type, location, specialties, plus a
@@ -553,37 +585,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         </button>
         <img src={splashLogo} alt="Agent One" className={styles.brandLogo} />
 
-        <div className={styles.mobileStack}>
+        <div className={styles.focusStack}>
         <div
-          className={`${styles.agentCard} ${mobileFace === 'setup' ? styles.mobilePanelActive : styles.mobilePanelCollapsed}`}
-          onClick={() => setMobileFace('setup')}
+          className={`${styles.agentCard} ${focusPanel === 'setup' ? styles.panelActive : styles.panelCollapsed}`}
+          onClick={() => setFocusPanel('setup')}
         >
           <div className={styles.agentCardMain}>
             <div className={styles.agentCardInfo}>
               <h1 className={styles.title}>Agent {agentName}</h1>
               <p className={styles.locationLiner}>📍 {location || 'No location set'}</p>
-            </div>
-            <div className={styles.agentTypeColumn}>
-              <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
-                {AGENT_TEMPLATES.map(t => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={agentType === t.id}
-                    aria-label={t.label}
-                    title={t.label}
-                    className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
-                    onClick={() => handleAgentTypeChange(t.id)}
-                    disabled={bootstrapping}
-                  >
-                    <span className={styles.agentTypePillIcon} aria-hidden="true">
-                      <AgentTypeIcon id={t.id} />
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <p className={styles.agentTypeLiner}><span aria-hidden="true">◆</span> {getTemplate(agentType).label}</p>
             </div>
           </div>
 
@@ -658,8 +668,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         type="button"
                         className={styles.profileSaveBtn}
                         onClick={saveSearch}
-                        disabled={bootstrapping}
-                        title="Save just these specialties for reuse"
+                        disabled={bootstrapping || !hasUnsavedSpecialties}
+                        title={hasUnsavedSpecialties ? 'Save the specialties above that aren\'t saved yet' : 'All current specialties are already saved'}
                       >
                         Save Specialties
                       </button>
@@ -736,33 +746,56 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               <p className={styles.commissionHint} role="status">{commissionHint}</p>
             )}
             {keywords.length > 0 && (
-              <button
-                type="button"
-                className={`${styles.profileSaveBtn} ${styles.profileSaveBtnCommissionRow}`}
-                onClick={saveAgentDraft}
-                disabled={bootstrapping}
-                title="Save this whole profile — name, type, location and specialties"
-              >
-                Save Agent
-              </button>
+              <div className={styles.saveAgentGroup}>
+                <button
+                  type="button"
+                  className={`${styles.profileSaveBtn} ${styles.profileSaveBtnCommissionRow}`}
+                  onClick={saveAgentDraft}
+                  disabled={bootstrapping}
+                  title="Save this whole profile — name, type, location and specialties"
+                >
+                  Save Agent
+                </button>
+              </div>
             )}
-            <button
-              type="submit"
-              form="agentSetupForm"
-              className={`${styles.profileCommissionBtn} ${keywords.length === 0 ? styles.profileCommissionBtnBlocked : ''}`}
-              disabled={bootstrapping}
-              aria-disabled={keywords.length === 0}
-            >
-              {bootstrapping ? 'Configuring…' : 'Commission Agent >'}
-            </button>
+            <div className={styles.commissionGroup}>
+              <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
+                {AGENT_TEMPLATES.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={agentType === t.id}
+                    aria-label={t.label}
+                    title={t.label}
+                    className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
+                    onClick={() => handleAgentTypeChange(t.id)}
+                    disabled={bootstrapping}
+                  >
+                    <span className={styles.agentTypePillIcon} aria-hidden="true">
+                      <AgentTypeIcon id={t.id} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="submit"
+                form="agentSetupForm"
+                className={`${styles.profileCommissionBtn} ${keywords.length === 0 ? styles.profileCommissionBtnBlocked : ''}`}
+                disabled={bootstrapping}
+                aria-disabled={keywords.length === 0}
+              >
+                {bootstrapping ? 'Configuring…' : 'Commission Agent >'}
+              </button>
+            </div>
           </div>
         </div>
 
         <form
           id="agentSetupForm"
           onSubmit={handleSubmit}
-          onClick={() => setMobileFace('dossier')}
-          className={`${styles.form} ${mobileFace === 'dossier' ? styles.mobilePanelActive : styles.mobilePanelCollapsed}`}
+          onClick={() => setFocusPanel('dossier')}
+          className={`${styles.form} ${focusPanel === 'dossier' ? styles.panelActive : styles.panelCollapsed}`}
         >
           <div className={styles.dossierWrap}>
           <div className={styles.savedSectionsScroll}>
@@ -785,37 +818,62 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               </button>
               {openSavedSections.searches && (
                 <div className={styles.savedSectionBody}>
-                  {savedKeywordPool.length > 0 ? (
-                    <div className={styles.savedKeywordPool}>
-                      {savedKeywordPool.map(kw => {
-                        const alreadyAdded = keywords.some(k => k.toLowerCase() === kw.toLowerCase())
-                        return (
-                          <div key={kw} className={styles.savedKeywordChip}>
-                            <button
-                              type="button"
-                              className={styles.savedKeywordAdd}
-                              onClick={() => addSavedKeyword(kw)}
-                              disabled={bootstrapping || alreadyAdded}
-                              title={alreadyAdded ? 'Already added' : 'Tap to add this specialty'}
-                            >
-                              {kw}
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.savedKeywordDelete}
-                              onClick={() => deleteSavedKeyword(kw)}
-                              aria-label={`Delete saved specialty ${kw}`}
-                              title="Delete saved specialty"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
+                  {savedKeywordPool.length === 0 && !addingSavedKeyword && (
                     <p className={styles.savedEmpty}>No specialties saved yet.</p>
                   )}
+                  <div className={styles.savedKeywordPool}>
+                    {savedKeywordPool.map(kw => {
+                      const alreadyAdded = keywords.some(k => k.toLowerCase() === kw.toLowerCase())
+                      return (
+                        <div key={kw} className={styles.savedKeywordChip}>
+                          <button
+                            type="button"
+                            className={styles.savedKeywordAdd}
+                            onClick={() => addSavedKeyword(kw)}
+                            disabled={bootstrapping || alreadyAdded}
+                            title={alreadyAdded ? 'Already added' : 'Tap to add this specialty'}
+                          >
+                            {kw}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.savedKeywordDelete}
+                            onClick={() => deleteSavedKeyword(kw)}
+                            aria-label={`Delete saved specialty ${kw}`}
+                            title="Delete saved specialty"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )
+                    })}
+                    {addingSavedKeyword ? (
+                      <input
+                        ref={newSavedKeywordRef}
+                        className={styles.chipInput}
+                        value={newSavedKeywordDraft}
+                        onChange={e => setNewSavedKeywordDraft(e.target.value.slice(0, 50))}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.preventDefault(); addNewSavedKeyword() }
+                          if (e.key === 'Escape') { setNewSavedKeywordDraft(''); setAddingSavedKeyword(false) }
+                        }}
+                        onBlur={addNewSavedKeyword}
+                        placeholder="New specialty…"
+                        autoFocus
+                        maxLength={50}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.savedKeywordAddNew}
+                        onClick={() => setAddingSavedKeyword(true)}
+                        disabled={bootstrapping}
+                        title="Add a new specialty straight to the saved pool"
+                      >
+                        + Add New
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
