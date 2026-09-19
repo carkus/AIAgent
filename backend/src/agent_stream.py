@@ -93,6 +93,54 @@ _DELEGATE_TOOL = {
 MAX_DELEGATIONS_PER_REQUEST = 6
 
 
+def _delegation_rule_body(keywords: list[str]) -> str:
+    """
+    Rule 6's body, in the system prompt built by run_agent_stream.
+
+    An agent bootstrapped with a specialty pool (agent_config["keywords"],
+    the "Saved Specialties" the user configured on the Setup screen) should
+    run *any* task the user gives it across that whole pool, not only a
+    request that happens to spell out a comma-separated keyword list — the
+    pool itself is the keyword source once one exists. Without a pool, fall
+    back to the original behavior of extracting distinct keywords/topics
+    from the request text itself.
+    """
+    if keywords:
+        pool = ", ".join(keywords)
+        return f"""
+   This agent's configured specialty pool is: {pool}. Whatever task the
+   user just gave you, run it across EVERY specialty in that pool, not
+   only ones the message happens to name — the pool itself is the set of
+   keywords/topics to search, regardless of how the request is worded.
+   Delegate ONE worker per specialty, and fold BOTH pieces into that
+   worker's `task`: the specialty itself AND whatever the user actually
+   asked for (e.g. task = "<specialty>: <the user's request>") — never
+   delegate on the bare specialty name alone, and never drop what the
+   user said in favor of just the keyword. Exception: if the user's
+   message clearly narrows things to only one or a few specialties from
+   the pool, delegate for just those; if the request has nothing to do
+   with the pool at all, handle it yourself instead. Call every
+   delegate_to_worker you need before writing your own findings. Limit:
+   {MAX_DELEGATIONS_PER_REQUEST} per turn — if the pool has more entries
+   than that, delegate as many as the limit allows and handle the rest
+   yourself with your own tools."""
+    return f"""
+   First, identify the distinct tasks the request actually requires. When
+   it names multiple distinct keywords, topics, roles, or subjects to
+   search/research (e.g. a request listing several comma-separated items —
+   "python developer, react developer", "renewable energy, EV batteries,
+   grid storage"), you MUST delegate ONE worker per keyword/topic, each
+   with a `task` scoped to that single item — never research more than one
+   keyword/topic yourself with your own tools when the request names
+   several. Call every `delegate_to_worker` you need before writing your
+   own findings. For a single keyword, or a request with no genuinely
+   separable parts, handle it yourself instead — delegating a one-part
+   task just adds latency for no benefit. Limit:
+   {MAX_DELEGATIONS_PER_REQUEST} per turn — if there are more keywords than
+   that, handle the remainder yourself with your own tools after delegating
+   as many as the limit allows."""
+
+
 def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool = True):
     """
     Generator that yields event dicts as the agent loop runs.
@@ -134,20 +182,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
    shows. For a single flat fact (one number, one listing), just say it plainly;
    don't force a diagram where there's nothing to compare.
 """ + (f"""
-6. You also have `delegate_to_worker`. First, identify the distinct tasks the
-   request actually requires. When it names multiple distinct keywords,
-   topics, roles, or subjects to search/research (e.g. a request listing
-   several comma-separated items — "python developer, react developer",
-   "renewable energy, EV batteries, grid storage"), you MUST delegate ONE
-   worker per keyword/topic, each with a `task` scoped to that single item —
-   never research more than one keyword/topic yourself with your own tools
-   when the request names several. Call every `delegate_to_worker` you need
-   before writing your own findings. For a single keyword, or a request with
-   no genuinely separable parts, handle it yourself instead — delegating a
-   one-part task just adds latency for no benefit. Limit:
-   {MAX_DELEGATIONS_PER_REQUEST} per turn — if there are more keywords than
-   that, handle the remainder yourself with your own tools after delegating
-   as many as the limit allows.
+6. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [])}
 7. Once your workers report back, do NOT restate or re-summarize each one's
    full findings in your own reply — the user already sees each worker's
    complete response individually, attributed to that worker, in the UI.

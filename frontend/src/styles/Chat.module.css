@@ -193,8 +193,8 @@ button.resetBtn:active {
   align-items: center;
   gap: 0.5rem;
   padding: 0.65rem 1.25rem;
-  border-bottom: 1px solid rgba(63, 126, 160, 0.25);
-  background: rgba(63, 126, 160, 0.05);
+  border-bottom: 1px solid #ddd9cd;
+  background: #f7f5f0;
   flex-shrink: 0;
 }
 
@@ -205,26 +205,41 @@ button.resetBtn:active {
   color: #16324a;
   flex: 1;
   min-width: 180px;
-  font-family: inherit;
-  font-size: 0.85rem;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
   outline: none;
   padding: 0.5rem 0.75rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.rosterInput::placeholder {
+  color: #8a8572;
 }
 
 .rosterInput:focus {
-  border-color: #3f7ea0;
+  border-color: #0b495e;
+  box-shadow: 0 0 0 2px rgba(31, 111, 115, 0.15);
 }
 
 .rosterConfirmBtn {
-  background: #3f7ea0;
-  border: none;
+  background: #0b495e;
+  border: 1px solid #0b495e;
   border-radius: 6px;
   color: #ffffff;
   cursor: pointer;
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   padding: 0.5rem 1rem;
   white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.rosterConfirmBtn:hover:not(:disabled) {
+  opacity: 0.9;
 }
 
 .rosterConfirmBtn:disabled {
@@ -233,19 +248,30 @@ button.resetBtn:active {
 }
 
 .rosterCancelBtn {
-  background: transparent;
-  border: 1px solid #ddd9cd;
+  background: #f7f5f0;
+  border: 1px solid #0b495e;
   border-radius: 6px;
-  color: #6b7785;
+  color: #0b495e;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   padding: 0.5rem 1rem;
   white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.rosterCancelBtn:hover {
+  opacity: 0.8;
 }
 
 .rosterFeedback {
-  color: #3f7ea0;
-  font-size: 0.78rem;
+  color: #0b495e;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
   margin: 0;
   padding: 0.4rem 1.25rem 0;
 }
@@ -316,7 +342,7 @@ button.resetBtn:active {
 
 .bubbleText {
   color: #f2f5f6;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Courier Prime', 'Courier New', Courier, serif;
   font-size: 0.79rem;
   line-height: 1.55;
   margin: 0;
@@ -634,12 +660,16 @@ button.resetBtn:active {
   border-radius: 7px;
   color: #16324a;
   flex: 1;
-  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-family: 'Share Tech Mono', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.85rem;
   letter-spacing: 0.02em;
   outline: none;
   padding: 0.65rem 0.9rem;
   transition: border-color 0.15s;
+}
+
+.input::placeholder {
+  color: #7a97a3;
 }
 
 .input:focus {
@@ -649,14 +679,14 @@ button.resetBtn:active {
 
 .sendBtn {
   background: #0b495e;
-  border: none;
+  border: 1px solid #0b495e;
   border-radius: 8px;
   color: #ffffff;
   cursor: pointer;
-  font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 0.65rem 1.25rem;
   transition: opacity 0.15s;
@@ -672,13 +702,16 @@ button.resetBtn:active {
 }
 
 .stopBtn {
-  background: transparent;
+  background: #f7f5f0;
   border: 1px solid #e3a3a3;
   border-radius: 8px;
   color: #b91c1c;
   cursor: pointer;
-  font-size: 0.92rem;
-  font-weight: 600;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   padding: 0.65rem 1.25rem;
   transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;

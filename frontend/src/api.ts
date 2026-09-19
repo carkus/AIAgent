@@ -70,6 +70,51 @@ export async function bootstrap(
   return config;
 }
 
+export interface AgentBrief {
+  type: 'brief' | 'question';
+  text: string;
+}
+
+/**
+ * AI-drafted Setup screen "Brief" (backend/src/brief.py) — usually a short
+ * paragraph interpreting the chosen specialties, occasionally a single
+ * clarifying question when the pool is too ambiguous/sparse to interpret
+ * confidently. Pass `priorQuestion`/`priorAnswer` after the user answers a
+ * question to get the model to write the brief using that guidance. Throws
+ * on any failure — callers should fall back to the deterministic template
+ * brief rather than surfacing this as a user-facing error.
+ */
+export async function fetchAgentBrief(
+  agentType: AgentTemplateId | undefined,
+  keywords: string[],
+  location: string,
+  agentName: string,
+  provider?: LlmProvider,
+  ollamaModel?: string | null,
+  priorQuestion?: string | null,
+  priorAnswer?: string | null,
+): Promise<AgentBrief> {
+  const res = await fetch(`${API_URL}/brief`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      agentType,
+      keywords,
+      location,
+      agentName,
+      provider: provider ?? undefined,
+      ollama_model: ollamaModel ?? undefined,
+      priorQuestion: priorQuestion ?? undefined,
+      priorAnswer: priorAnswer ?? undefined,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? 'Failed to generate brief');
+  }
+  return res.json();
+}
+
 /** Names of models currently pulled in the developer's local Ollama install. [] if unreachable. */
 export async function listOllamaModels(): Promise<string[]> {
   try {

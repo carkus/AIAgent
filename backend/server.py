@@ -35,6 +35,7 @@ import tempfile
 from flask import Flask, Response, jsonify, request, stream_with_context
 from bootstrap import generate_agent_config_stream
 from agent_stream import run_agent_stream
+from brief import generate_brief
 from llm_client import list_ollama_models
 import rate_limit
 import saved_searches
@@ -88,6 +89,35 @@ def models():
     if request.method == "OPTIONS":
         return "", 204
     return jsonify({"models": list_ollama_models()})
+
+
+@app.route("/brief", methods=["POST", "OPTIONS"])
+def brief():
+    if request.method == "OPTIONS":
+        return "", 204
+    body = request.get_json() or {}
+    keywords = body.get("keywords") or []
+    if not isinstance(keywords, list) or not keywords:
+        return jsonify({"error": "keywords is required"}), 400
+    provider = ((body.get("provider") or "").strip() or None)
+    model = ((body.get("ollama_model") or "").strip() or None)
+    if provider != "ollama":
+        rate_limit_error = rate_limit.check(rate_limit.client_ip(request))
+        if rate_limit_error:
+            return jsonify({"error": rate_limit_error}), 429
+    result = generate_brief(
+        agent_type=body.get("agentType"),
+        keywords=keywords,
+        location=(body.get("location") or "").strip(),
+        agent_name=(body.get("agentName") or "").strip(),
+        provider=provider,
+        model=model,
+        prior_question=(body.get("priorQuestion") or "").strip() or None,
+        prior_answer=(body.get("priorAnswer") or "").strip() or None,
+    )
+    if result is None:
+        return jsonify({"error": "Could not generate a brief"}), 502
+    return jsonify(result)
 
 
 @app.route("/file/<path:filename>", methods=["GET"])

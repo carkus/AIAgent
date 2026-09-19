@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, listAgentDrafts, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
-import type { AgentDraft, PublishedAgent, SavedSearch } from '../api'
+import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, listAgentDrafts, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
+import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
 import { hideSavedChat, loadHiddenChatIds, loadSavedChats } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
 import styles from '../styles/Setup.module.css'
@@ -279,9 +279,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [briefOpen, setBriefOpen] = useState(true)
   const [specialInstructionsOpen, setSpecialInstructionsOpen] = useState(false)
   const [specialInstructions, setSpecialInstructions] = useState('')
+  const [aiBrief, setAiBrief] = useState<AgentBrief | null>(null)
+  const [briefLoading, setBriefLoading] = useState(false)
+  const [briefAnswer, setBriefAnswer] = useState('')
+  const [answeringBrief, setAnsweringBrief] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const locationDebounceRef = useRef<number | undefined>(undefined)
   const locationAbortRef = useRef<AbortController | null>(null)
+  const briefDebounceRef = useRef<number | undefined>(undefined)
+  const briefRequestIdRef = useRef(0)
 
   useEffect(() => {
     if (provider !== 'ollama' || modelsLoaded) return
@@ -323,6 +329,59 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       // Aborted (superseded by a newer keystroke) or offline — free-text
       // location still works fine without a suggestion.
     }
+  }
+
+  // AI-drafted Brief (backend/src/brief.py) — debounced so it doesn't fire on
+  // every keystroke while adding specialties. Falls back to the deterministic
+  // buildAgentBrief() template (aiBrief stays null) on any failure, so a
+  // network hiccup never leaves the Brief section blank. A stale response
+  // from a superseded request is dropped via briefRequestIdRef.
+  useEffect(() => {
+    if (keywords.length === 0) {
+      setAiBrief(null)
+      setBriefLoading(false)
+      return
+    }
+    window.clearTimeout(briefDebounceRef.current)
+    const requestId = ++briefRequestIdRef.current
+    briefDebounceRef.current = window.setTimeout(() => {
+      setBriefLoading(true)
+      fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel)
+        .then(result => {
+          if (requestId !== briefRequestIdRef.current) return
+          setAiBrief(result)
+        })
+        .catch(() => {
+          if (requestId !== briefRequestIdRef.current) return
+          setAiBrief(null)
+        })
+        .finally(() => {
+          if (requestId !== briefRequestIdRef.current) return
+          setBriefLoading(false)
+        })
+    }, 700)
+    return () => window.clearTimeout(briefDebounceRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentType, keywords, location, agentName])
+
+  function handleBriefAnswerSubmit() {
+    const answer = briefAnswer.trim()
+    if (!answer || !aiBrief || aiBrief.type !== 'question' || answeringBrief) return
+    setAnsweringBrief(true)
+    const requestId = ++briefRequestIdRef.current
+    fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel, aiBrief.text, answer)
+      .then(result => {
+        if (requestId !== briefRequestIdRef.current) return
+        setAiBrief(result)
+        setBriefAnswer('')
+      })
+      .catch(() => {
+        // Leave the question showing — the user can retry the answer.
+      })
+      .finally(() => {
+        if (requestId !== briefRequestIdRef.current) return
+        setAnsweringBrief(false)
+      })
   }
 
   function handleLocationChange(value: string) {
@@ -708,11 +767,36 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 <span className={styles.fieldLabelCaret} aria-hidden="true">{briefOpen ? '▾' : '▸'}</span>
               </button>
               {briefOpen && (
-                <p className={styles.agentSummaryText}>
-                  {keywords.length > 0
-                    ? buildAgentBrief(agentType, keywords, location.trim(), agentName)
-                    : 'Add specialties above to generate this agent’s brief.'}
-                </p>
+                keywords.length === 0 ? (
+                  <p className={styles.agentSummaryText}>Add specialties above to generate this agent’s brief.</p>
+                ) : aiBrief?.type === 'question' ? (
+                  <div className={styles.briefQuestionBox}>
+                    <p className={styles.briefQuestionText}><span aria-hidden="true">🤔</span> {aiBrief.text}</p>
+                    <div className={styles.briefAnswerRow}>
+                      <input
+                        className={styles.briefAnswerInput}
+                        value={briefAnswer}
+                        onChange={e => setBriefAnswer(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleBriefAnswerSubmit() }}
+                        placeholder="Your answer…"
+                        disabled={answeringBrief}
+                      />
+                      <button
+                        type="button"
+                        className={styles.briefAnswerBtn}
+                        onClick={handleBriefAnswerSubmit}
+                        disabled={!briefAnswer.trim() || answeringBrief}
+                      >
+                        {answeringBrief ? '…' : 'Continue'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className={styles.agentSummaryText}>
+                    {aiBrief?.text ?? buildAgentBrief(agentType, keywords, location.trim(), agentName)}
+                    {briefLoading && <span className={styles.briefLoadingHint}> · redrafting…</span>}
+                  </p>
+                )
               )}
             </div>
 

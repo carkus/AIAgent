@@ -90,14 +90,18 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
   const autoSentRef = useRef(Boolean(initialMessages && initialMessages.length > 0))
   const abortRef = useRef<AbortController | null>(null)
 
-  // Auto-send initial search when keywords are available
+  // Auto-send an initial task when the agent has a configured specialty
+  // pool. The pool itself (agentConfig.keywords) is now the keyword source
+  // the backend's delegation rule iterates over (see agent_stream.py's
+  // _delegation_rule_body) — this message no longer needs to spell out
+  // each keyword itself, just hand over a generic task.
   useEffect(() => {
     if (autoSentRef.current) return
     const kws = agentConfig.keywords
     if (!kws?.length) return
     autoSentRef.current = true
     const loc = agentConfig.location ? ` in ${agentConfig.location}` : ''
-    sendMessage(`Search for: ${kws.join(', ')}${loc}`)
+    sendMessage(`Run your standard search across your full specialty pool${loc}.`)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

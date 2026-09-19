@@ -49,7 +49,7 @@
 .headingArrow {
   color: #0b495e;
   flex-shrink: 0;
-  font-size: 0.7rem;
+  font-size: 1.4rem;
 }
 
 .entry {
@@ -175,7 +175,7 @@
 .kwHeadingArrow {
   color: #3f7ea0;
   flex-shrink: 0;
-  font-size: 0.7rem;
+  font-size: 1.4rem;
 }
 
 .kwHeading {
@@ -635,7 +635,7 @@
 .workerHeadingArrow {
   color: #0b495e;
   flex-shrink: 0;
-  font-size: 0.7rem;
+  font-size: 1.4rem;
 }
 
 .workerName {
