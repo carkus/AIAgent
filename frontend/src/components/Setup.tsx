@@ -587,6 +587,21 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     onResumeChat(chat)
   }
 
+  // Tapping a Saved Chats card loads that agent's details (type, specialties,
+  // location, name) back into the Setup form — same shape as loadDraft() for
+  // Saved Agent Profiles — without jumping straight into the chat itself.
+  // Actually resuming the conversation is the arrow button's job (resumeChat).
+  function loadChatDetails(chat: SavedChat) {
+    if (bootstrapping) return
+    const cfg = chat.agentConfig
+    if (cfg.template) setAgentType(cfg.template)
+    setKeywords([...(cfg.keywords ?? [])])
+    setDraft('')
+    if (cfg.location) setLocation(cfg.location)
+    onAgentNameChange(chat.agentName)
+    inputRef.current?.focus()
+  }
+
   function hideChat(id: string) {
     setHiddenChatIds(hideSavedChat(id))
   }
@@ -1046,8 +1061,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         <div
                           key={c.id}
                           className={`${styles.savedRow} ${bootstrapping ? styles.savedRowDisabled : ''}`}
-                          onClick={() => resumeChat(c)}
-                          title={bootstrapping ? 'Agent is being commissioned — chats can’t be resumed right now' : 'Continue this chat'}
+                          onClick={() => loadChatDetails(c)}
+                          title={bootstrapping ? 'Agent is being commissioned — details can’t be loaded right now' : 'Load this agent’s details into the form'}
                           aria-disabled={bootstrapping}
                         >
                           <div className={styles.savedChatInfo}>
