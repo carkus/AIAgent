@@ -501,29 +501,36 @@ function SavedFileViewer({ filename }: { filename: string }) {
 
 // ─── Agents-employed summary (how many workers this search delegated) ───────
 
+// Only still-running workers get a pill here — once a worker produces a
+// result, its full name/traits/task/response is already shown in its own
+// WorkerResultCard below, so keeping its pending-notice pill around too
+// would just repeat the same information twice.
 function AgentsEmployedSummary({ workers }: { workers: WorkerSummary[] }) {
   if (workers.length === 0) return null
+  const pendingWorkers = workers.filter(w => w.pending)
   return (
     <div className={styles.agentsSummary}>
       <p className={styles.agentsSummaryHeading}>
         {workers.length} agent{workers.length !== 1 ? 's' : ''} employed
       </p>
-      <div className={styles.agentsSummaryPills}>
-        {workers.map((w, i) => (
-          <span key={i} className={styles.agentPill}>
-            <span className={styles.agentPillName}>🤝 {w.name}</span>
-            {w.traits.length > 0 && (
-              <span className={styles.agentPillTraits}>{w.traits.join(' · ')}</span>
-            )}
-            {w.task && (
-              <span className={styles.agentPillTask}>
-                {w.task.length > 90 ? w.task.slice(0, 90) + '…' : w.task}
-              </span>
-            )}
-            {w.pending && <span className={styles.agentPillPending}>running…</span>}
-          </span>
-        ))}
-      </div>
+      {pendingWorkers.length > 0 && (
+        <div className={styles.agentsSummaryPills}>
+          {pendingWorkers.map((w, i) => (
+            <span key={i} className={styles.agentPill}>
+              <span className={styles.agentPillName}>🤝 {w.name}</span>
+              {w.traits.length > 0 && (
+                <span className={styles.agentPillTraits}>{w.traits.join(' · ')}</span>
+              )}
+              {w.task && (
+                <span className={styles.agentPillTask}>
+                  {w.task.length > 90 ? w.task.slice(0, 90) + '…' : w.task}
+                </span>
+              )}
+              <span className={styles.agentPillPending}>running…</span>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

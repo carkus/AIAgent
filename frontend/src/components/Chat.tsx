@@ -432,6 +432,13 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
                           }
                           return <code className={className} {...props}>{children}</code>
                         },
+                        table({ children, ...props }) {
+                          return (
+                            <div className={styles.tableWrap}>
+                              <table {...props}>{children}</table>
+                            </div>
+                          )
+                        },
                       }}
                     >
                       {msg.content}

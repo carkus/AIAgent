@@ -482,6 +482,42 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }
   }
 
+  // Tap-to-rename a saved specialty in place. Same "no partial-update API"
+  // constraint as deleteSavedKeyword above — every saved-search entry that
+  // contains the old keyword gets deleted and re-created with the keyword
+  // swapped for the new text, preserving the entry's other keywords and its
+  // agentType. Also renames the keyword live in the active keyword chips if
+  // it's currently added there, so the two stay in sync.
+  const [editingSavedKeyword, setEditingSavedKeyword] = useState<string | null>(null)
+  const [editingSavedKeywordDraft, setEditingSavedKeywordDraft] = useState('')
+
+  async function renameSavedKeyword(oldKw: string, draft: string) {
+    const newKw = draft.trim().slice(0, 50)
+    setEditingSavedKeyword(null)
+    setEditingSavedKeywordDraft('')
+    if (!newKw || newKw.toLowerCase() === oldKw.toLowerCase()) return
+    if (savedKeywordPool.some(pooled => pooled.toLowerCase() === newKw.toLowerCase())) return
+    const lower = oldKw.toLowerCase()
+    const affected = saved.filter(s => s.keywords.some(k => k.toLowerCase() === lower))
+    if (affected.length === 0) return
+    setSaved(prev => prev.map(s =>
+      s.keywords.some(k => k.toLowerCase() === lower)
+        ? { ...s, keywords: s.keywords.map(k => k.toLowerCase() === lower ? newKw : k) }
+        : s
+    ))
+    setKeywords(prev => prev.map(k => k.toLowerCase() === lower ? newKw : k))
+    for (const entry of affected) {
+      deleteSavedSearch(entry.id).catch(() => {})
+      const renamed = entry.keywords.map(k => k.toLowerCase() === lower ? newKw : k)
+      try {
+        const fresh = await createSavedSearch(renamed.join(', '), renamed, entry.agentType ?? 'research')
+        setSaved(prev => [fresh, ...prev.filter(s => s.id !== entry.id)])
+      } catch {
+        // Best effort — local state already shows the rename either way.
+      }
+    }
+  }
+
   function removeKeyword(kw: string) {
     if (bootstrapping) return
     setKeywords(prev => prev.filter(k => k !== kw))
@@ -930,14 +966,39 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       const alreadyAdded = keywords.some(k => k.toLowerCase() === kw.toLowerCase())
                       return (
                         <div key={kw} className={styles.savedKeywordChip}>
+                          {editingSavedKeyword === kw ? (
+                            <input
+                              className={styles.chipInput}
+                              value={editingSavedKeywordDraft}
+                              onChange={e => setEditingSavedKeywordDraft(e.target.value.slice(0, 50))}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') { e.preventDefault(); renameSavedKeyword(kw, editingSavedKeywordDraft) }
+                                if (e.key === 'Escape') { e.preventDefault(); setEditingSavedKeyword(null); setEditingSavedKeywordDraft('') }
+                              }}
+                              onBlur={() => renameSavedKeyword(kw, editingSavedKeywordDraft)}
+                              autoFocus
+                              maxLength={50}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              className={styles.savedKeywordLabel}
+                              onClick={() => { setEditingSavedKeyword(kw); setEditingSavedKeywordDraft(kw) }}
+                              disabled={bootstrapping}
+                              title="Tap to rename"
+                            >
+                              {kw}
+                            </button>
+                          )}
                           <button
                             type="button"
-                            className={styles.savedKeywordAdd}
+                            className={styles.savedKeywordAddBtn}
                             onClick={() => addSavedKeyword(kw)}
                             disabled={bootstrapping || alreadyAdded}
-                            title={alreadyAdded ? 'Already added' : 'Tap to add this specialty'}
+                            aria-label={`Add saved specialty ${kw} to current specialties`}
+                            title={alreadyAdded ? 'Already added' : 'Add this specialty to current specialties'}
                           >
-                            {kw}
+                            +
                           </button>
                           <button
                             type="button"

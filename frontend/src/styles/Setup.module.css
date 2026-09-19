@@ -927,13 +927,13 @@
   border-color: #0b495e;
 }
 
-.savedKeywordAdd {
+.savedKeywordLabel {
   background: none;
   border: none;
   padding: 0;
   margin: 0;
   color: #0b495e;
-  cursor: pointer;
+  cursor: text;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.76rem;
   font-weight: 400;
@@ -941,12 +941,33 @@
   text-transform: uppercase;
 }
 
-.savedKeywordAdd:hover:not(:disabled) {
-  text-decoration: underline;
+.savedKeywordLabel:hover:not(:disabled) {
+  text-decoration: underline dotted;
 }
 
-.savedKeywordAdd:disabled {
+.savedKeywordLabel:disabled {
   opacity: 0.45;
+  cursor: default;
+}
+
+.savedKeywordAddBtn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: #1f6f73;
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 0.25rem;
+}
+
+.savedKeywordAddBtn:hover:not(:disabled) {
+  background: #e6f2f1;
+  border-color: #bcdbd8;
+}
+
+.savedKeywordAddBtn:disabled {
+  opacity: 0.35;
   cursor: default;
 }
 
@@ -1288,8 +1309,12 @@
     gap: 0.4rem;
   }
 
-  .savedKeywordAdd {
+  .savedKeywordLabel {
     font-size: 0.88rem;
+  }
+
+  .savedKeywordAddBtn {
+    font-size: 1rem;
   }
 
   .savedKeywordDelete {

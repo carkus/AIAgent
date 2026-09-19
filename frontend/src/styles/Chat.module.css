@@ -37,7 +37,7 @@
 .headerTitle {
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-weight: 700;
-  font-size: 0.99rem;
+  font-size: 1.485rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #0b495e;
@@ -312,7 +312,7 @@ button.resetBtn:active {
 .messageList {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem 1.25rem;
+  padding: 1rem 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -336,7 +336,7 @@ button.resetBtn:active {
 
 .assistantBubble {
   align-self: flex-start;
-  max-width: 90%;
+  max-width: 100%;
   width: 100%;
 }
 
@@ -346,7 +346,9 @@ button.resetBtn:active {
   font-size: 0.79rem;
   line-height: 1.55;
   margin: 0;
+  overflow-wrap: break-word;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Markdown renderer for assistant messages */
@@ -356,6 +358,13 @@ button.resetBtn:active {
   font-family: 'Courier Prime', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.79rem;
   line-height: 1.6;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.markdown a {
+  overflow-wrap: anywhere;
 }
 
 .markdown p {
@@ -496,6 +505,7 @@ button.resetBtn:active {
   color: #1f5761;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.82rem;
+  overflow-wrap: anywhere;
   padding: 0.1rem 0.35rem;
 }
 
@@ -504,6 +514,7 @@ button.resetBtn:active {
   border: 1px solid #ddd9cd;
   border-radius: 6px;
   margin: 0.5rem 0;
+  max-width: 100%;
   overflow-x: auto;
   padding: 0.75rem 1rem;
 }
@@ -512,6 +523,7 @@ button.resetBtn:active {
   background: none;
   border: none;
   color: #33475a;
+  overflow-wrap: normal;
   padding: 0;
 }
 
@@ -592,29 +604,51 @@ button.resetBtn:active {
 
 /* Tables */
 
+.tableWrap {
+  background: #fcfbf8;
+  border: 1px solid #ddd9cd;
+  border-radius: 8px;
+  margin: 0.6rem 0 0.9rem;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .markdown table {
   border-collapse: collapse;
-  font-size: 0.78rem;
-  margin: 0.5rem 0 0.75rem;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 0.8rem;
+  margin: 0;
+  table-layout: auto;
   width: 100%;
 }
 
+.markdown thead {
+  background: #eef1f0;
+}
+
 .markdown th {
-  background: none;
   border-bottom: 1px solid #ddd9cd;
   color: #16324a;
   font-weight: 600;
-  padding: 0.35rem 0.65rem;
+  padding: 0.45rem 0.75rem;
   text-align: left;
+  vertical-align: bottom;
 }
 
 .markdown td {
   border-bottom: 1px solid #eceae3;
   color: #33475a;
-  padding: 0.3rem 0.65rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  padding: 0.4rem 0.75rem;
+  vertical-align: top;
 }
 
-.markdown tr:last-child td {
+.markdown tbody tr:nth-child(even) {
+  background: #f5f6f4;
+}
+
+.markdown tbody tr:last-child td {
   border-bottom: none;
 }
 
