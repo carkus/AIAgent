@@ -27,14 +27,21 @@
 }
 
 .headerLogo {
-  height: 88px;
+  height: 114px;
   width: auto;
   border-radius: 8px;
   margin-right: 0.9rem;
   flex-shrink: 0;
 }
 
+.headerIdentityText {
+  min-width: 0;
+}
+
 .headerTitle {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: break-word;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-weight: 700;
   font-size: 1.485rem;
@@ -46,6 +53,8 @@
 
 .locationBadge {
   display: block;
+  max-width: 100%;
+  overflow-wrap: break-word;
   color: #6b7785;
   font-size: 0.72rem;
   margin: 0.15rem 0 0;
@@ -102,7 +111,8 @@
   padding: 0.1rem 0.4rem;
   margin: 0.25rem 0 0;
   width: fit-content;
-  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: break-word;
   cursor: help;
 }
 
@@ -205,7 +215,7 @@ button.resetBtn:active {
   color: #16324a;
   flex: 1;
   min-width: 180px;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Inter', 'Space Grotesk', sans-serif;
   font-size: 0.78rem;
   letter-spacing: 0.02em;
   outline: none;
@@ -228,9 +238,9 @@ button.resetBtn:active {
   border-radius: 6px;
   color: #ffffff;
   cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.72rem;
-  font-weight: 400;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 0.5rem 1rem;
@@ -253,9 +263,9 @@ button.resetBtn:active {
   border-radius: 6px;
   color: #0b495e;
   cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.72rem;
-  font-weight: 400;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 0.5rem 1rem;
@@ -269,7 +279,7 @@ button.resetBtn:active {
 
 .rosterFeedback {
   color: #0b495e;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Inter', 'Space Grotesk', sans-serif;
   font-size: 0.74rem;
   letter-spacing: 0.02em;
   margin: 0;
@@ -316,6 +326,9 @@ button.resetBtn:active {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
 .emptyHint {
@@ -531,8 +544,16 @@ button.resetBtn:active {
   background: #f5f6f4;
   border: 1px solid #ddd9cd;
   border-radius: 6px;
-  margin: 0.6rem 0 0.9rem;
-  max-height: 800px;
+  margin: 0.6rem auto 0.9rem;
+  /* Mermaid's useMaxWidth only stretches the SVG to fill this box, so
+     without a real cap here a two-slice pie chart ends up stretched to the
+     full ~950px width of the assistant bubble — visually huge for how
+     little data it holds. Capping the box itself (not just the SVG) keeps
+     small diagrams at a sane, human-scale size; genuinely large/complex
+     ones (a wide flowchart, a mindmap with many branches) still get to use
+     the space via the scrollbar below rather than being stretched further. */
+  max-width: min(100%, 480px);
+  max-height: 420px;
   overflow: auto;
   padding: 0.85rem;
   text-align: center;
@@ -540,6 +561,7 @@ button.resetBtn:active {
 
 .mermaidDiagram svg {
   max-width: 100%;
+  max-height: 380px;
   height: auto;
 }
 
@@ -654,9 +676,24 @@ button.resetBtn:active {
 
 .workingText {
   color: #6b7785;
+  font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8rem;
-  font-style: italic;
+  letter-spacing: 0.02em;
   margin: 0.5rem 0 0;
+}
+
+/* Blinking block cursor, like a terminal/data-loader prompt — a crisp
+   on/off step, not a smooth fade. */
+.workingText::after {
+  content: '\2588';
+  display: inline-block;
+  margin-left: 0.3em;
+  animation: workingCursorBlink 1s steps(1, end) infinite;
+}
+
+@keyframes workingCursorBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
 }
 
 .duration {
@@ -694,7 +731,7 @@ button.resetBtn:active {
   border-radius: 7px;
   color: #16324a;
   flex: 1;
-  font-family: 'Share Tech Mono', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-family: 'Inter', 'Space Grotesk', sans-serif;
   font-size: 0.85rem;
   letter-spacing: 0.02em;
   outline: none;
@@ -717,9 +754,9 @@ button.resetBtn:active {
   border-radius: 8px;
   color: #ffffff;
   cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.78rem;
-  font-weight: 400;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 0.65rem 1.25rem;
@@ -741,9 +778,9 @@ button.resetBtn:active {
   border-radius: 8px;
   color: #b91c1c;
   cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.72rem;
-  font-weight: 400;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 0.65rem 1.25rem;

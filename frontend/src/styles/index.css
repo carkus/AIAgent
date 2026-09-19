@@ -7,6 +7,12 @@ html, body {
   padding: 0;
   height: 100%;
   overflow: hidden;
+  /* Base font for the whole app. Most components set this explicitly per
+     element (headings/UI text vs. monospace for code-like content), but
+     plain prose that doesn't — e.g. ToolActivity's search-result titles/
+     snippets and job-card text — has no ancestor font-family to inherit
+     without this, so it falls back to the browser's default serif. */
+  font-family: 'Inter', 'Space Grotesk', sans-serif;
 }
 
 #root {

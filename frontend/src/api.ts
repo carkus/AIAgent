@@ -73,13 +73,18 @@ export async function bootstrap(
 export interface AgentBrief {
   type: 'brief' | 'question';
   text: string;
+  warning?: string | null;
 }
 
 /**
  * AI-drafted Setup screen "Brief" (backend/src/brief.py) — usually a short
  * paragraph interpreting the chosen specialties, occasionally a single
  * clarifying question when the pool is too ambiguous/sparse to interpret
- * confidently. Pass `priorQuestion`/`priorAnswer` after the user answers a
+ * confidently. `warning` is independent of that choice — it flags a
+ * commissioning-time problem (too many specialties for the delegation cap,
+ * unrelated domains, advice-as-fact requests, a location-dependent
+ * specialty with no location) and can accompany either a brief or a
+ * question. Pass `priorQuestion`/`priorAnswer` after the user answers a
  * question to get the model to write the brief using that guidance. Throws
  * on any failure — callers should fall back to the deterministic template
  * brief rather than surfacing this as a user-facing error.

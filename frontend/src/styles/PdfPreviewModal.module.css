@@ -87,6 +87,25 @@
   color: #33475a;
 }
 
+.saveJsonBtn {
+  background: transparent;
+  border: 1px solid #0b495e;
+  border-radius: 8px;
+  color: #0b495e;
+  cursor: pointer;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.55rem 1.1rem;
+  transition: background-color 0.15s;
+}
+
+.saveJsonBtn:hover {
+  background: #eef1f0;
+}
+
 .downloadBtn {
   background: #0b495e;
   border: none;

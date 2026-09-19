@@ -5,6 +5,13 @@
   padding: 0.75rem 1rem;
   margin-top: 0.75rem;
   font-size: 0.78rem;
+  /* Base font for anything below that doesn't set its own (search-result
+     titles/snippets, job cards, status text, etc.) — matches the assistant
+     message body's own font (.markdown in Chat.module.css) so tool output
+     reads as part of the same conversation, not a mismatched serif. Rules
+     that need code-like styling (tool names, args, raw JSON) already set
+     their own explicit ui-monospace stack and are unaffected. */
+  font-family: 'Courier Prime', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 }
 
 .liveDot {

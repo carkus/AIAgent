@@ -27,9 +27,16 @@ Most of the time, just write the brief directly and confidently — you don't ne
 
 When writing the brief: one tight paragraph, 2-3 sentences, third person, in this house style — "Agent {agent_name} reads these specialties as a mandate to <interpret/act on the topics>{location_clause}. If commissioned, it will <2-3 concrete actions> and report back with <what>."
 
+Separately from the ambiguity check above, also assess whether commissioning this agent as specified is likely to go badly, and if so add ONE short, specific warning (a plain sentence, no hedging disclaimer boilerplate). Flag it when you see:
+- More than 6 distinct specialties/topics — the platform delegates one worker per topic with a cap of 6 per turn, so extras will be dropped or starved rather than covered.
+- Specialties spanning clearly unrelated domains (e.g. "tax law" and "vintage motorcycles") — the agent's persona and searches will be diluted rather than focused.
+- A specialty that asks the agent to give binding legal, medical, financial, or safety advice as fact rather than to research/summarize the topic.
+- A specialty that is only meaningful with a location (e.g. "job openings", "weather", "local events") but no location was given.
+This is independent of the question/brief choice above — a warning can accompany either a brief or a question. Omit "warning" (or use null) when nothing is actually wrong; don't invent a warning just to have one.
+
 Respond with ONLY raw JSON, no markdown code fences, no other text, exactly one of:
-{{"type": "brief", "text": "..."}}
-{{"type": "question", "text": "..."}}
+{{"type": "brief", "text": "...", "warning": "..." or null}}
+{{"type": "question", "text": "...", "warning": "..." or null}}
 """
 
 
@@ -44,10 +51,10 @@ def generate_brief(
     prior_answer: str | None = None,
 ) -> dict | None:
     """
-    Returns {"type": "brief" | "question", "text": "..."} or None if the
-    call/parse failed — callers should fall back to the deterministic
-    template brief on None rather than surfacing an error, since this is a
-    nice-to-have polish step, not a required one.
+    Returns {"type": "brief" | "question", "text": "...", "warning": "..." | None}
+    or None if the call/parse failed — callers should fall back to the
+    deterministic template brief on None rather than surfacing an error,
+    since this is a nice-to-have polish step, not a required one.
     """
     prior_qa = ""
     if prior_question and prior_answer:
@@ -81,8 +88,9 @@ def generate_brief(
         data = json.loads(raw)
         text = (data.get("text") or "").strip()
         kind = data.get("type") if data.get("type") in ("brief", "question") else "brief"
+        warning = (data.get("warning") or "").strip() or None
         if not text:
             return None
-        return {"type": kind, "text": text}
+        return {"type": kind, "text": text, "warning": warning}
     except Exception:
         return None

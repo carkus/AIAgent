@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, listAgentDrafts, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
 import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
-import { hideSavedChat, loadHiddenChatIds, loadSavedChats } from '../chatStorage'
+import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
@@ -113,6 +113,27 @@ function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], loc: st
     default:
       return `${name} reads these specialties as a mandate to track ${topics}${beat}. If commissioned, it will monitor developments and report back on what's most relevant.`
   }
+}
+
+// Mirrors backend/src/agent_stream.py's MAX_DELEGATIONS_PER_REQUEST — one
+// worker is delegated per specialty, capped per turn, so more specialties
+// than this are silently dropped/starved rather than all covered.
+const MAX_DELEGATIONS_PER_REQUEST = 6
+
+// Deterministic warning check, used only when the AI-drafted brief (which
+// does its own, richer warning assessment — see backend/src/brief.py)
+// hasn't loaded or failed and we're falling back to buildAgentBrief()'s
+// template. Only checks conditions cheap/certain enough to assert without
+// an LLM call — the AI brief's own judgment always takes precedence when
+// available, including its explicit choice not to warn.
+function buildDeterministicWarning(keywords: string[], agentType: AgentTemplateId, loc: string): string | null {
+  if (keywords.length > MAX_DELEGATIONS_PER_REQUEST) {
+    return `${keywords.length} specialties is more than the ${MAX_DELEGATIONS_PER_REQUEST} the agent can delegate to in one turn — some will be dropped or under-covered.`
+  }
+  if (agentType === 'job_search' && !loc) {
+    return 'No location set — job listings will be searched without a geographic filter.'
+  }
+  return null
 }
 
 // Flavor traits for a saved agent *profile* (pre-bootstrap — there's no real
@@ -237,7 +258,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // Saved chats — full bootstrapped conversations, client-side only (see
   // chatStorage.ts). Read once on mount like the other saved-* lists above;
   // resuming one skips bootstrap entirely (App.tsx's onResumeChat).
-  const [savedChats] = useState<SavedChat[]>(() => loadSavedChats())
+  const [savedChats, setSavedChats] = useState<SavedChat[]>(() => loadSavedChats())
+  const chatFileInputRef = useRef<HTMLInputElement>(null)
   // Tucks a chat out of the dossier list without touching its underlying
   // localStorage entry — distinct from an actual delete.
   const [hiddenChatIds, setHiddenChatIds] = useState<string[]>(() => loadHiddenChatIds())
@@ -482,45 +504,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }
   }
 
-  // Tap-to-rename a saved specialty in place. Same "no partial-update API"
-  // constraint as deleteSavedKeyword above — every saved-search entry that
-  // contains the old keyword gets deleted and re-created with the keyword
-  // swapped for the new text, preserving the entry's other keywords and its
-  // agentType. Also renames the keyword live in the active keyword chips if
-  // it's currently added there, so the two stay in sync.
-  const [editingSavedKeyword, setEditingSavedKeyword] = useState<string | null>(null)
-  const [editingSavedKeywordDraft, setEditingSavedKeywordDraft] = useState('')
-
-  async function renameSavedKeyword(oldKw: string, draft: string) {
-    const newKw = draft.trim().slice(0, 50)
-    setEditingSavedKeyword(null)
-    setEditingSavedKeywordDraft('')
-    if (!newKw || newKw.toLowerCase() === oldKw.toLowerCase()) return
-    if (savedKeywordPool.some(pooled => pooled.toLowerCase() === newKw.toLowerCase())) return
-    const lower = oldKw.toLowerCase()
-    const affected = saved.filter(s => s.keywords.some(k => k.toLowerCase() === lower))
-    if (affected.length === 0) return
-    setSaved(prev => prev.map(s =>
-      s.keywords.some(k => k.toLowerCase() === lower)
-        ? { ...s, keywords: s.keywords.map(k => k.toLowerCase() === lower ? newKw : k) }
-        : s
-    ))
-    setKeywords(prev => prev.map(k => k.toLowerCase() === lower ? newKw : k))
-    for (const entry of affected) {
-      deleteSavedSearch(entry.id).catch(() => {})
-      const renamed = entry.keywords.map(k => k.toLowerCase() === lower ? newKw : k)
-      try {
-        const fresh = await createSavedSearch(renamed.join(', '), renamed, entry.agentType ?? 'research')
-        setSaved(prev => [fresh, ...prev.filter(s => s.id !== entry.id)])
-      } catch {
-        // Best effort — local state already shows the rename either way.
-      }
-    }
-  }
-
   function removeKeyword(kw: string) {
     if (bootstrapping) return
-    setKeywords(prev => prev.filter(k => k !== kw))
+    setKeywords(prev => prev.filter(k => k.toLowerCase() !== kw.toLowerCase()))
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -642,6 +628,29 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setHiddenChatIds(hideSavedChat(id))
   }
 
+  // Counterpart to Chat.tsx's handleSaveChatFile download — reads a .json
+  // file back in, upserts it into the same localStorage-backed saved-chats
+  // list (so it survives a refresh and shows up in the dossier like any
+  // other saved chat), then jumps straight into it via the existing
+  // onResumeChat path, same as tapping a saved chat's own resume arrow.
+  function handleLoadChatFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || bootstrapping) return
+    file.text().then(text => {
+      const parsed = JSON.parse(text)
+      if (!parsed || typeof parsed !== 'object' || !parsed.id || !parsed.agentConfig || !Array.isArray(parsed.messages)) {
+        throw new Error('Not a recognised chat file')
+      }
+      const chat = parsed as SavedChat
+      setSavedChats(saveChat(chat))
+      setHiddenChatIds(prev => prev.filter(id => id !== chat.id))
+      resumeChat(chat)
+    }).catch(() => {
+      setCommissionHint('That file doesn\'t look like a saved chat export.')
+    })
+  }
+
   function handleAgentTypeChange(type: AgentTemplateId) {
     setAgentType(type)
   }
@@ -683,6 +692,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       onError(err instanceof Error ? err.message : 'Unknown error')
     }
   }
+
+  const briefWarning = keywords.length === 0
+    ? null
+    : aiBrief
+      ? aiBrief.warning ?? null
+      : buildDeterministicWarning(keywords, agentType, location.trim())
 
   return (
     <div className={styles.container}>
@@ -821,32 +836,46 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 keywords.length === 0 ? (
                   <p className={styles.agentSummaryText}>Add specialties above to generate this agent’s brief.</p>
                 ) : aiBrief?.type === 'question' ? (
-                  <div className={styles.briefQuestionBox}>
-                    <p className={styles.briefQuestionText}><span aria-hidden="true">🤔</span> {aiBrief.text}</p>
-                    <div className={styles.briefAnswerRow}>
-                      <input
-                        className={styles.briefAnswerInput}
-                        value={briefAnswer}
-                        onChange={e => setBriefAnswer(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleBriefAnswerSubmit() }}
-                        placeholder="Your answer…"
-                        disabled={answeringBrief}
-                      />
-                      <button
-                        type="button"
-                        className={styles.briefAnswerBtn}
-                        onClick={handleBriefAnswerSubmit}
-                        disabled={!briefAnswer.trim() || answeringBrief}
-                      >
-                        {answeringBrief ? '…' : 'Continue'}
-                      </button>
+                  <>
+                    <div className={styles.briefQuestionBox}>
+                      <p className={styles.briefQuestionText}><span aria-hidden="true">🤔</span> {aiBrief.text}</p>
+                      <div className={styles.briefAnswerRow}>
+                        <input
+                          className={styles.briefAnswerInput}
+                          value={briefAnswer}
+                          onChange={e => setBriefAnswer(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleBriefAnswerSubmit() }}
+                          placeholder="Your answer…"
+                          disabled={answeringBrief}
+                        />
+                        <button
+                          type="button"
+                          className={styles.briefAnswerBtn}
+                          onClick={handleBriefAnswerSubmit}
+                          disabled={!briefAnswer.trim() || answeringBrief}
+                        >
+                          {answeringBrief ? '…' : 'Continue'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                    {briefWarning && (
+                      <div className={styles.briefWarningBox}>
+                        <p className={styles.briefWarningText}><span aria-hidden="true">⚠</span> {briefWarning}</p>
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <p className={styles.agentSummaryText}>
-                    {aiBrief?.text ?? buildAgentBrief(agentType, keywords, location.trim(), agentName)}
-                    {briefLoading && <span className={styles.briefLoadingHint}> · redrafting…</span>}
-                  </p>
+                  <>
+                    <p className={styles.agentSummaryText}>
+                      {aiBrief?.text ?? buildAgentBrief(agentType, keywords, location.trim(), agentName)}
+                      {briefLoading && <span className={styles.briefLoadingHint}> · redrafting…</span>}
+                    </p>
+                    {briefWarning && (
+                      <div className={styles.briefWarningBox}>
+                        <p className={styles.briefWarningText}><span aria-hidden="true">⚠</span> {briefWarning}</p>
+                      </div>
+                    )}
+                  </>
                 )
               )}
             </div>
@@ -964,46 +993,26 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   <div className={styles.savedKeywordPool}>
                     {savedKeywordPool.map(kw => {
                       const alreadyAdded = keywords.some(k => k.toLowerCase() === kw.toLowerCase())
+                      const toggle = () => { if (bootstrapping) return; alreadyAdded ? removeKeyword(kw) : addSavedKeyword(kw) }
                       return (
-                        <div key={kw} className={styles.savedKeywordChip}>
-                          {editingSavedKeyword === kw ? (
-                            <input
-                              className={styles.chipInput}
-                              value={editingSavedKeywordDraft}
-                              onChange={e => setEditingSavedKeywordDraft(e.target.value.slice(0, 50))}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') { e.preventDefault(); renameSavedKeyword(kw, editingSavedKeywordDraft) }
-                                if (e.key === 'Escape') { e.preventDefault(); setEditingSavedKeyword(null); setEditingSavedKeywordDraft('') }
-                              }}
-                              onBlur={() => renameSavedKeyword(kw, editingSavedKeywordDraft)}
-                              autoFocus
-                              maxLength={50}
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              className={styles.savedKeywordLabel}
-                              onClick={() => { setEditingSavedKeyword(kw); setEditingSavedKeywordDraft(kw) }}
-                              disabled={bootstrapping}
-                              title="Tap to rename"
-                            >
-                              {kw}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className={styles.savedKeywordAddBtn}
-                            onClick={() => addSavedKeyword(kw)}
-                            disabled={bootstrapping || alreadyAdded}
-                            aria-label={`Add saved specialty ${kw} to current specialties`}
-                            title={alreadyAdded ? 'Already added' : 'Add this specialty to current specialties'}
-                          >
-                            +
-                          </button>
+                        <div
+                          key={kw}
+                          className={`${styles.savedKeywordChip} ${alreadyAdded ? styles.savedKeywordChipAdded : ''}`}
+                          role="button"
+                          tabIndex={bootstrapping ? -1 : 0}
+                          onClick={toggle}
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } }}
+                          aria-pressed={alreadyAdded}
+                          aria-label={alreadyAdded ? `Remove ${kw} from current specialties` : `Add saved specialty ${kw} to current specialties`}
+                          title={alreadyAdded ? 'Tap to remove from current specialties' : 'Tap to add to current specialties'}
+                        >
+                          <span className={styles.savedKeywordLabel}>{kw}</span>
+                          {alreadyAdded && <span className={styles.savedKeywordAddedTag}>Added</span>}
                           <button
                             type="button"
                             className={styles.savedKeywordDelete}
-                            onClick={() => deleteSavedKeyword(kw)}
+                            onClick={ev => { ev.stopPropagation(); deleteSavedKeyword(kw) }}
+                            disabled={bootstrapping}
                             aria-label={`Delete saved specialty ${kw}`}
                             title="Delete saved specialty"
                           >
@@ -1035,7 +1044,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         disabled={bootstrapping}
                         title="Add a new specialty straight to the saved pool"
                       >
-                        + Add New
+                        Add New
                       </button>
                     )}
                   </div>
@@ -1116,6 +1125,22 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               </button>
               {openSavedSections.chats && (
                 <div className={styles.savedSectionBody}>
+                  <input
+                    ref={chatFileInputRef}
+                    type="file"
+                    accept="application/json"
+                    onChange={handleLoadChatFile}
+                    style={{ display: 'none' }}
+                  />
+                  <button
+                    type="button"
+                    className={styles.loadChatFileBtn}
+                    onClick={() => chatFileInputRef.current?.click()}
+                    disabled={bootstrapping}
+                    title="Load a chat previously saved as a .json file and resume it"
+                  >
+                    Load Chat File…
+                  </button>
                   {visibleChats.length > 0 ? (
                     <div className={styles.savedList}>
                       {visibleChats.map(c => (
@@ -1136,7 +1161,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                               </div>
                             )}
                             <span className={styles.savedChatMeta}>
-                              {c.messages.length} message{c.messages.length === 1 ? '' : 's'} · {formatSavedAt(c.savedAt)}
+                              {getTemplate(c.agentConfig.template).label} · {c.messages.length} message{c.messages.length === 1 ? '' : 's'} · {formatSavedAt(c.savedAt)}
                             </span>
                           </div>
                           <button

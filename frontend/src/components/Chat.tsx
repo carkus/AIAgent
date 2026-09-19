@@ -105,8 +105,8 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function saveChatLocally() {
-    const chat: SavedChat = {
+  function buildSavedChat(): SavedChat {
+    return {
       id: chatIdRef.current,
       agentName,
       agentConfig,
@@ -115,7 +115,26 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
       })),
       savedAt: Date.now(),
     }
-    saveChat(chat)
+  }
+
+  function saveChatLocally() {
+    saveChat(buildSavedChat())
+  }
+
+  // Downloads the same SavedChat shape saveChatLocally() writes to
+  // localStorage, but as a portable .json file — the reloadable counterpart
+  // to the PDF export, readable back in via Setup.tsx's "Load Chat File".
+  function handleSaveChatFile() {
+    const chat = buildSavedChat()
+    const blob = new Blob([JSON.stringify(chat, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const safeName = agentName.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'agent'
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `chat-${safeName}-${stamp}.json`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   function handleSaveChat() {
@@ -292,7 +311,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
       <header className={styles.header}>
         <div className={styles.headerIdentity}>
           <img src={splashLogo} alt="Agent One" className={styles.headerLogo} />
-          <div>
+          <div className={styles.headerIdentityText}>
             <span className={styles.headerTitle}>Agent {agentName}</span>
             {agentConfig.persona?.traits && agentConfig.persona.traits.length > 0 && (
               <span className={styles.personaTraits} title={agentConfig.persona.rationale}>
@@ -472,7 +491,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
             )}
             {thinking && i === messages.length - 1 && msg.role === 'assistant' && !msg.content && (
               <p className={styles.workingText}>
-                Working{elapsed > 0 ? ` · ${elapsed}s` : '…'}
+                Working{elapsed > 0 ? ` · ${elapsed}s` : ''}
               </p>
             )}
           </div>
@@ -505,6 +524,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
           blobUrl={pdfPreview.blobUrl}
           filename={pdfPreview.filename}
           onDownload={handleDownloadPdf}
+          onSaveJson={handleSaveChatFile}
           onClose={handleClosePdfPreview}
         />
       )}

@@ -506,6 +506,23 @@
   cursor: default;
 }
 
+.briefWarningBox {
+  margin-top: 0.5rem;
+  background: #fdecea;
+  border: 1px solid #f2b8b5;
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+  box-shadow: inset 0 1px 3px rgba(22, 50, 74, 0.08);
+}
+
+.briefWarningText {
+  margin: 0;
+  color: #8f1414;
+  font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .specialInstructionsRow {
   display: flex;
   flex-direction: column;
@@ -900,6 +917,30 @@
   margin: 0;
 }
 
+.loadChatFileBtn {
+  background: transparent;
+  border: 1px dashed #c9bd8f;
+  border-radius: 6px;
+  color: #0b495e;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 0.5rem;
+  width: 100%;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.loadChatFileBtn:hover:not(:disabled) {
+  background: #f7f5f0;
+  border-color: #0b495e;
+}
+
+.loadChatFileBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .savedList {
   display: flex;
   flex-direction: column;
@@ -913,12 +954,19 @@
 }
 
 .savedKeywordChip {
+  /* The whole chip is the tap target — tapping it adds the specialty to
+     the current agent (or removes it, if already added); there's no
+     separate "+"/"Add" control any more, since a dedicated button next to
+     the label was a smaller, easy-to-miss target than the chip itself.
+     The delete "×" button inside stops propagation so deleting doesn't
+     also toggle add/remove. */
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
   background: #f7f5f0;
   border: 1px solid #ddd9cd;
   border-radius: 5px;
+  cursor: pointer;
   padding: 0.25rem 0.5rem 0.25rem 0.65rem;
   transition: background-color 0.15s, border-color 0.15s;
 }
@@ -927,13 +975,18 @@
   border-color: #0b495e;
 }
 
+.savedKeywordChip:focus-visible {
+  outline: 2px solid #1f6f73;
+  outline-offset: 1px;
+}
+
+.savedKeywordChipAdded {
+  background: #eaf3f7;
+  border-color: #3f7ea0;
+}
+
 .savedKeywordLabel {
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
   color: #0b495e;
-  cursor: text;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.76rem;
   font-weight: 400;
@@ -941,48 +994,31 @@
   text-transform: uppercase;
 }
 
-.savedKeywordLabel:hover:not(:disabled) {
-  text-decoration: underline dotted;
-}
-
-.savedKeywordLabel:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.savedKeywordAddBtn {
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  color: #1f6f73;
-  cursor: pointer;
+.savedKeywordAddedTag {
+  color: #3f7ea0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.68rem;
   font-weight: 700;
-  line-height: 1;
-  padding: 0 0.25rem;
-}
-
-.savedKeywordAddBtn:hover:not(:disabled) {
-  background: #e6f2f1;
-  border-color: #bcdbd8;
-}
-
-.savedKeywordAddBtn:disabled {
-  opacity: 0.35;
-  cursor: default;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .savedKeywordDelete {
+  /* Plain-text danger glyph, not a graphic pill. Sits inside the
+     clickable chip, so its own click handler stops propagation. */
   background: none;
   border: none;
-  color: #6b7785;
+  color: #b91c1c;
   cursor: pointer;
-  font-size: 0.85rem;
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
   line-height: 1;
   padding: 0;
 }
 
 .savedKeywordDelete:hover {
-  color: #b91c1c;
+  color: #8f1414;
 }
 
 .savedKeywordAddNew {
@@ -1313,12 +1349,12 @@
     font-size: 0.88rem;
   }
 
-  .savedKeywordAddBtn {
-    font-size: 1rem;
+  .savedKeywordAddedTag {
+    font-size: 0.78rem;
   }
 
   .savedKeywordDelete {
-    font-size: 1rem;
+    font-size: 1.05rem;
   }
 
   .savedKeywordAddNew {
