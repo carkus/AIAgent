@@ -47,7 +47,7 @@
   font-size: 1.485rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #0b495e;
+  color: var(--color-accent);
   margin-right: 0.75rem;
 }
 
@@ -55,14 +55,14 @@
   display: block;
   max-width: 100%;
   overflow-wrap: break-word;
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.72rem;
   margin: 0.15rem 0 0;
 }
 
 .personaTraits {
   display: block;
-  color: #3f7ea0;
+  color: var(--color-accent-secondary);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.7rem;
   font-style: italic;
@@ -74,7 +74,7 @@
 }
 
 .headerPurpose {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.8rem;
   flex-basis: 100%;
   margin-top: 0.15rem;
@@ -92,7 +92,7 @@
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 5px;
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.72rem;
   font-weight: 500;
@@ -102,7 +102,7 @@
 
 .modelBadge {
   display: block;
-  color: #3f7ea0;
+  color: var(--color-accent-secondary);
   background: #eaf3f7;
   border: 1px solid #cfe3ea;
   border-radius: 5px;
@@ -125,7 +125,7 @@
   gap: 0.35rem;
   margin-top: 0.5rem;
   background: #e9e6dc;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 9px;
   padding: 0.3rem;
 }
@@ -148,14 +148,14 @@
   background: #e9f3f2;
   border: 1px solid #a8cdd6;
   border-radius: 7px;
-  color: #0b495e;
+  color: var(--color-accent);
   cursor: pointer;
   transition: background-color 0.12s, border-color 0.12s, opacity 0.12s;
 }
 
 button.resetBtn {
-  background: #0b495e;
-  border-color: #0b495e;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
   color: #ffffff;
   font-weight: 700;
 }
@@ -203,16 +203,16 @@ button.resetBtn:active {
   align-items: center;
   gap: 0.5rem;
   padding: 0.65rem 1.25rem;
-  border-bottom: 1px solid #ddd9cd;
-  background: #f7f5f0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
   flex-shrink: 0;
 }
 
 .rosterInput {
   background: #ffffff;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  color: #16324a;
+  color: var(--color-text);
   flex: 1;
   min-width: 180px;
   font-family: 'Inter', 'Space Grotesk', sans-serif;
@@ -228,13 +228,13 @@ button.resetBtn:active {
 }
 
 .rosterInput:focus {
-  border-color: #0b495e;
+  border-color: var(--color-accent);
   box-shadow: 0 0 0 2px rgba(31, 111, 115, 0.15);
 }
 
 .rosterConfirmBtn {
-  background: #0b495e;
-  border: 1px solid #0b495e;
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
   border-radius: 6px;
   color: #ffffff;
   cursor: pointer;
@@ -258,10 +258,10 @@ button.resetBtn:active {
 }
 
 .rosterCancelBtn {
-  background: #f7f5f0;
-  border: 1px solid #0b495e;
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent);
   border-radius: 6px;
-  color: #0b495e;
+  color: var(--color-accent);
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.72rem;
@@ -278,7 +278,7 @@ button.resetBtn:active {
 }
 
 .rosterFeedback {
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: 'Inter', 'Space Grotesk', sans-serif;
   font-size: 0.74rem;
   letter-spacing: 0.02em;
@@ -313,7 +313,7 @@ button.resetBtn:active {
   background: #eef1f0;
   border: 1px solid rgba(31, 111, 115, 0.3);
   border-radius: 4px;
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.68rem;
   padding: 0.1rem 0.4rem;
@@ -332,7 +332,7 @@ button.resetBtn:active {
 }
 
 .emptyHint {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.85rem;
   margin: auto;
   text-align: center;
@@ -340,7 +340,7 @@ button.resetBtn:active {
 
 .userBubble {
   align-self: flex-end;
-  background: linear-gradient(135deg, #1c3a52 0%, #16324a 100%);
+  background: linear-gradient(135deg, #1c3a52 0%, var(--color-text) 100%);
   border: 1px solid rgba(31, 111, 115, 0.3);
   border-radius: 10px 10px 2px 10px;
   max-width: 70%;
@@ -367,7 +367,7 @@ button.resetBtn:active {
 /* Markdown renderer for assistant messages */
 
 .markdown {
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-family: 'Courier Prime', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.79rem;
   line-height: 1.6;
@@ -378,6 +378,13 @@ button.resetBtn:active {
 
 .markdown a {
   overflow-wrap: anywhere;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown a:hover {
+  color: var(--color-accent-hover);
 }
 
 .markdown p {
@@ -389,19 +396,19 @@ button.resetBtn:active {
 }
 
 .markdown h1 {
-  color: #16324a;
+  color: var(--color-text);
   font-size: 1.05rem;
   font-weight: 700;
   margin: 1.2rem 0 0.5rem;
   padding-bottom: 0.3rem;
-  border-bottom: 1px solid #ddd9cd;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .markdown h2 {
   background: rgba(31, 111, 115, 0.08);
-  border-left: 3px solid #0b495e;
+  border-left: 3px solid var(--color-accent);
   border-radius: 0 5px 5px 0;
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.82rem;
   font-weight: 700;
@@ -421,7 +428,7 @@ button.resetBtn:active {
 .markdown h4,
 .markdown h5,
 .markdown h6 {
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-size: 0.85rem;
   font-weight: 600;
   margin: 0.75rem 0 0.25rem;
@@ -459,8 +466,8 @@ button.resetBtn:active {
 }
 
 .markdown ol li {
-  background: #f7f5f0;
-  border: 1px solid #ddd9cd;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   counter-increment: md-item;
   padding: 0.7rem 0.9rem 0.7rem 2.9rem;
@@ -485,29 +492,16 @@ button.resetBtn:active {
 }
 
 .markdown ol li a {
-  background: #e6f2f1;
-  border: 1px solid #bcdbd8;
-  border-radius: 4px;
-  color: #05384b;
   font-size: 0.8rem;
-  padding: 0.05rem 0.4rem;
-  text-decoration: none;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.markdown ol li a:hover {
-  border-color: #a8cdd6;
-  color: #164a4e;
-  text-decoration: none;
 }
 
 .markdown strong {
-  color: #16324a;
+  color: var(--color-text);
   font-weight: 600;
 }
 
 .markdown em {
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
@@ -524,7 +518,7 @@ button.resetBtn:active {
 
 .markdown pre {
   background: #f5f6f4;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   margin: 0.5rem 0;
   max-width: 100%;
@@ -535,14 +529,14 @@ button.resetBtn:active {
 .markdown pre code {
   background: none;
   border: none;
-  color: #33475a;
+  color: var(--color-text-secondary);
   overflow-wrap: normal;
   padding: 0;
 }
 
 .mermaidDiagram {
   background: #f5f6f4;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   margin: 0.6rem auto 0.9rem;
   /* Mermaid's useMaxWidth only stretches the SVG to fill this box, so
@@ -565,8 +559,17 @@ button.resetBtn:active {
   height: auto;
 }
 
+/* The one-or-two-sentence "takeaway" the model writes right after a diagram
+   (CLAUDE.md's "diagrams over prose" rule) is just the next markdown
+   paragraph — give it the same side breathing room as the diagram box
+   above it instead of running edge-to-edge. */
+.mermaidDiagram + p {
+  margin-left: 20px;
+  margin-right: 20px;
+}
+
 .mermaidLoading {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.8rem;
   font-style: italic;
   margin: 0.5rem 0;
@@ -580,16 +583,16 @@ button.resetBtn:active {
 
 .markdown hr {
   border: none;
-  border-top: 1px solid #ddd9cd;
+  border-top: 1px solid var(--color-border);
   margin: 0.9rem 0;
 }
 
-/* Source / link-only list items â†’ pill row */
+/* Source / link-only list items â†’ single row of plain links */
 
 .markdown ul:has(li > a:only-child) {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.35rem 0.75rem;
   list-style: none;
   padding: 0;
   margin: 0.4rem 0 0.75rem;
@@ -600,25 +603,11 @@ button.resetBtn:active {
 }
 
 .markdown ul:has(li > a:only-child) li > a {
-  background: #e6f2f1;
-  border: 1px solid #bcdbd8;
-  border-radius: 5px;
-  color: #05384b;
   font-size: 0.78rem;
-  padding: 0.2rem 0.6rem;
-  text-decoration: none;
-  transition: border-color 0.15s, color 0.15s;
-  white-space: nowrap;
-}
-
-.markdown ul:has(li > a:only-child) li > a:hover {
-  border-color: #a8cdd6;
-  color: #164a4e;
-  text-decoration: none;
 }
 
 .markdown blockquote {
-  border-left: 3px solid #0b495e;
+  border-left: 3px solid var(--color-accent);
   color: #5a6773;
   margin: 0.5rem 0;
   padding: 0 0 0 0.75rem;
@@ -628,7 +617,7 @@ button.resetBtn:active {
 
 .tableWrap {
   background: #fcfbf8;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   margin: 0.6rem 0 0.9rem;
   max-width: 100%;
@@ -649,8 +638,8 @@ button.resetBtn:active {
 }
 
 .markdown th {
-  border-bottom: 1px solid #ddd9cd;
-  color: #16324a;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
   font-weight: 600;
   padding: 0.45rem 0.75rem;
   text-align: left;
@@ -659,7 +648,7 @@ button.resetBtn:active {
 
 .markdown td {
   border-bottom: 1px solid #eceae3;
-  color: #33475a;
+  color: var(--color-text-secondary);
   line-height: 1.4;
   overflow-wrap: anywhere;
   padding: 0.4rem 0.75rem;
@@ -675,7 +664,7 @@ button.resetBtn:active {
 }
 
 .workingText {
-  color: #6b7785;
+  color: var(--color-muted);
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8rem;
   letter-spacing: 0.02em;
@@ -697,17 +686,17 @@ button.resetBtn:active {
 }
 
 .duration {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.68rem;
   margin: 0.35rem 0 0;
 }
 
 .tokenBreakdown {
-  color: #6b7785;
+  color: var(--color-muted);
 }
 
 .rateLimit {
-  color: #6b7785;
+  color: var(--color-muted);
 }
 
 .error {
@@ -721,7 +710,7 @@ button.resetBtn:active {
   display: flex;
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
-  border-top: 1px solid #ddd9cd;
+  border-top: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
@@ -729,7 +718,7 @@ button.resetBtn:active {
   background: #ffffff;
   border: 1px solid #a8cdd6;
   border-radius: 7px;
-  color: #16324a;
+  color: var(--color-text);
   flex: 1;
   font-family: 'Inter', 'Space Grotesk', sans-serif;
   font-size: 0.85rem;
@@ -744,13 +733,13 @@ button.resetBtn:active {
 }
 
 .input:focus {
-  border-color: #0b495e;
+  border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.15);
 }
 
 .sendBtn {
-  background: #0b495e;
-  border: 1px solid #0b495e;
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
   border-radius: 8px;
   color: #ffffff;
   cursor: pointer;
@@ -773,7 +762,7 @@ button.resetBtn:active {
 }
 
 .stopBtn {
-  background: #f7f5f0;
+  background: var(--color-surface);
   border: 1px solid #e3a3a3;
   border-radius: 8px;
   color: #b91c1c;

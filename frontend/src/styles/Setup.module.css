@@ -34,12 +34,12 @@
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #0b495e;
+  color: var(--color-accent);
 }
 
 .subtitle {
   margin: 0 0 2rem;
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.95rem;
 }
 
@@ -59,8 +59,8 @@
 }
 
 .chipArea {
-  background: #f7f5f0;
-  border: 1px solid #ddd9cd;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   box-shadow: inset 0 1px 4px rgba(28, 40, 51, 0.07);
   cursor: text;
@@ -75,16 +75,16 @@
 }
 
 .chipArea:focus-within {
-  border-color: #0b495e;
+  border-color: var(--color-accent);
   box-shadow: inset 0 1px 4px rgba(28, 40, 51, 0.07), 0 0 0 3px rgba(31, 111, 115, 0.12);
 }
 
 .chip {
   align-items: center;
-  background: #f7f5f0;
-  border: 1px solid #ddd9cd;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 5px;
-  color: #0b495e;
+  color: var(--color-accent);
   display: inline-flex;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.76rem;
@@ -106,7 +106,7 @@
 }
 
 .chipX:hover {
-  color: #0b495e;
+  color: var(--color-accent);
 }
 
 .chipInput {
@@ -114,7 +114,7 @@
   border: 1px solid #bcdbd8;
   border-radius: 6px;
   box-sizing: border-box;
-  color: #0b495e;
+  color: var(--color-accent);
   flex: 0 0 220px;
   width: 220px;
   font-size: 0.75rem;
@@ -128,7 +128,7 @@
 }
 
 .chipInput:focus {
-  border-color: #0b495e;
+  border-color: var(--color-accent);
   box-shadow: 0 0 0 2px rgba(31, 111, 115, 0.15);
 }
 
@@ -145,7 +145,7 @@
   border: 1px solid #cfbf94;
   border-radius: 999px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.85rem;
   font-weight: 400;
@@ -189,7 +189,7 @@
   align-items: center;
   gap: 0.6rem;
   background: #f2efe4;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 0.4rem;
 }
@@ -207,7 +207,7 @@
 }
 
 .agentTypeLabel {
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.6rem;
   font-weight: 400;
@@ -227,8 +227,8 @@
 }
 
 .profileCommissionBtn {
-  background: #0b495e;
-  border: 1px solid #0b495e;
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
   border-radius: 6px;
   box-sizing: border-box;
   color: #ffffff;
@@ -260,11 +260,11 @@
 }
 
 .profileSaveBtn {
-  background: #f7f5f0;
-  border: 1px solid #0b495e;
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent);
   border-radius: 4px;
   box-sizing: border-box;
-  color: #0b495e;
+  color: var(--color-accent);
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.66rem;
@@ -289,7 +289,7 @@
 }
 
 .profileSaveBtn:hover:not(:disabled) {
-  background: #0b495e;
+  background: var(--color-accent);
   color: #fff;
 }
 
@@ -299,7 +299,7 @@
 }
 
 .profileResetBtn {
-  background: #f7f5f0;
+  background: var(--color-surface);
   border: 1px solid #c98f8f;
   border-radius: 4px;
   color: #a34b4b;
@@ -333,7 +333,7 @@
 
 .locationLiner {
   margin: -0.35rem 0 0.15rem;
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.66rem;
   text-align: left;
 }
@@ -343,7 +343,7 @@
   flex-direction: column;
   gap: 0.85rem;
   background: #ffffff;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 1rem 0.625rem;
   margin-bottom: 1rem;
@@ -382,7 +382,7 @@
   flex-direction: column;
   gap: 0.4rem;
   padding-top: 0.75rem;
-  border-top: 1px dashed #ddd9cd;
+  border-top: 1px dashed var(--color-border);
 }
 
 .specialtiesActionsRow {
@@ -403,7 +403,7 @@
 }
 
 .saveFeedbackSuccess {
-  color: #0b495e;
+  color: var(--color-accent);
 }
 
 .saveFeedbackError {
@@ -415,16 +415,16 @@
   flex-direction: column;
   gap: 0.35rem;
   padding-top: 0.75rem;
-  border-top: 1px dashed #ddd9cd;
+  border-top: 1px dashed var(--color-border);
 }
 
 .agentSummaryText {
   margin: 0;
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.88rem;
   line-height: 1.55;
-  background: #f7f5f0;
+  background: var(--color-surface);
   border: 1px solid #e2ded2;
   border-radius: 6px;
   padding: 0.65rem 0.75rem;
@@ -464,7 +464,7 @@
   background: #ffffff;
   border: 1px solid #e8d2a0;
   border-radius: 6px;
-  color: #16324a;
+  color: var(--color-text);
   flex: 1;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.76rem;
@@ -528,16 +528,16 @@
   flex-direction: column;
   gap: 0.35rem;
   padding-top: 0.75rem;
-  border-top: 1px dashed #ddd9cd;
+  border-top: 1px dashed var(--color-border);
 }
 
 .specialInstructionsInput {
   margin: 0;
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.88rem;
   line-height: 1.55;
-  background: #f7f5f0;
+  background: var(--color-surface);
   border: 1px solid #e2ded2;
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
@@ -549,14 +549,14 @@
 }
 
 .specialInstructionsInput:focus {
-  border-color: #0b495e;
+  border-color: var(--color-accent);
 }
 
 .fieldLabel {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  color: #3f7ea0;
+  color: var(--color-accent-secondary);
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.7rem;
   font-weight: 400;
@@ -565,7 +565,7 @@
 }
 
 .fieldLabel span {
-  color: #0b495e;
+  color: var(--color-accent);
   font-size: 0.6rem;
 }
 
@@ -590,7 +590,7 @@
 }
 
 .fieldLabelCaret {
-  color: #0b495e;
+  color: var(--color-accent);
   font-size: 1.3rem;
   flex-shrink: 0;
 }
@@ -598,7 +598,7 @@
 .fieldLabelCount {
   background: #eef1f0;
   border-radius: 999px;
-  color: #0b495e;
+  color: var(--color-accent);
   font-size: 0.68rem;
   font-weight: 600;
   padding: 0.05rem 0.45rem;
@@ -610,9 +610,9 @@
   top: 1.1rem;
   right: 1.1rem;
   background: none;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  color: #0b495e;
+  color: var(--color-accent);
   cursor: pointer;
   font-size: 1.425rem;
   line-height: 1;
@@ -625,7 +625,7 @@
 }
 
 .settingsIconBtn:hover {
-  border-color: #0b495e;
+  border-color: var(--color-accent);
   background: rgba(31, 111, 115, 0.08);
 }
 
@@ -638,10 +638,10 @@
 }
 
 .agentTypePill {
-  background: #f7f5f0;
-  border: 1px solid #ddd9cd;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  color: #6b7785;
+  color: var(--color-muted);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -665,8 +665,8 @@
 }
 
 .agentTypePill:hover:not(:disabled) {
-  border-color: #0b495e;
-  color: #33475a;
+  border-color: var(--color-accent);
+  color: var(--color-text-secondary);
   transform: translateY(-1px);
 }
 
@@ -678,8 +678,8 @@
 .agentTypePillActive,
 .agentTypePillActive:hover:not(:disabled) {
   background: rgba(11, 73, 94, 0.1);
-  border-color: #0b495e;
-  color: #0b495e;
+  border-color: var(--color-accent);
+  color: var(--color-accent);
   transform: none;
 }
 
@@ -691,9 +691,9 @@
 
 .locationInput {
   background: #ffffff;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-family: inherit;
   font-size: 0.85rem;
   outline: none;
@@ -704,7 +704,7 @@
 }
 
 .locationInput:focus {
-  border-color: #0b495e;
+  border-color: var(--color-accent);
 }
 
 .locationSuggestions {
@@ -713,7 +713,7 @@
   left: 0;
   right: 0;
   background: #ffffff;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   list-style: none;
   margin: 0;
@@ -724,7 +724,7 @@
 }
 
 .locationSuggestions li {
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-size: 0.82rem;
   padding: 0.45rem 0.5rem;
   border-radius: 4px;
@@ -733,14 +733,14 @@
 
 .locationSuggestions li:hover {
   background: #eef1f0;
-  color: #16324a;
+  color: var(--color-text);
 }
 
 .providerSelect {
   background-color: #ffffff;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-family: inherit;
   font-size: 0.85rem;
   outline: none;
@@ -757,7 +757,7 @@
 }
 
 .providerSelect:focus {
-  border-color: #0b495e;
+  border-color: var(--color-accent);
 }
 
 .providerHint {
@@ -833,8 +833,8 @@
   right: 0.4rem;
   z-index: 1;
   background: #f2efe4;
-  color: #0b495e;
-  border: 2.25px solid #0b495e;
+  color: var(--color-accent);
+  border: 2.25px solid var(--color-accent);
   border-radius: 6px;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.9rem;
@@ -867,7 +867,7 @@
   width: 100%;
   background: transparent;
   border: none;
-  color: #16324a;
+  color: var(--color-text);
   cursor: pointer;
   font-family: inherit;
   padding: 0.55rem 0.7rem;
@@ -886,7 +886,7 @@
 }
 
 .savedSectionTitle {
-  color: #16324a;
+  color: var(--color-text);
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.78rem;
   font-weight: 400;
@@ -899,7 +899,7 @@
 .savedSectionCount {
   background: #eef1f0;
   border-radius: 999px;
-  color: #0b495e;
+  color: var(--color-accent);
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.1rem 0.5rem;
@@ -921,7 +921,7 @@
   background: transparent;
   border: 1px dashed #c9bd8f;
   border-radius: 6px;
-  color: #0b495e;
+  color: var(--color-accent);
   cursor: pointer;
   font-size: 0.75rem;
   font-weight: 600;
@@ -932,8 +932,8 @@
 }
 
 .loadChatFileBtn:hover:not(:disabled) {
-  background: #f7f5f0;
-  border-color: #0b495e;
+  background: var(--color-surface);
+  border-color: var(--color-accent);
 }
 
 .loadChatFileBtn:disabled {
@@ -963,8 +963,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  background: #f7f5f0;
-  border: 1px solid #ddd9cd;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 5px;
   cursor: pointer;
   padding: 0.25rem 0.5rem 0.25rem 0.65rem;
@@ -972,7 +972,7 @@
 }
 
 .savedKeywordChip:hover {
-  border-color: #0b495e;
+  border-color: var(--color-accent);
 }
 
 .savedKeywordChip:focus-visible {
@@ -982,11 +982,11 @@
 
 .savedKeywordChipAdded {
   background: #eaf3f7;
-  border-color: #3f7ea0;
+  border-color: var(--color-accent-secondary);
 }
 
 .savedKeywordLabel {
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.76rem;
   font-weight: 400;
@@ -995,7 +995,7 @@
 }
 
 .savedKeywordAddedTag {
-  color: #3f7ea0;
+  color: var(--color-accent-secondary);
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.68rem;
   font-weight: 700;
@@ -1025,7 +1025,7 @@
   background: none;
   border: 1px dashed #9fb3ab;
   border-radius: 5px;
-  color: #0b495e;
+  color: var(--color-accent);
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.75rem;
@@ -1034,7 +1034,7 @@
 }
 
 .savedKeywordAddNew:hover:not(:disabled) {
-  border-color: #0b495e;
+  border-color: var(--color-accent);
   background: #e6f2f1;
 }
 
@@ -1047,8 +1047,8 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #f7f5f0;
-  border: 1px solid #ddd9cd;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 0.35rem 0.5rem 0.35rem 0.75rem;
   cursor: pointer;
@@ -1056,7 +1056,7 @@
 }
 
 .savedRow:hover {
-  border-color: #0b495e;
+  border-color: var(--color-accent);
 }
 
 .savedRowDisabled {
@@ -1065,7 +1065,7 @@
 }
 
 .savedRowDisabled:hover {
-  border-color: #ddd9cd;
+  border-color: var(--color-border);
 }
 
 .savedChips {
@@ -1077,10 +1077,10 @@
 }
 
 .savedChip {
-  background: #f7f5f0;
-  border: 1px solid #ddd9cd;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 5px;
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.72rem;
   font-weight: 400;
@@ -1098,7 +1098,7 @@
 }
 
 .savedChatName {
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.82rem;
   font-weight: 700;
@@ -1107,13 +1107,13 @@
 }
 
 .savedChatTraits {
-  color: #0b495e;
+  color: var(--color-accent);
   font-size: 0.72rem;
   font-style: italic;
 }
 
 .savedChatMeta {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.62rem;
 }
 
@@ -1122,7 +1122,7 @@
   align-items: center;
   background: none;
   border: none;
-  color: #6b7785;
+  color: var(--color-muted);
   cursor: pointer;
   font-size: 1.05rem;
   line-height: 1;
@@ -1131,7 +1131,7 @@
 }
 
 .savedResume:hover:not(:disabled) {
-  color: #0b495e;
+  color: var(--color-accent);
 }
 
 .savedResume:disabled {
@@ -1142,7 +1142,7 @@
 .savedDelete {
   background: none;
   border: none;
-  color: #6b7785;
+  color: var(--color-muted);
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
@@ -1202,7 +1202,7 @@
 }
 
 .modelInfoLine {
-  color: #0b495e !important;
+  color: var(--color-accent) !important;
   font-weight: 600;
   margin-bottom: 0.5rem !important;
 }
@@ -1213,7 +1213,7 @@
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 999px;
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.72rem;
   font-weight: 700;

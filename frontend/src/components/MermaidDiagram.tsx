@@ -70,6 +70,17 @@ function ensureInitialized() {
   })
 }
 
+// Below this viewport width, a horizontally-laid-out flowchart (LR/RL) has
+// nowhere near enough room per node — labels overlap or the whole diagram
+// forces the chat bubble to scroll sideways. The model writes the chart
+// without knowing the viewer's screen size, so it's adapted here instead.
+const NARROW_SCREEN_PX = 480
+
+function adaptChartForWidth(chart: string, screenWidth: number): string {
+  if (screenWidth >= NARROW_SCREEN_PX) return chart
+  return chart.replace(/^(\s*(?:flowchart|graph)\s+)(LR|RL)\b/im, '$1TD')
+}
+
 // Renders a ```mermaid fenced code block from the agent's reply as an actual
 // diagram (flowchart, pie/bar chart, mind map, etc.) instead of raw text —
 // the "prefer a diagram over a wordy paragraph" output style.
@@ -83,7 +94,8 @@ export default function MermaidDiagram({ chart }: { chart: string }) {
     let cancelled = false
     setSvg(null)
     setError(null)
-    mermaid.render(`mermaid-${id}`, chart)
+    const adapted = adaptChartForWidth(chart, window.innerWidth)
+    mermaid.render(`mermaid-${id}`, adapted)
       .then(result => { if (!cancelled) setSvg(result.svg) })
       .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : 'Diagram failed to render') })
     return () => { cancelled = true }

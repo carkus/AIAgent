@@ -80,7 +80,7 @@
 
 .closeBtn:hover {
   background: rgba(107, 90, 50, 0.1);
-  color: #16324a;
+  color: var(--color-text);
 }
 
 .body {
@@ -103,7 +103,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  color: #3f7ea0;
+  color: var(--color-accent-secondary);
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.68rem;
   font-weight: 400;
@@ -113,7 +113,7 @@
 
 .sectionLabel::before {
   content: '◆';
-  color: #0b495e;
+  color: var(--color-accent);
   font-size: 0.58rem;
 }
 
@@ -134,7 +134,7 @@
   background: #f8f4e7;
   border: 1px solid #ddd0a5;
   border-radius: 8px;
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-family: inherit;
   font-size: 0.9rem;
   outline: none;
@@ -150,7 +150,7 @@
 
 .locationInput:focus {
   background: #ffffff;
-  border-color: #0b495e;
+  border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.12);
 }
 
@@ -171,7 +171,7 @@
 }
 
 .locationSuggestions li {
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-size: 0.85rem;
   padding: 0.5rem 0.6rem;
   border-radius: 4px;
@@ -180,11 +180,11 @@
 
 .locationSuggestions li:hover {
   background: #ede4cd;
-  color: #16324a;
+  color: var(--color-text);
 }
 
 .detectBtn {
-  background: #0b495e;
+  background: var(--color-accent);
   border: none;
   border-radius: 6px;
   color: #fff;
@@ -209,7 +209,7 @@
   background-color: #f8f4e7;
   border: 1px solid #ddd0a5;
   border-radius: 8px;
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-family: inherit;
   font-size: 0.85rem;
   font-weight: 500;
@@ -238,7 +238,7 @@
 
 .providerSelect:focus {
   background-color: #ffffff;
-  border-color: #0b495e;
+  border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.12);
 }
 
@@ -262,7 +262,7 @@
 }
 
 .doneBtn {
-  background: #0b495e;
+  background: var(--color-accent);
   border: none;
   border-radius: 8px;
   color: #fff;

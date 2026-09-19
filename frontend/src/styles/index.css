@@ -2,6 +2,26 @@
   box-sizing: border-box;
 }
 
+/* Theme colors — the "main default colours" the settings gear (App.tsx's
+   ThemeSettings) lets the user repick live via <input type="color">.
+   Every value here is the exact hex the app shipped with, so defining these
+   changes nothing on its own; components opt in by using var(--color-*)
+   instead of a literal hex. Not every one-off color in the app (status
+   chips, error red, etc.) was migrated — just the handful that actually
+   carry the app's overall look (background, text, borders, the two accent
+   colors used throughout for links/buttons/highlights). */
+:root {
+  --color-bg: #fbfaf8;
+  --color-surface: #fffefd;
+  --color-text: #16324a;
+  --color-text-secondary: #33475a;
+  --color-muted: #6b7785;
+  --color-border: #ddd9cd;
+  --color-accent: #0b495e;
+  --color-accent-hover: #164a4e;
+  --color-accent-secondary: #3f7ea0;
+}
+
 html, body {
   margin: 0;
   padding: 0;

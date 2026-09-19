@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Setup from './components/Setup'
 import Chat from './components/Chat'
 import SplashScreen from './components/SplashScreen'
+import ThemeSettings from './components/ThemeSettings'
 import type { AgentConfig, SavedChat } from './types'
 import { SURNAMES } from './surnames'
+import { loadTheme } from './theme'
 
 type Phase = 'splash' | 'setup' | 'bootstrapping' | 'chat'
 
@@ -25,6 +27,10 @@ export default function App() {
   // bootstrap entirely) — cleared on the next fresh bootstrap or reset so a
   // resumed conversation's history doesn't leak into an unrelated agent.
   const [resumedChat, setResumedChat] = useState<SavedChat | null>(null)
+
+  useEffect(() => {
+    loadTheme()
+  }, [])
 
   function handleBootstrapStart() {
     setBootstrapError(null)
@@ -96,6 +102,7 @@ export default function App() {
           chatId={resumedChat?.id}
         />
       ) : null}
+      <ThemeSettings />
     </div>
   )
 }
@@ -103,8 +110,8 @@ export default function App() {
 const styles: Record<string, React.CSSProperties> = {
   root: {
     height: '100%',
-    background: '#f2efe9',
-    color: '#16324a',
+    background: 'var(--color-bg)',
+    color: 'var(--color-text)',
     fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
     display: 'flex',
     flexDirection: 'column',

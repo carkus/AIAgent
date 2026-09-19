@@ -31,7 +31,7 @@
 }
 
 .heading {
-  color: #6b7785;
+  color: var(--color-muted);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -54,7 +54,7 @@
 }
 
 .headingArrow {
-  color: #0b495e;
+  color: var(--color-accent);
   flex-shrink: 0;
   font-size: 1.4rem;
 }
@@ -82,7 +82,7 @@
 }
 
 .mcpBadge {
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-weight: 700;
   font-size: 0.65rem;
@@ -101,7 +101,7 @@
 
 .pill {
   background: #f0efe9;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   display: inline-flex;
   gap: 0.25rem;
@@ -109,11 +109,11 @@
 }
 
 .pillKey {
-  color: #6b7785;
+  color: var(--color-muted);
 }
 
 .pillVal {
-  color: #33475a;
+  color: var(--color-text-secondary);
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -122,27 +122,28 @@
 }
 
 .resultCount {
-  color: #6b7785;
+  color: var(--color-muted);
   margin: 0 0 0.4rem;
 }
 
 .searchResult {
-  border-left: 2px solid #ddd9cd;
+  border-left: 2px solid var(--color-border);
   margin-bottom: 0.5rem;
   padding-left: 0.6rem;
 }
 
 .resultTitle {
-  color: #05384b;
+  color: var(--color-accent);
   display: block;
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
   font-weight: 500;
   font-size: 0.8rem;
   margin-bottom: 0.15rem;
 }
 
 .resultTitle:hover {
-  text-decoration: underline;
+  color: var(--color-accent-hover);
 }
 
 .resultSnippet {
@@ -152,7 +153,7 @@
 }
 
 .noResults {
-  color: #6b7785;
+  color: var(--color-muted);
   margin: 0;
   font-style: italic;
 }
@@ -181,13 +182,13 @@
 }
 
 .kwHeadingArrow {
-  color: #3f7ea0;
+  color: var(--color-accent-secondary);
   flex-shrink: 0;
   font-size: 1.4rem;
 }
 
 .kwHeading {
-  color: #3f7ea0;
+  color: var(--color-accent-secondary);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.82rem;
   font-weight: 700;
@@ -195,7 +196,7 @@
 }
 
 .kwCount {
-  color: #6b7785;
+  color: var(--color-muted);
   font-weight: 400;
   font-family: inherit;
 }
@@ -203,22 +204,22 @@
 /* Market trend card */
 
 .marketCard {
-  background: #f7f5f0;
-  border: 1px solid #ddd9cd;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   margin-top: 0.5rem;
   padding: 0.65rem 0.75rem;
 }
 
 .marketHeading {
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-size: 0.75rem;
   font-weight: 600;
   margin: 0 0 0.6rem;
 }
 
 .marketCount {
-  color: #6b7785;
+  color: var(--color-muted);
   font-weight: 400;
 }
 
@@ -234,7 +235,7 @@
 }
 
 .marketSectionLabel {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -252,7 +253,7 @@
 }
 
 .barLabel {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.68rem;
   min-width: 60px;
 }
@@ -275,17 +276,17 @@
 .barMeter::-webkit-meter-optimum-value,
 .barMeter::-webkit-meter-suboptimum-value,
 .barMeter::-webkit-meter-even-less-good-value {
-  background: #0b495e;
+  background: var(--color-accent);
   border-radius: 2px;
 }
 
 .barMeter::-moz-meter-bar {
-  background: #0b495e;
+  background: var(--color-accent);
   border-radius: 2px;
 }
 
 .barCount {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.65rem;
   min-width: 16px;
   text-align: right;
@@ -310,7 +311,7 @@
 }
 
 .companyCount {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.65rem;
   flex-shrink: 0;
 }
@@ -346,9 +347,9 @@
 
 .contractChip {
   background: #f0efe9;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 3px;
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.65rem;
   padding: 0.05rem 0.35rem;
 }
@@ -392,7 +393,7 @@
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 4px;
-  color: #0b495e;
+  color: var(--color-accent);
   display: inline-flex;
   font-size: 0.72rem;
   gap: 0.3rem;
@@ -402,7 +403,7 @@
 .termCount {
   background: #cfe3ea;
   border-radius: 3px;
-  color: #164a4e;
+  color: var(--color-accent-hover);
   font-size: 0.65rem;
   font-weight: 700;
   padding: 0 0.3rem;
@@ -418,7 +419,7 @@
 }
 
 .analysisNote {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.7rem;
   margin: 0 0 0.2rem;
 }
@@ -434,7 +435,7 @@
 
 .kvPill {
   background: #f0efe9;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   display: inline-flex;
   font-size: 0.72rem;
@@ -448,7 +449,7 @@
 }
 
 .kvVal {
-  color: #33475a;
+  color: var(--color-text-secondary);
   padding: 0.15rem 0.4rem;
   max-width: 200px;
   overflow: hidden;
@@ -457,31 +458,31 @@
 }
 
 .kvValLink {
-  color: #0b495e;
+  color: var(--color-accent);
   padding: 0.15rem 0.4rem;
   max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .kvValLink:hover {
-  color: #164a4e;
-  text-decoration: underline;
+  color: var(--color-accent-hover);
 }
 
 .kwLink {
-  color: #0b495e;
-  text-decoration: none;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.78rem;
   font-weight: 400;
 }
 
 .kwLink:hover {
-  color: #164a4e;
-  text-decoration: underline;
+  color: var(--color-accent-hover);
 }
 
 .fetchResult {
@@ -492,16 +493,16 @@
 }
 
 .fetchUrl {
-  color: #6b7785;
+  color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.72rem;
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
   word-break: break-all;
 }
 
 .fetchUrl:hover {
-  color: #33475a;
-  text-decoration: underline;
+  color: var(--color-accent-hover);
 }
 
 .listingCount {
@@ -534,7 +535,7 @@
 /* Pending state */
 
 .pending {
-  color: #6b7785;
+  color: var(--color-muted);
   font-style: italic;
   font-size: 0.75rem;
   margin: 0;
@@ -549,7 +550,7 @@
 }
 
 .filteredNote {
-  color: #6b7785;
+  color: var(--color-muted);
 }
 
 /* Agents-employed summary */
@@ -561,7 +562,7 @@
 }
 
 .agentsSummaryHeading {
-  color: #0b495e;
+  color: var(--color-accent);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -577,9 +578,9 @@
 
 .agentPill {
   align-items: baseline;
-  background: #f7f5f0;
+  background: var(--color-surface);
   border: 1px solid #cfe3ea;
-  border-left: 2px solid #0b495e;
+  border-left: 2px solid var(--color-accent);
   border-radius: 5px;
   display: inline-flex;
   flex-wrap: wrap;
@@ -589,7 +590,7 @@
 }
 
 .agentPillName {
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-weight: 700;
   font-size: 0.75rem;
@@ -604,21 +605,21 @@
 }
 
 .agentPillTask {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.7rem;
 }
 
 .agentPillPending {
-  color: #3f7ea0;
+  color: var(--color-accent-secondary);
   font-size: 0.66rem;
   font-style: italic;
   flex-shrink: 0;
 }
 
 .workerCard {
-  background: #f7f5f0;
+  background: var(--color-surface);
   border: 1px solid #cfe3ea;
-  border-left: 2px solid #0b495e;
+  border-left: 2px solid var(--color-accent);
   border-radius: 6px;
   margin-top: 0.5rem;
   padding: 0.65rem 0.75rem;
@@ -641,13 +642,13 @@
 }
 
 .workerHeadingArrow {
-  color: #0b495e;
+  color: var(--color-accent);
   flex-shrink: 0;
   font-size: 1.4rem;
 }
 
 .workerName {
-  color: #0b495e;
+  color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-weight: 700;
   font-size: 0.8rem;
@@ -661,7 +662,7 @@
 }
 
 .groundedBadge {
-  color: #3f7ea0;
+  color: var(--color-accent-secondary);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-weight: 700;
   font-size: 0.65rem;
@@ -673,13 +674,13 @@
 }
 
 .workerTask {
-  color: #6b7785;
+  color: var(--color-muted);
   font-size: 0.7rem;
   margin: 0 0 0.5rem;
 }
 
 .workerSummary {
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-family: 'Courier Prime', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.74rem;
   line-height: 1.45;
@@ -687,7 +688,7 @@
 }
 
 .workerResponse {
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-family: 'Courier Prime', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.78rem;
   line-height: 1.5;
@@ -716,7 +717,7 @@
 }
 
 .workerResponse a {
-  color: #0b495e;
+  color: var(--color-accent);
 }
 
 .workerTools {
@@ -727,7 +728,7 @@
 }
 
 .jobCard {
-  border-left: 2px solid #ddd9cd;
+  border-left: 2px solid var(--color-border);
   margin-bottom: 0.65rem;
   padding-left: 0.6rem;
 }
@@ -745,14 +746,15 @@
 }
 
 .jobTitle {
-  color: #05384b;
-  text-decoration: none;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
   font-weight: 500;
   font-size: 0.8rem;
 }
 
 .jobTitle:hover {
-  text-decoration: underline;
+  color: var(--color-accent-hover);
 }
 
 .salaryChip {
@@ -766,7 +768,7 @@
 }
 
 .jobMeta {
-  color: #6b7785;
+  color: var(--color-muted);
   margin: 0 0 0.15rem;
   font-size: 0.72rem;
 }
@@ -782,14 +784,14 @@
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 3px;
-  color: #0b495e;
+  color: var(--color-accent);
   font-size: 0.66rem;
   padding: 0.05rem 0.35rem;
   flex-shrink: 0;
 }
 
 .jobSnippet {
-  color: #33475a;
+  color: var(--color-text-secondary);
   margin: 0;
   line-height: 1.5;
   font-style: normal;
@@ -811,7 +813,7 @@
 .savedFileBtn {
   background: none;
   border: none;
-  color: #0b495e;
+  color: var(--color-accent);
   cursor: pointer;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.78rem;
@@ -821,11 +823,11 @@
 }
 
 .savedFileBtn:hover:not(:disabled) {
-  color: #164a4e;
+  color: var(--color-accent-hover);
 }
 
 .savedFileBtn:disabled {
-  color: #6b7785;
+  color: var(--color-muted);
   cursor: not-allowed;
   text-decoration: none;
 }
@@ -871,7 +873,7 @@
 }
 
 .fileModalName {
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.82rem;
 }
@@ -879,7 +881,7 @@
 .fileModalClose {
   background: none;
   border: none;
-  color: #6b7785;
+  color: var(--color-muted);
   cursor: pointer;
   font-size: 1.2rem;
   line-height: 1;
@@ -887,11 +889,11 @@
 }
 
 .fileModalClose:hover {
-  color: #33475a;
+  color: var(--color-text-secondary);
 }
 
 .fileModalContent {
-  color: #33475a;
+  color: var(--color-text-secondary);
   font-family: 'Consolas', 'Courier New', monospace;
   font-size: 0.8rem;
   line-height: 1.6;
@@ -904,9 +906,9 @@
 
 .statusBadge {
   background: #eef1f0;
-  border: 1px solid #ddd9cd;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
-  color: #33475a;
+  color: var(--color-text-secondary);
   display: inline-block;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   margin-bottom: 0.3rem;
@@ -914,7 +916,7 @@
 }
 
 .fetchPreview {
-  color: #6b7785;
+  color: var(--color-muted);
   margin: 0;
   line-height: 1.4;
   font-style: italic;
@@ -946,7 +948,7 @@
 }
 
 .statusMessage {
-  color: #33475a;
+  color: var(--color-text-secondary);
   margin: 0.2rem 0 0;
   line-height: 1.4;
 }
