@@ -21,7 +21,8 @@ Scope of this first pass, deliberately kept small:
 from bootstrap import generate_agent_config
 
 
-def run_worker(task: str, context: str, provider: str | None, model: str | None) -> dict:
+def run_worker(task: str, context: str, provider: str | None, model: str | None,
+                search_defaults: dict | None = None) -> dict:
     """
     Bootstrap and run one worker agent to completion for `task`.
 
@@ -66,6 +67,12 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None)
         }
 
     persona = worker_config.get("persona") or {}
+    # A worker's own bootstrap has no notion of the Settings-screen search
+    # defaults (country/results_per_page/radius_km) — it's a fresh AgentConfig
+    # generated from just the subtask string — so carry the parent's values
+    # over rather than letting a worker silently fall back to "au"/20/none.
+    if search_defaults:
+        worker_config["search_defaults"] = search_defaults
     user_content = task if not context else f"{task}\n\nContext:\n{context}"
 
     final_response = ""

@@ -101,7 +101,8 @@ def fetch_page(url: str) -> dict:
 
 
 def search_jobs(what: str, where: str = "", country: str = "au",
-                 results_per_page: int = 20, page: int = 1) -> dict:
+                 results_per_page: int = 20, page: int = 1,
+                 distance_km: int | None = None) -> dict:
     """
     Built-in primitive: real job search via Adzuna's Job Search API
     (https://developer.adzuna.com/), not scraping. Exists because fetch_page
@@ -140,6 +141,10 @@ def search_jobs(what: str, where: str = "", country: str = "au",
     }
     if where:
         params["where"] = where
+    # Adzuna's "distance" param (km) only does anything alongside "where" —
+    # a radius with no center point to measure from is meaningless to their API.
+    if distance_km and where:
+        params["distance"] = distance_km
 
     try:
         r = requests.get(url, params=params, timeout=15)

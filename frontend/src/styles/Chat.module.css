@@ -47,7 +47,10 @@
   font-size: 1.485rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--color-accent);
+  /* Header/footer chrome is deliberately NOT wired to the chat content's
+     var(--color-*) palette — it keeps its own fixed look, independent of
+     index.css's shared text/accent variables used below. */
+  color: #0b495e;
   margin-right: 0.75rem;
 }
 
@@ -55,14 +58,14 @@
   display: block;
   max-width: 100%;
   overflow-wrap: break-word;
-  color: var(--color-muted);
+  color: #6b7785;
   font-size: 0.72rem;
   margin: 0.15rem 0 0;
 }
 
 .personaTraits {
   display: block;
-  color: var(--color-accent-secondary);
+  color: #3f7ea0;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.7rem;
   font-style: italic;
@@ -74,7 +77,7 @@
 }
 
 .headerPurpose {
-  color: var(--color-muted);
+  color: #6b7785;
   font-size: 0.8rem;
   flex-basis: 100%;
   margin-top: 0.15rem;
@@ -92,7 +95,7 @@
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 5px;
-  color: var(--color-accent);
+  color: #0b495e;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.72rem;
   font-weight: 500;
@@ -102,7 +105,7 @@
 
 .modelBadge {
   display: block;
-  color: var(--color-accent-secondary);
+  color: #3f7ea0;
   background: #eaf3f7;
   border: 1px solid #cfe3ea;
   border-radius: 5px;
@@ -125,7 +128,7 @@
   gap: 0.35rem;
   margin-top: 0.5rem;
   background: #e9e6dc;
-  border: 1px solid var(--color-border);
+  border: 1px solid #ddd9cd;
   border-radius: 9px;
   padding: 0.3rem;
 }
@@ -133,29 +136,37 @@
 .headerActions button {
   flex: 0 0 auto;
   height: 1.7rem;
-  padding: 0 0.85rem;
+  width: 2.125rem;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0.02em;
   line-height: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   background: #e9f3f2;
   border: 1px solid #a8cdd6;
   border-radius: 7px;
-  color: var(--color-accent);
+  color: #0b495e;
   cursor: pointer;
   transition: background-color 0.12s, border-color 0.12s, opacity 0.12s;
 }
 
+.headerActions button svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.spinnerIcon {
+  animation: toolbarSpin 0.8s linear infinite;
+}
+
+@keyframes toolbarSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 button.resetBtn {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: #0b495e;
+  border-color: #0b495e;
   color: #ffffff;
   font-weight: 700;
 }
@@ -203,16 +214,16 @@ button.resetBtn:active {
   align-items: center;
   gap: 0.5rem;
   padding: 0.65rem 1.25rem;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
+  border-bottom: 1px solid #ddd9cd;
+  background: #f7f5f0;
   flex-shrink: 0;
 }
 
 .rosterInput {
   background: #ffffff;
-  border: 1px solid var(--color-border);
+  border: 1px solid #ddd9cd;
   border-radius: 6px;
-  color: var(--color-text);
+  color: #16324a;
   flex: 1;
   min-width: 180px;
   font-family: 'Inter', 'Space Grotesk', sans-serif;
@@ -228,13 +239,13 @@ button.resetBtn:active {
 }
 
 .rosterInput:focus {
-  border-color: var(--color-accent);
+  border-color: #0b495e;
   box-shadow: 0 0 0 2px rgba(31, 111, 115, 0.15);
 }
 
 .rosterConfirmBtn {
-  background: var(--color-accent);
-  border: 1px solid var(--color-accent);
+  background: #0b495e;
+  border: 1px solid #0b495e;
   border-radius: 6px;
   color: #ffffff;
   cursor: pointer;
@@ -258,10 +269,10 @@ button.resetBtn:active {
 }
 
 .rosterCancelBtn {
-  background: var(--color-surface);
-  border: 1px solid var(--color-accent);
+  background: #f7f5f0;
+  border: 1px solid #0b495e;
   border-radius: 6px;
-  color: var(--color-accent);
+  color: #0b495e;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.72rem;
@@ -278,7 +289,7 @@ button.resetBtn:active {
 }
 
 .rosterFeedback {
-  color: var(--color-accent);
+  color: #0b495e;
   font-family: 'Inter', 'Space Grotesk', sans-serif;
   font-size: 0.74rem;
   letter-spacing: 0.02em;
@@ -322,7 +333,7 @@ button.resetBtn:active {
 .messageList {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem 0.5rem;
+  padding: 1rem 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -356,8 +367,8 @@ button.resetBtn:active {
 .bubbleText {
   color: #f2f5f6;
   font-family: 'Courier Prime', 'Courier New', Courier, serif;
-  font-size: 0.79rem;
-  line-height: 1.55;
+  font-size: 0.78rem;
+  line-height: 1.5;
   margin: 0;
   overflow-wrap: break-word;
   white-space: pre-wrap;
@@ -367,10 +378,12 @@ button.resetBtn:active {
 /* Markdown renderer for assistant messages */
 
 .markdown {
-  color: var(--color-text-secondary);
-  font-family: 'Courier Prime', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.79rem;
-  line-height: 1.6;
+  color: var(--color-text);
+  font-family: 'Inter', 'Space Grotesk', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 400;
+  line-height: 1.58;
+  letter-spacing: 0;
   min-width: 0;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -388,7 +401,7 @@ button.resetBtn:active {
 }
 
 .markdown p {
-  margin: 0 0 0.65rem;
+  margin: 0 0 0.85rem;
 }
 
 .markdown p:last-child {
@@ -397,7 +410,7 @@ button.resetBtn:active {
 
 .markdown h1 {
   color: var(--color-text);
-  font-size: 1.05rem;
+  font-size: 0.98rem;
   font-weight: 700;
   margin: 1.2rem 0 0.5rem;
   padding-bottom: 0.3rem;
@@ -410,7 +423,7 @@ button.resetBtn:active {
   border-radius: 0 5px 5px 0;
   color: var(--color-accent);
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -420,7 +433,7 @@ button.resetBtn:active {
 
 .markdown h3 {
   color: #233240;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   font-weight: 600;
   margin: 0.9rem 0 0.3rem;
 }
@@ -428,8 +441,8 @@ button.resetBtn:active {
 .markdown h4,
 .markdown h5,
 .markdown h6 {
-  color: var(--color-text-secondary);
-  font-size: 0.85rem;
+  color: var(--color-text);
+  font-size: 0.8rem;
   font-weight: 600;
   margin: 0.75rem 0 0.25rem;
 }
@@ -501,7 +514,7 @@ button.resetBtn:active {
 }
 
 .markdown em {
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   font-style: italic;
 }
 
@@ -529,7 +542,7 @@ button.resetBtn:active {
 .markdown pre code {
   background: none;
   border: none;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   overflow-wrap: normal;
   padding: 0;
 }
@@ -627,7 +640,7 @@ button.resetBtn:active {
 .markdown table {
   border-collapse: collapse;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   margin: 0;
   table-layout: auto;
   width: 100%;
@@ -648,7 +661,7 @@ button.resetBtn:active {
 
 .markdown td {
   border-bottom: 1px solid #eceae3;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   line-height: 1.4;
   overflow-wrap: anywhere;
   padding: 0.4rem 0.75rem;
@@ -708,39 +721,51 @@ button.resetBtn:active {
 
 .inputRow {
   display: flex;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  border-top: 1px solid var(--color-border);
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.9rem 1.5rem;
+  background: #fbfdfd;
+  border-top: 1px solid #ddd9cd;
+  box-shadow: 0 -6px 16px rgba(22, 50, 74, 0.04);
   flex-shrink: 0;
 }
 
 .input {
   background: #ffffff;
-  border: 1px solid #a8cdd6;
-  border-radius: 7px;
-  color: var(--color-text);
+  border: 1px solid #cfe0e4;
+  border-radius: 999px;
+  color: #16324a;
   flex: 1;
   font-family: 'Inter', 'Space Grotesk', sans-serif;
-  font-size: 0.85rem;
-  letter-spacing: 0.02em;
+  font-size: 0.92rem;
+  letter-spacing: 0.01em;
   outline: none;
-  padding: 0.65rem 0.9rem;
-  transition: border-color 0.15s;
+  padding: 0.75rem 1.15rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .input::placeholder {
-  color: #7a97a3;
+  color: #8ba3ac;
+}
+
+.input:hover:not(:disabled) {
+  border-color: #a8cdd6;
 }
 
 .input:focus {
-  border-color: var(--color-accent);
+  border-color: #0b495e;
   box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.15);
 }
 
+.input:disabled {
+  background: #f5f6f4;
+  color: #8ba3ac;
+}
+
 .sendBtn {
-  background: var(--color-accent);
-  border: 1px solid var(--color-accent);
-  border-radius: 8px;
+  background: #0b495e;
+  border: 1px solid #0b495e;
+  border-radius: 999px;
   color: #ffffff;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
@@ -748,12 +773,17 @@ button.resetBtn:active {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.65rem 1.25rem;
-  transition: opacity 0.15s;
+  padding: 0.75rem 1.4rem;
+  transition: opacity 0.15s, transform 0.1s;
+  flex-shrink: 0;
 }
 
 .sendBtn:hover:not(:disabled) {
   opacity: 0.9;
+}
+
+.sendBtn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .sendBtn:disabled {
@@ -762,9 +792,9 @@ button.resetBtn:active {
 }
 
 .stopBtn {
-  background: var(--color-surface);
+  background: #f7f5f0;
   border: 1px solid #e3a3a3;
-  border-radius: 8px;
+  border-radius: 999px;
   color: #b91c1c;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
@@ -772,9 +802,10 @@ button.resetBtn:active {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.65rem 1.25rem;
+  padding: 0.75rem 1.4rem;
   transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .stopBtn:hover {

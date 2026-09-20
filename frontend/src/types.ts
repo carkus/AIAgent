@@ -30,6 +30,16 @@ export interface AgentPersona {
   rationale: string;
 }
 
+// Adzuna-backed search_jobs() defaults, set once on the Settings screen and
+// used to fill in whatever the model's own tool call leaves unspecified —
+// see backend/src/agent_stream.py's search_jobs call site. All optional;
+// undefined = the backend's own hardcoded fallback ("au", 20, no radius).
+export interface SearchDefaults {
+  country?: string;
+  results_per_page?: number;
+  radius_km?: number;
+}
+
 export interface AgentConfig {
   purpose: string;
   system_prompt: string;
@@ -42,6 +52,10 @@ export interface AgentConfig {
   // undefined/null = the backend's OLLAMA_MODEL default.
   ollama_model?: string | null;
   template?: AgentTemplateId;
+  // Settings-screen overrides — undefined/null on older saved chats/drafts,
+  // which fall back to the backend's own defaults (agent_stream.py).
+  max_delegations?: number | null;
+  search_defaults?: SearchDefaults;
 }
 
 export interface ToolCall {

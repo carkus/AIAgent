@@ -1,6 +1,13 @@
-import { useEffect, useRef } from 'react'
-import type { LlmProvider } from '../types'
+import { useEffect, useRef, useState } from 'react'
+import type { LlmProvider, SearchDefaults } from '../types'
+import { listMcpTools, type McpServerInfo } from '../api'
 import styles from '../styles/SettingsModal.module.css'
+
+// Mirrors backend/src/agent_stream.py's MAX_DELEGATIONS_PER_REQUEST — shown
+// as the placeholder/hint here, not enforced client-side; the backend clamps
+// for real.
+const DEFAULT_MAX_DELEGATIONS = 6
+const DEFAULT_RESULTS_PER_PAGE = 20
 
 interface Props {
   isOpen: boolean
@@ -20,6 +27,10 @@ interface Props {
   onOllamaModelChange: (m: string | null) => void
   availableModels: string[]
   modelsLoaded: boolean
+  maxDelegations: number | null
+  onMaxDelegationsChange: (n: number | null) => void
+  searchDefaults: SearchDefaults
+  onSearchDefaultsChange: (d: SearchDefaults) => void
   disabled: boolean
 }
 
@@ -41,9 +52,14 @@ export default function SettingsModal({
   onOllamaModelChange,
   availableModels,
   modelsLoaded,
+  maxDelegations,
+  onMaxDelegationsChange,
+  searchDefaults,
+  onSearchDefaultsChange,
   disabled,
 }: Props) {
   const closeBtnRef = useRef<HTMLButtonElement>(null)
+  const [mcpServers, setMcpServers] = useState<McpServerInfo[] | null>(null)
 
   // Accessible-overlay basics: focus moves into the dialog on open, Escape
   // dismisses it — this app has no other dialog to mirror, so this is the
@@ -58,6 +74,15 @@ export default function SettingsModal({
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
+
+  // Read-only, so fetched fresh each time the panel opens rather than
+  // threaded through Setup.tsx's own state — nothing here is user-editable.
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    listMcpTools().then(servers => { if (!cancelled) setMcpServers(servers) })
+    return () => { cancelled = true }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -153,6 +178,128 @@ export default function SettingsModal({
                 </p>
               </>
             )}
+          </section>
+
+          <section className={styles.section}>
+            <span className={styles.sectionLabel}>Delegation</span>
+            <input
+              className={styles.numberInput}
+              type="number"
+              min={1}
+              max={20}
+              value={maxDelegations ?? ''}
+              placeholder={String(DEFAULT_MAX_DELEGATIONS)}
+              onChange={e => {
+                const v = e.target.value
+                onMaxDelegationsChange(v === '' ? null : Math.max(1, Math.min(20, Number(v))))
+              }}
+              disabled={disabled}
+            />
+            <p className={styles.providerHint}>
+              Max worker agents this agent can spin up per turn when a task splits
+              across several specialties/topics. Higher means more parallel research
+              but more API cost per message. Default {DEFAULT_MAX_DELEGATIONS}.
+            </p>
+          </section>
+
+          <section className={styles.section}>
+            <span className={styles.sectionLabel}>Search defaults</span>
+            <div className={styles.searchGrid}>
+              <label className={styles.searchField}>
+                <span>Country</span>
+                <input
+                  className={styles.numberInput}
+                  type="text"
+                  maxLength={2}
+                  placeholder="au"
+                  value={searchDefaults.country ?? ''}
+                  onChange={e => onSearchDefaultsChange({
+                    ...searchDefaults,
+                    country: e.target.value.trim().toLowerCase().slice(0, 2) || undefined,
+                  })}
+                  disabled={disabled}
+                />
+              </label>
+              <label className={styles.searchField}>
+                <span>Results per page</span>
+                <input
+                  className={styles.numberInput}
+                  type="number"
+                  min={1}
+                  max={50}
+                  placeholder={String(DEFAULT_RESULTS_PER_PAGE)}
+                  value={searchDefaults.results_per_page ?? ''}
+                  onChange={e => {
+                    const v = e.target.value
+                    onSearchDefaultsChange({
+                      ...searchDefaults,
+                      results_per_page: v === '' ? undefined : Math.max(1, Math.min(50, Number(v))),
+                    })
+                  }}
+                  disabled={disabled}
+                />
+              </label>
+              <label className={styles.searchField}>
+                <span>Radius (km)</span>
+                <input
+                  className={styles.numberInput}
+                  type="number"
+                  min={0}
+                  placeholder="any"
+                  value={searchDefaults.radius_km ?? ''}
+                  onChange={e => {
+                    const v = e.target.value
+                    onSearchDefaultsChange({
+                      ...searchDefaults,
+                      radius_km: v === '' ? undefined : Math.max(0, Number(v)),
+                    })
+                  }}
+                  disabled={disabled}
+                />
+              </label>
+            </div>
+            <p className={styles.providerHint}>
+              Adzuna job-search defaults (backend/src/tools.py's search_jobs) — the
+              agent can still override any of these per search; these just fill in
+              whatever it leaves out. Radius only applies alongside a location.
+            </p>
+          </section>
+
+          <section className={styles.section}>
+            <span className={styles.sectionLabel}>MCP tools</span>
+            {mcpServers === null ? (
+              <p className={styles.providerHint}>Loading…</p>
+            ) : mcpServers.length === 0 ? (
+              <p className={styles.providerHint}>No vetted MCP servers configured.</p>
+            ) : (
+              <ul className={styles.mcpList}>
+                {mcpServers.map(server => (
+                  <li key={server.server_id} className={styles.mcpServer}>
+                    <div className={styles.mcpServerHeader}>
+                      <span className={server.reachable ? styles.mcpDotOn : styles.mcpDotOff} aria-hidden="true" />
+                      <span className={styles.mcpServerName}>{server.server_id}</span>
+                      <span className={styles.mcpServerStatus}>
+                        {server.reachable ? 'active' : 'unreachable'}
+                      </span>
+                    </div>
+                    <p className={styles.providerHint}>{server.description}</p>
+                    {server.tools.length > 0 && (
+                      <div className={styles.mcpToolPills}>
+                        {server.tools.map(t => (
+                          <span key={t.name} className={styles.mcpToolPill} title={t.description}>
+                            {t.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className={styles.providerHint}>
+              Read-only — the vetted servers bootstrap can pick real tools from
+              instead of writing a Python implementation (backend/src/mcp_registry.py).
+            </p>
           </section>
         </div>
 

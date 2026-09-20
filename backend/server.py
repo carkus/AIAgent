@@ -41,6 +41,8 @@ import rate_limit
 import saved_searches
 import agent_registry
 import agent_drafts
+import mcp_client
+from mcp_registry import MCP_SERVERS
 
 app = Flask(__name__)
 
@@ -114,6 +116,7 @@ def brief():
         model=model,
         prior_question=(body.get("priorQuestion") or "").strip() or None,
         prior_answer=(body.get("priorAnswer") or "").strip() or None,
+        max_delegations=body.get("maxDelegations"),
     )
     if result is None:
         return jsonify({"error": "Could not generate a brief"}), 502
@@ -202,6 +205,26 @@ def published_agents_item(agent_id):
         return "", 204
     agent_registry.unpublish(agent_id)
     return "", 204
+
+
+@app.route("/mcp-tools", methods=["GET", "OPTIONS"])
+def mcp_tools():
+    if request.method == "OPTIONS":
+        return "", 204
+    # Read-only visibility into the vetted MCP server directory a bootstrap
+    # can pick tools from (mcp_registry.py) — every entry, reachable or not,
+    # so an installed-but-not-running server is visibly distinct from one
+    # that was never vetted at all, rather than just vanishing from the list.
+    servers = []
+    for server_id, spec in MCP_SERVERS.items():
+        tools = mcp_client.list_tools(server_id)
+        servers.append({
+            "server_id": server_id,
+            "description": spec.get("description", ""),
+            "reachable": bool(tools),
+            "tools": [{"name": t["tool_name"], "description": t["description"]} for t in tools],
+        })
+    return jsonify({"servers": servers})
 
 
 @app.route("/agent", methods=["POST", "OPTIONS"])

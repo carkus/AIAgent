@@ -50,7 +50,7 @@ Execution environment for tool implementations:
 Two primitive tools are pre-built and always available to the agent — do NOT include either in the tools array you generate:
 
 - `fetch_page` — takes a `url` (string), returns `{{status_code, url, content, char_count, truncated, listing_count}}` where `content` is clean text with all HTML, scripts, and SVG stripped. Use for company pages, news, or any general URL.
-- `search_jobs` — real job search via the Adzuna API (not scraping). Takes `what` (required, job title/keywords), `where` (optional location), `country` (optional, default "au"), `results_per_page` (optional, default 20), `page` (optional, default 1). Returns `{{status_code, total_count, returned, mean_salary, listings: [{{title, company, location, salary_min, salary_max, redirect_url, description, created, contract_type, category}}]}}`.
+- `search_jobs` — real job search via the Adzuna API (not scraping). Takes `what` (required, job title/keywords), `where` (optional location), `country` (optional, default "au"), `results_per_page` (optional, default 20), `page` (optional, default 1), `distance_km` (optional radius around `where`). Returns `{{status_code, total_count, returned, mean_salary, listings: [{{title, company, location, salary_min, salary_max, redirect_url, description, created, contract_type, category}}]}}`.
 
 Instruct the agent to call these directly rather than reinventing them.
 

@@ -28,6 +28,75 @@ function describeModelFallback(provider: AgentConfig['provider']): string {
   return `Auto cascade: Gemini first, falls back to local Ollama (${DEFAULT_OLLAMA_MODEL}) if Gemini is unavailable`
 }
 
+type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent'
+
+// Mono line icons for the header toolbar — same stroke-based style as
+// Setup.tsx's AgentTypeIcon (currentColor, no fill), styled after plain
+// Office-suite toolbar glyphs (floppy-disk save, clipboard roster, document
+// export, spinner) instead of full-colour emoji, so the toolbar reads as one
+// coherent teal-on-cream unit rather than a row of mismatched platform emoji.
+function ToolbarIcon({ name }: { name: ToolbarIconName }) {
+  const common = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.75,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  }
+  switch (name) {
+    case 'save':
+      return (
+        <svg {...common}>
+          <path d="M5 3.5h11l3.5 3.5V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z" />
+          <path d="M7.5 3.5V8h7.5V3.5" />
+          <rect x="7" y="13" width="10" height="7" />
+        </svg>
+      )
+    case 'saved':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9.25" />
+          <path d="M7.5 12.5 10.3 15.3 16.5 9" />
+        </svg>
+      )
+    case 'roster':
+      return (
+        <svg {...common}>
+          <rect x="5" y="3.5" width="14" height="17" rx="1.5" />
+          <path d="M9 3v-.25A1.75 1.75 0 0 1 10.75 1h2.5A1.75 1.75 0 0 1 15 2.75V3" />
+          <line x1="8.5" y1="10.5" x2="15.5" y2="10.5" />
+          <line x1="8.5" y1="14" x2="15.5" y2="14" />
+          <line x1="8.5" y1="17.5" x2="12.5" y2="17.5" />
+        </svg>
+      )
+    case 'export':
+      return (
+        <svg {...common}>
+          <path d="M6.5 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 6.5 3.5Z" />
+          <path d="M13 3.5V8h4.5" />
+          <line x1="12" y1="11.5" x2="12" y2="17" />
+          <path d="M9.3 14.3 12 17l2.7-2.7" />
+        </svg>
+      )
+    case 'exporting':
+      return (
+        <svg {...common} className={styles.spinnerIcon}>
+          <path d="M12 3.5a8.5 8.5 0 1 1-8.5 8.5" />
+        </svg>
+      )
+    case 'newAgent':
+      return (
+        <svg {...common}>
+          <circle cx="10.5" cy="8.5" r="3.5" />
+          <path d="M4 20c0-3.6 2.9-6 6.5-6 1 0 1.94.18 2.78.52" />
+          <line x1="17.5" y1="10.5" x2="17.5" y2="16.5" />
+          <line x1="14.5" y1="13.5" x2="20.5" y2="13.5" />
+        </svg>
+      )
+  }
+}
+
 interface LiveToolCall {
   tool: string
   inputs: Record<string, unknown>
@@ -335,7 +404,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
             aria-label={saveFeedback ?? 'Save chat'}
             title={saveFeedback ?? 'Save this conversation locally so it can be reopened later'}
           >
-            {saveFeedback ? saveFeedback : 'Save'}
+            <ToolbarIcon name={saveFeedback ? 'saved' : 'save'} />
           </button>
           <button
             type="button"
@@ -345,7 +414,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
             aria-label="Roster"
             title="Save this agent and deploy them as a callable tool on the roster"
           >
-            Roster
+            <ToolbarIcon name="roster" />
           </button>
           <button
             type="button"
@@ -355,16 +424,16 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
             aria-label={exporting ? 'Exporting…' : 'Export PDF'}
             title="Export PDF"
           >
-            {exporting ? 'Exporting…' : 'PDF'}
+            <ToolbarIcon name={exporting ? 'exporting' : 'export'} />
           </button>
           <button
             type="button"
             className={styles.resetBtn}
             onClick={onReset}
-            aria-label="New"
+            aria-label="New agent"
             title="New agent"
           >
-            New agent
+            <ToolbarIcon name="newAgent" />
           </button>
         </div>
         {agentConfig.keywords && agentConfig.keywords.length > 0 && (

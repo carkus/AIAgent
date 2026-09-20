@@ -2,6 +2,8 @@ import { useEffect, useId, useState } from 'react'
 import mermaid from 'mermaid'
 import styles from '../styles/Chat.module.css'
 
+const GRAPH_ACCENT = '#05384b'
+
 let initialized = false
 
 function ensureInitialized() {
@@ -21,13 +23,13 @@ function ensureInitialized() {
       background: '#f5f6f4',
       primaryColor: '#e6f2f1',
       primaryTextColor: '#16324a',
-      primaryBorderColor: '#05384b',
-      lineColor: '#3f7ea0',
+      primaryBorderColor: GRAPH_ACCENT,
+      lineColor: GRAPH_ACCENT,
       secondaryColor: '#eaf3f7',
       tertiaryColor: '#f0efe9',
       fontSize: '9px',
       fontFamily,
-      pie1: '#05384b',
+      pie1: GRAPH_ACCENT,
       pie2: '#3f7ea0',
       pie3: '#c98a2c',
       pie4: '#6b8f71',
@@ -56,7 +58,7 @@ function ensureInitialized() {
         yAxisTitleColor: '#33475a',
         yAxisTickColor: '#8a94a0',
         yAxisLineColor: '#8a94a0',
-        plotColorPalette: '#05384b,#3f7ea0,#c98a2c,#6b8f71,#b6552c,#5c6b73',
+        plotColorPalette: `${GRAPH_ACCENT},#3f7ea0,#c98a2c,#6b8f71,#b6552c,#5c6b73`,
       },
     },
     // Without this, mermaid renders each diagram at its own natural
@@ -92,8 +94,6 @@ export default function MermaidDiagram({ chart }: { chart: string }) {
 
   useEffect(() => {
     let cancelled = false
-    setSvg(null)
-    setError(null)
     const adapted = adaptChartForWidth(chart, window.innerWidth)
     mermaid.render(`mermaid-${id}`, adapted)
       .then(result => { if (!cancelled) setSvg(result.svg) })

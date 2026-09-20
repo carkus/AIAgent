@@ -98,6 +98,7 @@ export async function fetchAgentBrief(
   ollamaModel?: string | null,
   priorQuestion?: string | null,
   priorAnswer?: string | null,
+  maxDelegations?: number | null,
 ): Promise<AgentBrief> {
   const res = await fetch(`${API_URL}/brief`, {
     method: 'POST',
@@ -111,6 +112,7 @@ export async function fetchAgentBrief(
       ollama_model: ollamaModel ?? undefined,
       priorQuestion: priorQuestion ?? undefined,
       priorAnswer: priorAnswer ?? undefined,
+      maxDelegations: maxDelegations ?? undefined,
     }),
   });
   if (!res.ok) {
@@ -270,6 +272,29 @@ export async function publishAgent(
 
 export async function unpublishAgent(id: string): Promise<void> {
   await fetch(`${API_URL}/agents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export interface McpServerInfo {
+  server_id: string;
+  description: string;
+  reachable: boolean;
+  tools: { name: string; description: string }[];
+}
+
+/** Read-only visibility into the vetted MCP server directory a bootstrap can
+ * pick tools from (backend/src/mcp_registry.py) — every entry the platform
+ * trusts, reachable or not, so an installed-but-not-running server reads
+ * differently from one that was never vetted. [] on any failure, same
+ * degrade-quietly shape as listSavedSearches(). */
+export async function listMcpTools(): Promise<McpServerInfo[]> {
+  try {
+    const res = await fetch(`${API_URL}/mcp-tools`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.servers) ? data.servers : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function runAgent(

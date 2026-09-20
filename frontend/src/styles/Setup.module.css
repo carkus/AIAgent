@@ -420,7 +420,7 @@
 
 .agentSummaryText {
   margin: 0;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.88rem;
   line-height: 1.55;
@@ -533,7 +533,7 @@
 
 .specialInstructionsInput {
   margin: 0;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.88rem;
   line-height: 1.55;
@@ -666,7 +666,7 @@
 
 .agentTypePill:hover:not(:disabled) {
   border-color: var(--color-accent);
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   transform: translateY(-1px);
 }
 
@@ -693,7 +693,7 @@
   background: #ffffff;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   font-family: inherit;
   font-size: 0.85rem;
   outline: none;
@@ -724,7 +724,7 @@
 }
 
 .locationSuggestions li {
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   font-size: 0.82rem;
   padding: 0.45rem 0.5rem;
   border-radius: 4px;
@@ -740,7 +740,7 @@
   background-color: #ffffff;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   font-family: inherit;
   font-size: 0.85rem;
   outline: none;
@@ -955,11 +955,14 @@
 
 .savedKeywordChip {
   /* The whole chip is the tap target — tapping it adds the specialty to
-     the current agent (or removes it, if already added); there's no
-     separate "+"/"Add" control any more, since a dedicated button next to
-     the label was a smaller, easy-to-miss target than the chip itself.
-     The delete "×" button inside stops propagation so deleting doesn't
-     also toggle add/remove. */
+     the current agent; there's no separate "+"/"Add" control any more,
+     since a dedicated button next to the label was a smaller,
+     easy-to-miss target than the chip itself. Once added, the chip fades
+     (.savedKeywordChipAdded) and stops being a tap target — removing a
+     specialty from the current agent happens via its chip in the search
+     box above, not by tapping it here again. The delete "×" button inside
+     stops propagation so deleting from the saved pool doesn't also fire
+     the add click. */
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -983,6 +986,12 @@
 .savedKeywordChipAdded {
   background: #eaf3f7;
   border-color: var(--color-accent-secondary);
+  opacity: 0.55;
+  cursor: default;
+}
+
+.savedKeywordChipAdded:hover {
+  border-color: var(--color-accent-secondary);
 }
 
 .savedKeywordLabel {
@@ -990,15 +999,6 @@
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.76rem;
   font-weight: 400;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.savedKeywordAddedTag {
-  color: var(--color-accent-secondary);
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 0.68rem;
-  font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -1347,10 +1347,6 @@
 
   .savedKeywordLabel {
     font-size: 0.88rem;
-  }
-
-  .savedKeywordAddedTag {
-    font-size: 0.78rem;
   }
 
   .savedKeywordDelete {

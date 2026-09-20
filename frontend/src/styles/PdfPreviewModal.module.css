@@ -84,7 +84,7 @@
 
 .cancelBtn:hover {
   background: #f0efe9;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
 }
 
 .saveJsonBtn {

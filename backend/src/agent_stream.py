@@ -1,9 +1,85 @@
 import concurrent.futures
 import json
+import re
 import time
+from types import SimpleNamespace
 from llm_client import create_chat_completion
 from tools import execute_tool, fetch_page, search_jobs
 import mcp_client
+
+_FENCE_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
+
+# Confirmed against qwen2.5-coder:7b via Ollama: after a long tool-schema-
+# heavy conversation, the model occasionally answers a plain question (no
+# tool calls at all) with a single bare word echoed from a JSON-schema key
+# it saw repeated throughout the tool definitions, instead of real text.
+_DEGENERATE_REPLIES = {
+    "description", "name", "arguments", "parameters", "properties",
+    "type", "schema", "function", "tool", "required",
+}
+
+
+def _is_degenerate_reply(text: str) -> bool:
+    return text.strip().strip("\"'").lower() in _DEGENERATE_REPLIES
+
+
+def _extract_text_tool_calls(content: str | None, valid_names: set[str]):
+    """
+    Some local models served through Ollama's OpenAI-compatible endpoint don't
+    reliably populate the structured `tool_calls` field on the response —
+    confirmed directly against qwen2.5-coder:7b: a tool-eligible prompt comes
+    back with `tool_calls=None` and `content` holding the call as bare JSON
+    instead, e.g. '{"name": "delegate_to_worker", "arguments": {...}}', and for
+    multiple calls, one such JSON object per line rather than a JSON array.
+    Without this, that raw JSON gets shown to the user as if it were the
+    model's final answer instead of being executed.
+
+    Returns a list of (name, arguments) tuples, or None if `content` isn't
+    (only) one or more such tool-call objects — callers fall back to treating
+    it as ordinary final text in that case, so a message that's genuinely
+    prose (even prose that happens to mention a tool by name) is never
+    mistaken for a call.
+    """
+    if not content:
+        return None
+    text = content.strip()
+    fence = _FENCE_RE.match(text)
+    if fence:
+        text = fence.group(1).strip()
+    if not text:
+        return None
+
+    def _as_call(obj):
+        if not isinstance(obj, dict):
+            return None
+        name, args = obj.get("name"), obj.get("arguments")
+        return (name, args) if name in valid_names and isinstance(args, dict) else None
+
+    try:
+        parsed = json.loads(text)
+        candidates = parsed if isinstance(parsed, list) else [parsed]
+        calls = [c for c in (_as_call(c) for c in candidates) if c]
+        if len(calls) == len(candidates):
+            return calls
+        return None
+    except json.JSONDecodeError:
+        pass
+
+    # Fall back to one JSON object per non-blank line.
+    calls = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        call = _as_call(obj)
+        if not call:
+            return None
+        calls.append(call)
+    return calls or None
 
 _PRIMITIVE_TOOLS = [
     {
@@ -24,6 +100,7 @@ _PRIMITIVE_TOOLS = [
                     "country": {"type": "string", "description": "Two-letter Adzuna country code, default 'au'."},
                     "results_per_page": {"type": "integer", "description": "Max 50, default 20."},
                     "page": {"type": "integer", "description": "Page number for pagination, default 1."},
+                    "distance_km": {"type": "integer", "description": "Search radius in km around 'where'. Only meaningful when 'where' is also given."},
                 },
                 "required": ["what"],
             },
@@ -93,7 +170,7 @@ _DELEGATE_TOOL = {
 MAX_DELEGATIONS_PER_REQUEST = 6
 
 
-def _delegation_rule_body(keywords: list[str]) -> str:
+def _delegation_rule_body(keywords: list[str], max_delegations: int) -> str:
     """
     Rule 6's body, in the system prompt built by run_agent_stream.
 
@@ -121,7 +198,7 @@ def _delegation_rule_body(keywords: list[str]) -> str:
    the pool, delegate for just those; if the request has nothing to do
    with the pool at all, handle it yourself instead. Call every
    delegate_to_worker you need before writing your own findings. Limit:
-   {MAX_DELEGATIONS_PER_REQUEST} per turn — if the pool has more entries
+   {max_delegations} per turn — if the pool has more entries
    than that, delegate as many as the limit allows and handle the rest
    yourself with your own tools."""
     return f"""
@@ -136,7 +213,7 @@ def _delegation_rule_body(keywords: list[str]) -> str:
    own findings. For a single keyword, or a request with no genuinely
    separable parts, handle it yourself instead — delegating a one-part
    task just adds latency for no benefit. Limit:
-   {MAX_DELEGATIONS_PER_REQUEST} per turn — if there are more keywords than
+   {max_delegations} per turn — if there are more keywords than
    that, handle the remainder yourself with your own tools after delegating
    as many as the limit allows."""
 
@@ -155,6 +232,13 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
     above) — False when this call itself IS a worker's loop, to keep
     orchestration one level deep.
     """
+    # User-configurable overrides set on the Settings screen (SettingsModal.tsx)
+    # and threaded onto AgentConfig client-side, same pattern as provider/
+    # ollama_model — fall back to the platform defaults when unset (older
+    # saved chats/drafts predate these fields).
+    max_delegations = agent_config.get("max_delegations") or MAX_DELEGATIONS_PER_REQUEST
+    search_defaults = agent_config.get("search_defaults") or {}
+
     system_prompt = agent_config["system_prompt"] + """
 
 ---
@@ -182,7 +266,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
    shows. For a single flat fact (one number, one listing), just say it plainly;
    don't force a diagram where there's nothing to compare.
 """ + (f"""
-6. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [])}
+6. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [], max_delegations)}
 7. Once your workers report back, do NOT restate or re-summarize each one's
    full findings in your own reply — the user already sees each worker's
    complete response individually, attributed to that worker, in the UI.
@@ -209,6 +293,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
     # dispatch below can tell a generated tool from an MCP-backed one
     # (CLAUDE.md MCP priority 6) and route accordingly.
     tool_def_map = {t["name"]: t for t in tool_definitions}
+    tool_names = {t["function"]["name"] for t in tools}
     provider = agent_config.get("provider")
     model = agent_config.get("ollama_model")
 
@@ -257,16 +342,51 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
             assistant_msg = message.model_dump(exclude_none=True)
             assistant_msg["role"] = "assistant"
             assistant_msg["content"] = assistant_msg.get("content") or ""
+
+            # Some models (confirmed: qwen2.5-coder:7b via Ollama's OpenAI-
+            # compatible endpoint) don't populate the structured tool_calls
+            # field at all — they print the call as bare JSON in `content`
+            # instead. Detect that shape here so it gets executed like a real
+            # tool call instead of being shown to the user as the final answer.
+            effective_tool_calls = message.tool_calls
+            synthetic_calls = None
+            if not effective_tool_calls:
+                extracted = _extract_text_tool_calls(message.content, tool_names)
+                if extracted:
+                    synthetic_calls = [
+                        SimpleNamespace(
+                            id=f"synthetic_call_{i}",
+                            function=SimpleNamespace(name=name, arguments=json.dumps(args)),
+                        )
+                        for i, (name, args) in enumerate(extracted)
+                    ]
+                    effective_tool_calls = synthetic_calls
+                    # Replace the raw-JSON content with what it would have
+                    # been had the model used real tool_calls — empty, with
+                    # the calls carried in their own field — so conversation
+                    # history sent back to the model next turn stays clean.
+                    assistant_msg["content"] = ""
+                    assistant_msg["tool_calls"] = [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                        }
+                        for tc in synthetic_calls
+                    ]
+
             current_messages.append(assistant_msg)
 
             # No tool calls → final response
-            if not message.tool_calls:
+            if not effective_tool_calls:
                 final_text = message.content or ""
                 if (
                     not nudged
-                    and tool_calls_log
                     and finish_reason == "stop"
-                    and len(final_text.strip()) < 400
+                    and (
+                        (tool_calls_log and len(final_text.strip()) < 400)
+                        or _is_degenerate_reply(final_text)
+                    )
                 ):
                     nudged = True
                     current_messages.append({
@@ -326,7 +446,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                 })
                 return result_str
 
-            for idx, tc in enumerate(message.tool_calls):
+            for idx, tc in enumerate(effective_tool_calls):
                 tool_name = tc.function.name
                 try:
                     tool_inputs = json.loads(tc.function.arguments)
@@ -340,10 +460,10 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                 yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs, "source": source, "call_index": idx}
 
                 if tool_name == "delegate_to_worker":
-                    if delegation_count >= MAX_DELEGATIONS_PER_REQUEST:
+                    if delegation_count >= max_delegations:
                         result = {
                             "error": (
-                                f"Delegation limit ({MAX_DELEGATIONS_PER_REQUEST}) reached "
+                                f"Delegation limit ({max_delegations}) reached "
                                 "for this turn — finish the task yourself with the tools "
                                 "you already have."
                             )
@@ -359,7 +479,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                         from orchestrator import run_worker
                         if executor is None:
                             executor = concurrent.futures.ThreadPoolExecutor(
-                                max_workers=MAX_DELEGATIONS_PER_REQUEST
+                                max_workers=max_delegations
                             )
                         future = executor.submit(
                             run_worker,
@@ -367,6 +487,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                             context=tool_inputs.get("context", ""),
                             provider=provider,
                             model=model,
+                            search_defaults=search_defaults,
                         )
                         pending_workers[idx] = (future, tc, tool_name, tool_inputs, source)
                     continue
@@ -374,12 +495,17 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                 if tool_name == "fetch_page":
                     result = fetch_page(tool_inputs.get("url", ""))
                 elif tool_name == "search_jobs":
+                    # The model can still override any of these per-call; the
+                    # Settings-screen values (search_defaults) only fill in
+                    # whatever it left out, same precedence as the "au"/20
+                    # hardcoded fallbacks they replace.
                     result = search_jobs(
                         what=tool_inputs.get("what", ""),
                         where=tool_inputs.get("where", ""),
-                        country=tool_inputs.get("country") or "au",
-                        results_per_page=tool_inputs.get("results_per_page") or 20,
+                        country=tool_inputs.get("country") or search_defaults.get("country") or "au",
+                        results_per_page=tool_inputs.get("results_per_page") or search_defaults.get("results_per_page") or 20,
                         page=tool_inputs.get("page") or 1,
+                        distance_km=tool_inputs.get("distance_km") or search_defaults.get("radius_km"),
                     )
                 elif tool_name in _SEARCH_TOOL_NAMES:
                     result = {

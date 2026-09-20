@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, listAgentDrafts, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
 import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
 import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat } from '../chatStorage'
-import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat } from '../types'
+import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat, SearchDefaults } from '../types'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
 import SettingsModal from './SettingsModal'
@@ -115,10 +115,11 @@ function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], loc: st
   }
 }
 
-// Mirrors backend/src/agent_stream.py's MAX_DELEGATIONS_PER_REQUEST — one
-// worker is delegated per specialty, capped per turn, so more specialties
-// than this are silently dropped/starved rather than all covered.
-const MAX_DELEGATIONS_PER_REQUEST = 6
+// Default when the user hasn't overridden it on the Settings screen — mirrors
+// backend/src/agent_stream.py's MAX_DELEGATIONS_PER_REQUEST. One worker is
+// delegated per specialty, capped per turn, so more specialties than this are
+// silently dropped/starved rather than all covered.
+const DEFAULT_MAX_DELEGATIONS = 6
 
 // Deterministic warning check, used only when the AI-drafted brief (which
 // does its own, richer warning assessment — see backend/src/brief.py)
@@ -126,9 +127,10 @@ const MAX_DELEGATIONS_PER_REQUEST = 6
 // template. Only checks conditions cheap/certain enough to assert without
 // an LLM call — the AI brief's own judgment always takes precedence when
 // available, including its explicit choice not to warn.
-function buildDeterministicWarning(keywords: string[], agentType: AgentTemplateId, loc: string): string | null {
-  if (keywords.length > MAX_DELEGATIONS_PER_REQUEST) {
-    return `${keywords.length} specialties is more than the ${MAX_DELEGATIONS_PER_REQUEST} the agent can delegate to in one turn — some will be dropped or under-covered.`
+function buildDeterministicWarning(keywords: string[], agentType: AgentTemplateId, loc: string, maxDelegations: number | null): string | null {
+  const limit = maxDelegations ?? DEFAULT_MAX_DELEGATIONS
+  if (keywords.length > limit) {
+    return `${keywords.length} specialties is more than the ${limit} the agent can delegate to in one turn — some will be dropped or under-covered.`
   }
   if (agentType === 'job_search' && !loc) {
     return 'No location set — job listings will be searched without a geographic filter.'
@@ -217,6 +219,28 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setOllamaModel(m)
     if (m) localStorage.setItem('aiagent_ollama_model', m)
     else localStorage.removeItem('aiagent_ollama_model')
+  }
+  // Same "standing preference across agents, not per-purpose content"
+  // treatment as provider/ollamaModel above — these are platform-tuning
+  // knobs (Settings screen), not something the bootstrap call should invent.
+  const [maxDelegations, setMaxDelegations] = useState<number | null>(() => {
+    const raw = localStorage.getItem('aiagent_max_delegations')
+    return raw ? Number(raw) : null
+  })
+  function handleMaxDelegationsChange(n: number | null) {
+    setMaxDelegations(n)
+    if (n) localStorage.setItem('aiagent_max_delegations', String(n))
+    else localStorage.removeItem('aiagent_max_delegations')
+  }
+  const [searchDefaults, setSearchDefaults] = useState<SearchDefaults>(() => {
+    const raw = localStorage.getItem('aiagent_search_defaults')
+    if (!raw) return {}
+    try { return JSON.parse(raw) as SearchDefaults } catch { return {} }
+  })
+  function handleSearchDefaultsChange(d: SearchDefaults) {
+    setSearchDefaults(d)
+    if (Object.keys(d).length > 0) localStorage.setItem('aiagent_search_defaults', JSON.stringify(d))
+    else localStorage.removeItem('aiagent_search_defaults')
   }
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
@@ -368,7 +392,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     const requestId = ++briefRequestIdRef.current
     briefDebounceRef.current = window.setTimeout(() => {
       setBriefLoading(true)
-      fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel)
+      fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel, undefined, undefined, maxDelegations)
         .then(result => {
           if (requestId !== briefRequestIdRef.current) return
           setAiBrief(result)
@@ -384,14 +408,14 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }, 700)
     return () => window.clearTimeout(briefDebounceRef.current)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentType, keywords, location, agentName])
+  }, [agentType, keywords, location, agentName, maxDelegations])
 
   function handleBriefAnswerSubmit() {
     const answer = briefAnswer.trim()
     if (!answer || !aiBrief || aiBrief.type !== 'question' || answeringBrief) return
     setAnsweringBrief(true)
     const requestId = ++briefRequestIdRef.current
-    fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel, aiBrief.text, answer)
+    fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel, aiBrief.text, answer, maxDelegations)
       .then(result => {
         if (requestId !== briefRequestIdRef.current) return
         setAiBrief(result)
@@ -687,7 +711,16 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         handleProgress,
         agentType,
       )
-      onDone({ ...config, keywords, location: loc, provider, ollama_model: provider === 'ollama' ? ollamaModel : null, template: agentType })
+      onDone({
+        ...config,
+        keywords,
+        location: loc,
+        provider,
+        ollama_model: provider === 'ollama' ? ollamaModel : null,
+        template: agentType,
+        max_delegations: maxDelegations,
+        search_defaults: searchDefaults,
+      })
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unknown error')
     }
@@ -697,7 +730,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     ? null
     : aiBrief
       ? aiBrief.warning ?? null
-      : buildDeterministicWarning(keywords, agentType, location.trim())
+      : buildDeterministicWarning(keywords, agentType, location.trim(), maxDelegations)
 
   return (
     <div className={styles.container}>
@@ -993,21 +1026,21 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   <div className={styles.savedKeywordPool}>
                     {savedKeywordPool.map(kw => {
                       const alreadyAdded = keywords.some(k => k.toLowerCase() === kw.toLowerCase())
-                      const toggle = () => { if (bootstrapping) return; alreadyAdded ? removeKeyword(kw) : addSavedKeyword(kw) }
+                      const toggle = () => { if (bootstrapping || alreadyAdded) return; addSavedKeyword(kw) }
                       return (
                         <div
                           key={kw}
                           className={`${styles.savedKeywordChip} ${alreadyAdded ? styles.savedKeywordChipAdded : ''}`}
                           role="button"
-                          tabIndex={bootstrapping ? -1 : 0}
+                          tabIndex={bootstrapping || alreadyAdded ? -1 : 0}
                           onClick={toggle}
                           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } }}
                           aria-pressed={alreadyAdded}
-                          aria-label={alreadyAdded ? `Remove ${kw} from current specialties` : `Add saved specialty ${kw} to current specialties`}
-                          title={alreadyAdded ? 'Tap to remove from current specialties' : 'Tap to add to current specialties'}
+                          aria-disabled={alreadyAdded}
+                          aria-label={alreadyAdded ? `${kw} is already in current specialties` : `Add saved specialty ${kw} to current specialties`}
+                          title={alreadyAdded ? 'Already in current specialties' : 'Tap to add to current specialties'}
                         >
                           <span className={styles.savedKeywordLabel}>{kw}</span>
-                          {alreadyAdded && <span className={styles.savedKeywordAddedTag}>Added</span>}
                           <button
                             type="button"
                             className={styles.savedKeywordDelete}
@@ -1306,6 +1339,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         onOllamaModelChange={handleOllamaModelChange}
         availableModels={availableModels}
         modelsLoaded={modelsLoaded}
+        maxDelegations={maxDelegations}
+        onMaxDelegationsChange={handleMaxDelegationsChange}
+        searchDefaults={searchDefaults}
+        onSearchDefaultsChange={handleSearchDefaultsChange}
         disabled={bootstrapping}
       />
     </div>
