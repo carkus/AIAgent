@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import styles from '../styles/ImageViewer.module.css'
 
 interface Props {
-  svg: string
+  // Exactly one of these is expected: an inline SVG string (mermaid diagrams)
+  // or a plain <img> src (e.g. a base64 data URL from a user's uploaded
+  // diagram photo/screenshot) — same enlarge-on-tap overlay either way.
+  svg?: string
+  src?: string
   onClose: () => void
 }
 
@@ -14,7 +18,7 @@ const ZOOM_STEP = 0.0015
 // preview (MermaidDiagram's 150px-tall box). Generic on purpose: as more
 // visual output lands in the app, this is the shared enlarge-on-tap
 // overlay rather than something built one-off into MermaidDiagram.
-export default function ImageViewer({ svg, onClose }: Props) {
+export default function ImageViewer({ svg, src, onClose }: Props) {
   const [scale, setScale] = useState(1)
   const pageRef = useRef<HTMLDivElement | null>(null)
 
@@ -41,13 +45,24 @@ export default function ImageViewer({ svg, onClose }: Props) {
         {scale !== 1 && (
           <span className={styles.zoomBadge} aria-hidden="true">{Math.round(scale * 100)}%</span>
         )}
-        <div
-          className={styles.image}
-          style={{ transform: `scale(${scale})` }}
-          onDoubleClick={() => setScale(1)}
-          title="Scroll to zoom, double-click to reset"
-          dangerouslySetInnerHTML={{ __html: svg }}
-        />
+        {svg ? (
+          <div
+            className={styles.image}
+            style={{ transform: `scale(${scale})` }}
+            onDoubleClick={() => setScale(1)}
+            title="Scroll to zoom, double-click to reset"
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
+        ) : (
+          <img
+            className={styles.image}
+            style={{ transform: `scale(${scale})` }}
+            onDoubleClick={() => setScale(1)}
+            title="Scroll to zoom, double-click to reset"
+            src={src}
+            alt=""
+          />
+        )}
       </div>
     </div>
   )

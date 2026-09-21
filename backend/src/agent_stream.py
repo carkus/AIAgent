@@ -464,16 +464,25 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
    ```
    Max ~8 nodes. Skip this entirely for a simple, single-step question that
    needs no tools or just one tool call.
+
+7. BE ASSERTIVE. State your findings and recommendations directly — "X is
+   the better choice because Y," not "X might possibly be worth considering,
+   though it depends." Lead with a conclusion, then back it with the
+   evidence, instead of hedging your way toward one. If the data is
+   genuinely inconclusive, say so plainly and explain why, rather than
+   burying a wishy-washy answer in qualifiers. Don't over-hedge with
+   "it depends," "you may want to," or "consider" when you actually have
+   an opinion backed by what you found — give the opinion.
 """ + (f"""
-7. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [], max_delegations)}
-8. Once your workers report back, do NOT restate or re-summarize each one's
+8. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [], max_delegations)}
+9. Once your workers report back, do NOT restate or re-summarize each one's
    full findings in your own reply — the user already sees each worker's
    complete response individually, attributed to that worker, in the UI.
    Your own reply should be short: at most a few sentences comparing or
    synthesizing across workers (or noting anything none of them covered),
    never a repeat of content they already reported.
-9. DRIVE THE CONVERSATION FORWARD.""" if allow_delegation else """
-7. DRIVE THE CONVERSATION FORWARD.""") + """ Close your reply with one
+10. DRIVE THE CONVERSATION FORWARD.""" if allow_delegation else """
+8. DRIVE THE CONVERSATION FORWARD.""") + """ Close your reply with one
    short, concrete sentence suggesting a specific next move — a follow-up
    question worth digging into, a comparison to add, a next report to run
    — phrased as a suggestion the user can accept or ignore, not a vague
@@ -508,7 +517,39 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
     # Build initial message list: system prompt first, then conversation history
     current_messages: list[dict] = [{"role": "system", "content": system_prompt}]
     for m in messages:
-        current_messages.append({"role": m["role"], "content": m["content"]})
+        image = m.get("image")
+        if not image:
+            current_messages.append({"role": m["role"], "content": m["content"]})
+            continue
+        if provider == "ollama":
+            # Local Ollama models in this cascade aren't vision-capable — drop
+            # the image rather than send a content shape it can't handle, but
+            # say so, so the agent doesn't just silently ignore the attachment.
+            note = (
+                "[The user attached a diagram image, but this agent is running "
+                "on a local Ollama model, which can't see images. Ask them to "
+                "describe the diagram in words, or switch the agent to the "
+                "Gemini provider to analyze it directly.]"
+            )
+            content = f"{m['content']}\n\n{note}" if m["content"] else note
+            current_messages.append({"role": m["role"], "content": content})
+            continue
+        # OpenAI-compatible multimodal content (Gemini's endpoint accepts this
+        # transparently — see llm_client.py) — one text block plus one image
+        # block. A default critique prompt covers the case where the user
+        # attached an image with no message of their own.
+        text = m["content"] or (
+            "Critique this diagram's structure — dead-end branches, redundant "
+            "boxes, unclear or missing labels, unnecessary complexity — then "
+            "offer to rebuild it as a cleaner mermaid diagram."
+        )
+        current_messages.append({
+            "role": m["role"],
+            "content": [
+                {"type": "text", "text": text},
+                {"type": "image_url", "image_url": {"url": image}},
+            ],
+        })
 
     tool_calls_log = []
     started_at = time.time()

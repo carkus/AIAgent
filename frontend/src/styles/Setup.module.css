@@ -1594,11 +1594,13 @@
 /* Expanding stack, active at every width: the setup form (.agentCard) and
    the dossier (<form>, wrapping .dossierWrap) are both tall enough that
    showing both fully at once crowds the page, so whichever one the user
-   taps into expands to ~70% of the available height while the other
-   collapses to a read-only peek strip — no separate toggle buttons,
-   tapping the panel itself is the control. Placed at the end of the file
-   so these overrides win any specificity ties against the unconditional
-   .agentCard/.form rules declared earlier. */
+   taps into expands to fill the available height while the other collapses
+   down to its own natural (peek) content size — no separate toggle buttons,
+   tapping the panel itself is the control. No fixed height split between
+   them: the active panel just takes whatever the collapsed one doesn't
+   need. Placed at the end of the file so these overrides win any
+   specificity ties against the unconditional .agentCard/.form rules
+   declared earlier. */
 .focusStack {
   display: flex;
   flex-direction: column;
@@ -1617,38 +1619,15 @@
 }
 
 .panelActive {
-  flex: 1 1 70%;
+  flex: 1 1 auto;
   opacity: 1;
 }
 
 .panelCollapsed {
-  flex: 1 1 30%;
+  flex: 0 0 auto;
   opacity: 0.55;
   cursor: pointer;
   overflow: hidden;
-}
-
-/* The agent panel resizes with .panelActive/.panelCollapsed's own flex-basis
-   (70%/30% of .focusStack, set above) — that IS its maximum, not a second
-   hardcoded vh cap layered on top. Only once content still doesn't fit in
-   that allotted height does .agentCardScroll (the middle section) scroll;
-   the name header (.agentCardMain) and the commission button row
-   (.profileCommissionRow) are siblings outside it, so they stay pinned in
-   place above/below the scroll area instead of scrolling out of view with
-   it. The dossier panel, when selected, grows to fill whatever vertical
-   space that leaves in .focusStack rather than sharing a fixed 70/30 split. */
-.focusStack .form.panelActive {
-  flex: 1 1 auto;
-}
-
-/* When the dossier is the selected panel, shrink the now-collapsed setup
-   panel's peek strip from the generic 30% down to 20% — since the dossier
-   itself grows to fill whatever's left (flex: auto, above), that extra 10
-   percentage points of .focusStack's height goes straight to the dossier,
-   letting it come up further. Scoped to .agentCard specifically so the
-   reverse case (setup active, dossier collapsed) keeps its own 30% peek. */
-.focusStack .agentCard.panelCollapsed {
-  flex: 1 1 20%;
 }
 
 /* Collapsed content stays visible (cropped) but inert — a tap anywhere

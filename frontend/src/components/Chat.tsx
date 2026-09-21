@@ -9,12 +9,13 @@ import ToolActivity from './ToolActivity'
 import MermaidDiagram from './MermaidDiagram'
 import CodeBlock from './CodeBlock'
 import PdfPreviewModal from './PdfPreviewModal'
+import ImageViewer from './ImageViewer'
 import type { AgentConfig, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import { describeModel, describeModelFallback } from '../modelLabel'
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/splash_logo.png'
 
-type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent'
+type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent' | 'attach' | 'imagePlaceholder'
 
 // Lenient on purpose (trailing whitespace after the fence marker, CRLF,
 // casing, trailing blank lines before the closing fence) — the earlier,
@@ -99,6 +100,23 @@ function ToolbarIcon({ name }: { name: ToolbarIconName }) {
           <line x1="14.5" y1="13.5" x2="20.5" y2="13.5" />
         </svg>
       )
+    case 'attach':
+      return (
+        <svg {...common}>
+          <path d="M16.5 6.5 8.7 14.3a3 3 0 1 0 4.24 4.24l7.1-7.1a5 5 0 1 0-7.07-7.07L5.5 11.84" />
+        </svg>
+      )
+    // Shown in the composer's attachment chip while an image is still being
+    // read off disk (FileReader is async) — a generic "image slot, not yet
+    // filled in" glyph rather than leaving the chip blank/empty-looking.
+    case 'imagePlaceholder':
+      return (
+        <svg {...common} className={styles.spinnerIcon}>
+          <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
+          <circle cx="9" cy="10" r="1.5" />
+          <path d="M4 16.5 9 12l3 2.5 4-3.5 4 4" />
+        </svg>
+      )
   }
 }
 
@@ -113,6 +131,9 @@ interface LiveToolCall {
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  // Base64 data URL of a diagram image attached to this turn (composer's
+  // paperclip button). Undefined on every message that isn't an upload.
+  image?: string
   toolCalls?: ToolCall[]
   liveToolCalls?: LiveToolCall[]
   // The agent's own step-by-step plan for this turn (agent_stream.py's
@@ -176,6 +197,14 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // auto-search that a fresh bootstrap triggers.
   const autoSentRef = useRef(Boolean(initialMessages && initialMessages.length > 0))
   const abortRef = useRef<AbortController | null>(null)
+  // Composer's attached-diagram state. `attachingImage` covers the brief
+  // window while FileReader is still converting the picked file to a data
+  // URL — the attachment chip shows the imagePlaceholder glyph then, so the
+  // slot never reads as empty/broken before the real image is filled in.
+  const [attachedImage, setAttachedImage] = useState<string | null>(null)
+  const [attachingImage, setAttachingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [viewerImage, setViewerImage] = useState<string | null>(null)
 
   // Auto-send an initial task when the agent has a configured specialty
   // pool. The pool itself (agentConfig.keywords) is now the keyword source
@@ -197,8 +226,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       id: chatIdRef.current,
       agentName,
       agentConfig,
-      messages: messages.map(({ role, content, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits }) => ({
-        role, content, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits,
+      messages: messages.map(({ role, content, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits }) => ({
+        role, content, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits,
       })),
       savedAt: Date.now(),
     }
@@ -319,19 +348,63 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     abortRef.current?.abort()
   }
 
-  async function sendMessage(text: string, currentMessages: ChatMessage[] = messages) {
-    if (!text.trim() || thinking) return
+  // Stop relies on the fetch's AbortError actually propagating through
+  // sendMessage's catch block to clear `thinking`/liveToolCalls — if that
+  // never happens (a hung stream that doesn't reject cleanly), the composer
+  // stays locked with no way to send another message. Kill doesn't wait on
+  // that: it aborts AND unconditionally forces the UI back to a clean,
+  // sendable state itself, dropping the in-progress assistant placeholder
+  // if it never got any content. Distinct from Recommission, which wipes
+  // the whole conversation and starts a fresh agent — this only unsticks
+  // the current turn.
+  function killAgent() {
+    abortRef.current?.abort()
+    setMessages(msgs => {
+      const last = msgs[msgs.length - 1]
+      if (last && last.role === 'assistant' && !last.content && !last.toolCalls?.length) {
+        return msgs.slice(0, -1)
+      }
+      return last && last.role === 'assistant' ? [...msgs.slice(0, -1), { ...last, liveToolCalls: undefined }] : msgs
+    })
+    setError(null)
+    setThinking(false)
+  }
+
+  function handleAttachClick() {
+    fileInputRef.current?.click()
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setAttachingImage(true)
+    const reader = new FileReader()
+    reader.onload = () => {
+      setAttachedImage(typeof reader.result === 'string' ? reader.result : null)
+      setAttachingImage(false)
+    }
+    reader.onerror = () => setAttachingImage(false)
+    reader.readAsDataURL(file)
+  }
+
+  function clearAttachedImage() {
+    setAttachedImage(null)
+  }
+
+  async function sendMessage(text: string, currentMessages: ChatMessage[] = messages, image?: string) {
+    if ((!text.trim() && !image) || thinking) return
     setError(null)
 
     const controller = new AbortController()
     abortRef.current = controller
 
-    const userMsg: ChatMessage = { role: 'user', content: text }
+    const userMsg: ChatMessage = { role: 'user', content: text, image }
     const withUser = [...currentMessages, userMsg]
     setMessages([...withUser, { role: 'assistant', content: '', liveToolCalls: [] }])
     setThinking(true)
 
-    const apiMessages = withUser.map(m => ({ role: m.role, content: m.content }))
+    const apiMessages = withUser.map(m => ({ role: m.role, content: m.content, image: m.image }))
 
     try {
       await runAgent(apiMessages, agentConfig, (event: StreamEvent) => {
@@ -406,9 +479,11 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
     const text = input.trim()
-    if (!text || thinking) return
+    if ((!text && !attachedImage) || thinking) return
     setInput('')
-    await sendMessage(text)
+    const image = attachedImage ?? undefined
+    setAttachedImage(null)
+    await sendMessage(text, messages, image)
   }
 
   return (
@@ -427,6 +502,15 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
 
           <div className={styles.headerIdentityText}>
             <span className={styles.headerTitle}>Agent {agentName}</span>
+            <button
+              type="button"
+              className={styles.newAgentBtn}
+              onClick={onReset}
+              aria-label="New agent"
+              title="New agent — recommission a fresh agent, wiping this conversation"
+            >
+              <ToolbarIcon name="newAgent" />
+            </button>
             {agentConfig.persona?.traits && agentConfig.persona.traits.length > 0 && (
               <span className={styles.personaTraits} title={agentConfig.persona.rationale}>
                 {agentConfig.persona.traits.join(' · ')}
@@ -470,15 +554,6 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             title="Export PDF"
           >
             <ToolbarIcon name={exporting ? 'exporting' : 'export'} />
-          </button>
-          <button
-            type="button"
-            className={styles.resetBtn}
-            onClick={onReset}
-            aria-label="New agent"
-            title="New agent"
-          >
-            <ToolbarIcon name="newAgent" />
           </button>
         </div>
         {agentConfig.keywords && agentConfig.keywords.length > 0 && (
@@ -533,6 +608,16 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         )}
         {messages.map((msg, i) => (
           <div key={i} className={msg.role === 'user' ? styles.userBubble : styles.assistantBubble}>
+            {msg.image && (
+              <button
+                type="button"
+                className={styles.messageImageBtn}
+                onClick={() => setViewerImage(msg.image!)}
+                aria-label="Enlarge attached diagram"
+              >
+                <img src={msg.image} alt="Attached diagram" className={styles.messageImage} />
+              </button>
+            )}
             {msg.planDiagram && (
               <MermaidDiagram chart={msg.planDiagram} label="Plan" caption={msg.planSummary} />
             )}
@@ -630,7 +715,42 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         {error && <p className={styles.error}>{error}</p>}
       </div>
 
+      {(attachedImage || attachingImage) && (
+        <div className={styles.attachmentChip}>
+          {attachingImage ? (
+            <span className={styles.attachmentPlaceholder}>
+              <ToolbarIcon name="imagePlaceholder" />
+              Loading image…
+            </span>
+          ) : (
+            <>
+              <img src={attachedImage!} alt="Attached diagram" className={styles.attachmentThumb} />
+              <span>Diagram attached — the agent will critique it on send</span>
+              <button type="button" className={styles.attachmentRemove} onClick={clearAttachedImage} aria-label="Remove attached image">
+                ✕
+              </button>
+            </>
+          )}
+        </div>
+      )}
       <form className={styles.inputRow} onSubmit={handleSend}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className={styles.hiddenFileInput}
+          onChange={handleFileChange}
+        />
+        <button
+          type="button"
+          className={styles.attachBtn}
+          onClick={handleAttachClick}
+          disabled={thinking || attachingImage}
+          title="Attach a diagram image for the agent to critique"
+          aria-label="Attach a diagram image"
+        >
+          <ToolbarIcon name="attach" />
+        </button>
         <input
           className={styles.input}
           value={input}
@@ -639,11 +759,21 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           disabled={thinking}
         />
         {thinking ? (
-          <button type="button" className={styles.stopBtn} onClick={stopAgent}>
-            Stop
-          </button>
+          <>
+            <button type="button" className={styles.stopBtn} onClick={stopAgent}>
+              Stop
+            </button>
+            <button
+              type="button"
+              className={styles.killBtn}
+              onClick={killAgent}
+              title="Force this stuck turn to end and unlock the composer, without wiping the conversation"
+            >
+              Kill
+            </button>
+          </>
         ) : (
-          <button type="submit" className={styles.sendBtn} disabled={!input.trim()}>
+          <button type="submit" className={styles.sendBtn} disabled={!input.trim() && !attachedImage}>
             Send
           </button>
         )}
@@ -669,6 +799,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           onClose={handleClosePdfPreview}
         />
       )}
+      {viewerImage && <ImageViewer src={viewerImage} onClose={() => setViewerImage(null)} />}
     </div>
   )
 }

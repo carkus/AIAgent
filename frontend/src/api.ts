@@ -308,7 +308,7 @@ export async function listMcpTools(): Promise<McpServerInfo[]> {
 }
 
 export async function runAgent(
-  messages: { role: string; content: string }[],
+  messages: { role: string; content: string; image?: string }[],
   agentConfig: AgentConfig,
   onEvent: (event: StreamEvent) => void,
   signal?: AbortSignal,

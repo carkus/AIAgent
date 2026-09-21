@@ -11,17 +11,16 @@ export default function CodeBlock({ language, children }: { language: string; ch
 
   return (
     <div className={styles.codeBlock}>
-      <div className={styles.codeBlockHeader}>
+      <button
+        type="button"
+        className={styles.codeBlockHeader}
+        onClick={() => setCollapsed(c => !c)}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? 'Expand code block' : 'Collapse code block'}
+      >
         <span className={styles.codeBlockLang}>{language}</span>
-        <button
-          type="button"
-          className={styles.codeBlockToggle}
-          onClick={() => setCollapsed(c => !c)}
-          aria-label={collapsed ? 'Expand code block' : 'Collapse code block'}
-        >
-          {collapsed ? '▸' : '▾'}
-        </button>
-      </div>
+        <span className={styles.codeBlockToggle} aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
+      </button>
       {!collapsed && <pre className={styles.codeBlockPre}>{children}</pre>}
     </div>
   )
