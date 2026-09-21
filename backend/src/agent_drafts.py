@@ -49,7 +49,14 @@ def list_drafts() -> list:
         return _load()
 
 
-def add_draft(agent_name: str, agent_type: str | None, keywords: list, location: str, traits: list) -> dict:
+def add_draft(
+    agent_name: str,
+    agent_type: str | None,
+    keywords: list,
+    location: str,
+    traits: list,
+    behavior_toggles: list | None = None,
+) -> dict:
     entry = {
         "id": uuid.uuid4().hex,
         "agentName": agent_name,
@@ -57,6 +64,7 @@ def add_draft(agent_name: str, agent_type: str | None, keywords: list, location:
         "keywords": keywords,
         "location": location,
         "traits": traits,
+        "behaviorToggles": behavior_toggles or [],
         "savedAt": int(time.time() * 1000),
     }
     with _lock:
@@ -70,6 +78,7 @@ def add_draft(agent_name: str, agent_type: str | None, keywords: list, location:
                 and d.get("agentType") == agent_type
                 and d.get("keywords") == keywords
                 and d.get("location") == location
+                and d.get("behaviorToggles", []) == (behavior_toggles or [])
             )
         ]
         drafts.insert(0, entry)

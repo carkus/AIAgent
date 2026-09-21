@@ -46,7 +46,7 @@
 .title {
   margin: 0 0 0.5rem;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 1.85rem;
+  font-size: 2.035rem;
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -56,7 +56,7 @@
 .subtitle {
   margin: 0 0 2rem;
   color: var(--color-muted);
-  font-size: 0.95rem;
+  font-size: 1.045rem;
 }
 
 .form {
@@ -103,7 +103,7 @@
   color: var(--color-accent);
   display: inline-flex;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.76rem;
+  font-size: 0.836rem;
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -116,7 +116,7 @@
   border: none;
   color: #6b9895;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 1.1rem;
   line-height: 1;
   padding: 0 0.1rem;
 }
@@ -133,7 +133,7 @@
   color: var(--color-accent);
   flex: 0 0 220px;
   width: 220px;
-  font-size: 0.75rem;
+  font-size: 0.825rem;
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -152,7 +152,7 @@
 
 .chipInput::placeholder {
   color: #6b9895;
-  font-size: 0.7rem;
+  font-size: 0.77rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -167,7 +167,7 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.85rem;
+  font-size: 0.935rem;
   font-weight: 400;
   height: 1.7rem;
   min-width: 1.7rem;
@@ -179,14 +179,14 @@
 
 .charHint {
   color: #8a94a0;
-  font-size: 0.7rem;
+  font-size: 0.77rem;
   margin: 0;
   text-align: right;
 }
 
 .specialtiesHint {
   color: #8a94a0;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   margin: 0 0 0.3rem;
 }
 
@@ -202,7 +202,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 0.6rem;
-  padding-top: calc(0.6rem - 10px);
+  margin-top: calc(20px - 0.85rem);
   flex-shrink: 0;
 }
 
@@ -235,7 +235,7 @@
 .agentTypeLabel {
   color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.6rem;
+  font-size: 0.66rem;
   font-weight: 400;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -248,7 +248,7 @@
 
 .commissionHint {
   color: #b45309;
-  font-size: 0.75rem;
+  font-size: 0.825rem;
   margin: 0 auto 0 0;
 }
 
@@ -263,7 +263,7 @@
   align-items: center;
   height: 2.6rem;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.85rem;
+  font-size: 0.935rem;
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -293,25 +293,12 @@
   color: var(--color-accent);
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.66rem;
+  font-size: 0.726rem;
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 0.4rem 0.75rem;
   transition: background-color 0.15s, color 0.15s;
-}
-
-.profileSaveBtnCommissionRow {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 3rem;
-  height: 2.6rem;
-  padding: 0 0.35rem;
-  line-height: 1.15;
-  text-align: center;
-  flex-shrink: 0;
 }
 
 .profileSaveBtn:hover:not(:disabled) {
@@ -331,7 +318,7 @@
   color: #a34b4b;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.66rem;
+  font-size: 0.726rem;
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -360,7 +347,7 @@
 .locationLiner {
   margin: -0.35rem 0 0.15rem;
   color: var(--color-muted);
-  font-size: 0.66rem;
+  font-size: 0.726rem;
   text-align: left;
 }
 
@@ -371,7 +358,7 @@
   border: 1px solid #cfe3ea;
   border-radius: 5px;
   font-family: inherit;
-  font-size: 0.66rem;
+  font-size: 0.726rem;
   font-weight: 600;
   padding: 0.1rem 0.4rem;
   margin: 0.4rem 0 0.35rem;
@@ -397,7 +384,6 @@
   margin-bottom: 1rem;
   position: relative;
   box-shadow: 0 6px 18px rgba(28, 40, 51, 0.06);
-  max-height: 50vh;
   flex-shrink: 0;
 }
 
@@ -425,6 +411,14 @@
   min-width: 0;
 }
 
+.personalityRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--color-border);
+}
+
 .specialtiesRow {
   display: flex;
   flex-direction: column;
@@ -444,7 +438,7 @@
 .saveFeedbackText {
   margin: 0;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.7rem;
+  font-size: 0.77rem;
   font-weight: 500;
   letter-spacing: 0.02em;
   text-align: right;
@@ -458,12 +452,18 @@
   color: #b91c1c;
 }
 
-.agentSummaryRow {
+/* Its own subsection, deliberately set apart from the dashed-divider rows
+   inside .agentCardScroll above (personality/specialties/behavior — all
+   directly editable). A solid border and card-like inset mark this as a
+   different kind of content: assembled/read-only, not another field. */
+.briefSection {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  padding-top: 0.75rem;
-  border-top: 1px dashed var(--color-border);
+  flex-shrink: 0;
+  margin: 0.85rem 0 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border);
 }
 
 /* Generated from the specialties/special-instructions above, not something
@@ -474,8 +474,7 @@
   margin: 0;
   color: var(--color-text);
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.88rem;
-  font-style: italic;
+  font-size: 0.968rem;
   line-height: 1.55;
   background: #f2f0e6;
   border-left: 3px solid var(--color-accent-secondary);
@@ -503,7 +502,7 @@
   margin: 0;
   color: #6b4d1f;
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.88rem;
+  font-size: 0.968rem;
   line-height: 1.5;
 }
 
@@ -519,7 +518,7 @@
   color: var(--color-text);
   flex: 1;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.76rem;
+  font-size: 0.836rem;
   outline: none;
   padding: 0.4rem 0.6rem;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -541,7 +540,7 @@
   color: #ffffff;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 0.4rem 0.85rem;
@@ -571,7 +570,7 @@
   margin: 0;
   color: #8f1414;
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.82rem;
+  font-size: 0.902rem;
   line-height: 1.5;
 }
 
@@ -589,6 +588,14 @@
   gap: 0.4rem;
 }
 
+/* Same left-aligned wrap as .behaviorTogglesRow above — chips sit at their
+   own natural size and stack from the left, no forced full-width spread. */
+.behaviorIconRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 /* Text-label pills, same rest/hover/active language as .agentTypePill but
    sized for a word instead of an icon — several can be active at once and
    their effects compound, so "active" reads as "pressed in", not "selected
@@ -601,7 +608,7 @@
   color: var(--color-muted);
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -627,6 +634,115 @@
   color: var(--color-accent);
 }
 
+/* Behavior toggles — same rest/hover/active visual language as
+   .behaviorToggle/.behaviorToggleActive (the Personality pills just above):
+   surface background + muted text at rest, accent border/text + lift on
+   hover, a light accent-tinted fill on active. Several can be active at
+   once and their effects compound, same "pressed in" reading as Personality. */
+.behaviorIconBtn,
+.behaviorIconBtnActive {
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  color: var(--color-muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  padding: 0.3rem 0.6rem;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s, transform 0.15s;
+}
+
+.behaviorIconGlyph {
+  display: none;
+}
+
+/* Typewritten label — the sole visible content of the chip now that the
+   icon glyph is hidden; the hover tooltip (below) still carries the
+   longer description. */
+.behaviorIconLabel {
+  font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.15;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.behaviorIconBtn:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+  transform: translateY(-1px);
+}
+
+.behaviorIconBtn:disabled,
+.behaviorIconBtnActive:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.behaviorIconBtnActive {
+  background: rgba(11, 73, 94, 0.1);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* Speech-bubble tooltip (now just the longer description — the label itself
+   is always visible under the icon, see .behaviorIconLabel above) — a
+   plain fade, no bounce/scale-in, to match the flat terminal-readout style
+   of the button itself. Pops DOWNWARD, not upward: this row lives inside
+   .agentCardScroll, which is overflow-y: auto, and a scrollable ancestor
+   clips absolutely-positioned content that overflows above its current
+   scroll position — an upward tooltip was getting silently cut off there.
+   Popping down stays within the scrollable content instead of escaping it. */
+.behaviorIconTooltip {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  left: 50%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: max-content;
+  max-width: 12rem;
+  background: var(--color-text);
+  color: var(--color-surface);
+  border-radius: 2px;
+  padding: 0.4rem 0.55rem;
+  font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.748rem;
+  line-height: 1.35;
+  text-transform: none;
+  letter-spacing: normal;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 0);
+  transition: opacity 0.15s;
+}
+
+.behaviorIconTooltip::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-bottom-color: var(--color-text);
+}
+
+.behaviorIconBtn:hover .behaviorIconTooltip,
+.behaviorIconBtn:focus-visible .behaviorIconTooltip,
+.behaviorIconBtnActive:hover .behaviorIconTooltip,
+.behaviorIconBtnActive:focus-visible .behaviorIconTooltip {
+  opacity: 1;
+}
+
 /* One line per active toggle, appearing/growing as they're switched on —
    makes the compounding effect legible instead of leaving the user to
    remember what each pill's title tooltip said. */
@@ -641,13 +757,16 @@
   border-left: 3px solid var(--color-accent-secondary);
   border-radius: 0 6px 6px 0;
   color: var(--color-text);
-  font-size: 0.78rem;
+  font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.858rem;
   line-height: 1.4;
 }
 
 .behaviorEffectLabel {
   color: var(--color-accent);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .fieldLabel {
@@ -656,7 +775,7 @@
   gap: 0.4rem;
   color: var(--color-accent-secondary);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.7rem;
+  font-size: 0.77rem;
   font-weight: 400;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -664,7 +783,7 @@
 
 .fieldLabel span {
   color: var(--color-accent);
-  font-size: 0.6rem;
+  font-size: 0.66rem;
 }
 
 .fieldLabelToggle {
@@ -689,7 +808,7 @@
 
 .fieldLabelCaret {
   color: var(--color-accent);
-  font-size: 1.3rem;
+  font-size: 1.43rem;
   flex-shrink: 0;
 }
 
@@ -697,7 +816,7 @@
   background: #eef1f0;
   border-radius: 999px;
   color: var(--color-accent);
-  font-size: 0.68rem;
+  font-size: 0.748rem;
   font-weight: 600;
   padding: 0.05rem 0.45rem;
   flex-shrink: 0;
@@ -712,7 +831,7 @@
   border-radius: 999px;
   color: var(--color-accent);
   cursor: pointer;
-  font-size: 1.425rem;
+  font-size: 1.5675rem;
   line-height: 1;
   width: 3rem;
   height: 3rem;
@@ -723,6 +842,29 @@
 }
 
 .settingsIconBtn:hover {
+  border-color: var(--color-accent);
+  background: rgba(31, 111, 115, 0.08);
+}
+
+.characterGenBtn {
+  position: absolute;
+  top: 1.1rem;
+  right: 4.6rem;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-size: 1.35rem;
+  line-height: 1;
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.characterGenBtn:hover {
   border-color: var(--color-accent);
   background: rgba(31, 111, 115, 0.08);
 }
@@ -793,7 +935,7 @@
   border-radius: 6px;
   color: var(--color-text);
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 0.935rem;
   outline: none;
   padding: 0.3rem 0.6rem;
   width: 100%;
@@ -823,7 +965,7 @@
 
 .locationSuggestions li {
   color: var(--color-text);
-  font-size: 0.82rem;
+  font-size: 0.902rem;
   padding: 0.45rem 0.5rem;
   border-radius: 4px;
   cursor: pointer;
@@ -840,7 +982,7 @@
   border-radius: 6px;
   color: var(--color-text);
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 0.935rem;
   outline: none;
   padding: 0.3rem 1.75rem 0.3rem 0.6rem;
   flex: 1;
@@ -860,7 +1002,7 @@
 
 .providerHint {
   color: #8a94a0;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   margin: -0.35rem 0 0;
 }
 
@@ -909,20 +1051,20 @@
 
 .dossierTab {
   position: absolute;
-  top: -1.575rem;
+  top: -1.5rem;
   left: 0.75rem;
   z-index: 1;
   background: #ede4cd;
   border: 1px solid #cfbf94;
   border-bottom: none;
-  border-radius: 7.5px 7.5px 0 0;
+  border-radius: 7.13px 7.13px 0 0;
   color: #6b5a32;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.93rem;
+  font-size: 0.968rem;
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.375rem 0.9rem 0.525rem;
+  padding: 0.36rem 0.855rem 0.5rem;
 }
 
 .dossierStamp {
@@ -935,7 +1077,7 @@
   border: 2.25px solid var(--color-accent);
   border-radius: 6px;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.9rem;
+  font-size: 0.99rem;
   font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -978,7 +1120,7 @@
 
 .savedSectionCaret {
   color: #6b5a32;
-  font-size: 1.4rem;
+  font-size: 1.54rem;
   width: 1.6rem;
   flex-shrink: 0;
 }
@@ -986,7 +1128,7 @@
 .savedSectionTitle {
   color: var(--color-text);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.78rem;
+  font-size: 0.858rem;
   font-weight: 400;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -998,7 +1140,7 @@
   background: #eef1f0;
   border-radius: 999px;
   color: var(--color-accent);
-  font-size: 0.7rem;
+  font-size: 0.77rem;
   font-weight: 600;
   padding: 0.1rem 0.5rem;
   flex-shrink: 0;
@@ -1011,7 +1153,7 @@
 
 .savedEmpty {
   color: #8a94a0;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   margin: 0;
 }
 
@@ -1021,7 +1163,7 @@
   border-radius: 6px;
   color: var(--color-accent);
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.825rem;
   font-weight: 600;
   padding: 0.4rem 0.6rem;
   margin-bottom: 0.5rem;
@@ -1095,7 +1237,7 @@
 .savedKeywordLabel {
   color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.76rem;
+  font-size: 0.836rem;
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -1109,7 +1251,7 @@
   color: #b91c1c;
   cursor: pointer;
   flex-shrink: 0;
-  font-size: 0.95rem;
+  font-size: 1.045rem;
   font-weight: 700;
   line-height: 1;
   padding: 0;
@@ -1126,7 +1268,7 @@
   color: var(--color-accent);
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.75rem;
+  font-size: 0.825rem;
   font-weight: 400;
   padding: 0.2rem 0.6rem;
 }
@@ -1180,7 +1322,27 @@
   border-radius: 5px;
   color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.55rem;
+}
+
+.savedBehaviorBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.savedBehaviorBadge {
+  background: #0b495e;
+  border: 1px solid #0b495e;
+  border-radius: 5px;
+  color: #ffffff;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.792rem;
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -1198,7 +1360,7 @@
 .savedChatName {
   color: var(--color-accent);
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 0.82rem;
+  font-size: 0.902rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -1206,22 +1368,53 @@
 
 .savedChatTraits {
   color: var(--color-accent);
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   font-style: italic;
+}
+
+/* The saved chat's last line of actual conversation — name/keywords/traits
+   describe the agent, not what was said, so this is the only thing in the
+   row that gives context for which conversation this is. Light steel-blue
+   (the app's own secondary accent) sets it apart from the plain muted meta
+   line below it, and the quote mark reads as "something that was said"
+   rather than another label. */
+.savedChatPreview {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  color: var(--color-accent-secondary);
+  background: rgba(63, 126, 160, 0.08);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  margin: 0.1rem 0;
+  font-size: 0.792rem;
+  font-style: italic;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.savedChatPreview::before {
+  content: '“';
+  flex-shrink: 0;
+  font-style: normal;
+  font-weight: 700;
+  opacity: 0.6;
 }
 
 .savedChatMeta {
   color: var(--color-muted);
-  font-size: 0.62rem;
+  font-size: 0.682rem;
 }
 
 .savedResume {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #eef6ec;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: 5px;
   box-sizing: border-box;
   color: var(--color-accent);
   cursor: pointer;
@@ -1250,7 +1443,7 @@
   color: #b91c1c;
   cursor: pointer;
   flex-shrink: 0;
-  font-size: 0.95rem;
+  font-size: 1.045rem;
   font-weight: 700;
   line-height: 1;
   padding: 0 0.15rem;
@@ -1277,7 +1470,7 @@
 .errorIcon {
   flex-shrink: 0;
   color: #c0575c;
-  font-size: 0.95rem;
+  font-size: 1.045rem;
   line-height: 1.4;
 }
 
@@ -1298,13 +1491,13 @@
   margin: 0 0 0.2rem;
   color: #8a3a3d;
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.935rem;
 }
 
 .errorDetail {
   margin: 0;
   color: #a15a5d;
-  font-size: 0.78rem;
+  font-size: 0.858rem;
   line-height: 1.4;
   word-break: break-word;
 }
@@ -1320,7 +1513,7 @@
   color: #8a3a3d;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.875rem;
+  font-size: 0.9625rem;
   font-weight: 400;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1344,7 +1537,7 @@
   box-shadow: 0 6px 18px rgba(28, 40, 51, 0.06);
   color: var(--color-muted);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.76rem;
+  font-size: 0.836rem;
   margin-top: 1rem;
   padding: 0.85rem 1rem;
   text-align: center;
@@ -1368,7 +1561,7 @@
   border-radius: 999px;
   color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 0.2rem 0.65rem;
@@ -1421,6 +1614,19 @@
   overflow: hidden;
 }
 
+/* The agent panel resizes with .panelActive/.panelCollapsed's own flex-basis
+   (70%/30% of .focusStack, set above) — that IS its maximum, not a second
+   hardcoded vh cap layered on top. Only once content still doesn't fit in
+   that allotted height does .agentCardScroll (the middle section) scroll;
+   the name header (.agentCardMain) and the commission button row
+   (.profileCommissionRow) are siblings outside it, so they stay pinned in
+   place above/below the scroll area instead of scrolling out of view with
+   it. The dossier panel, when selected, grows to fill whatever vertical
+   space that leaves in .focusStack rather than sharing a fixed 70/30 split. */
+.focusStack .form.panelActive {
+  flex: 1 1 auto;
+}
+
 /* Collapsed content stays visible (cropped) but inert — a tap anywhere
    on the panel should just expand it, not fire the button/link
    underneath the user's thumb. */
@@ -1434,7 +1640,8 @@
    Save/Commission actions row only make sense once the panel is tapped
    back to active; hidden outright here rather than left to whatever the
    30% peek height happens to crop, so the contract holds at any viewport. */
-.panelCollapsed .agentSummaryRow,
+.panelCollapsed .briefSection,
+.panelCollapsed .personalityRow,
 .panelCollapsed .specialInstructionsRow,
 .panelCollapsed .specialtiesActionsRow,
 .panelCollapsed .profileCommissionRow {
@@ -1472,10 +1679,6 @@
     flex-shrink: 0;
   }
 
-  .profileSaveBtnCommissionRow {
-    flex-shrink: 0;
-  }
-
   .profileCommissionBtn {
     flex-shrink: 0;
     padding-left: 0.9rem;
@@ -1485,11 +1688,11 @@
   /* Saved Specialties pool + its section header read too small to tap/read
      comfortably on a phone at the base desktop-tuned sizes above. */
   .savedSectionTitle {
-    font-size: 0.88rem;
+    font-size: 0.968rem;
   }
 
   .savedSectionCount {
-    font-size: 0.78rem;
+    font-size: 0.858rem;
     padding: 0.15rem 0.55rem;
   }
 
@@ -1499,15 +1702,15 @@
   }
 
   .savedKeywordLabel {
-    font-size: 0.88rem;
+    font-size: 0.968rem;
   }
 
   .savedKeywordDelete {
-    font-size: 1.05rem;
+    font-size: 1.155rem;
   }
 
   .savedKeywordAddNew {
-    font-size: 0.86rem;
+    font-size: 0.946rem;
     padding: 0.35rem 0.75rem;
   }
 }

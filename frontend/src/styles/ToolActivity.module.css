@@ -4,7 +4,7 @@
   border: 1px solid rgba(31, 111, 115, 0.2);
   padding: 0.75rem 1rem;
   margin-top: 0.75rem;
-  font-size: 0.78rem;
+  font-size: 0.858rem;
   /* Base font for anything below that doesn't set its own (search-result
      titles/snippets, job cards, status text, etc.) — matches the assistant
      message body's own font (.markdown in Chat.module.css) so tool output
@@ -35,7 +35,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-size: 0.68rem;
+  font-size: 0.748rem;
 }
 
 .headingBtn {
@@ -56,7 +56,7 @@
 .headingArrow {
   color: var(--color-accent);
   flex-shrink: 0;
-  font-size: 1.4rem;
+  font-size: 1.54rem;
 }
 
 .entry {
@@ -77,7 +77,7 @@
   color: #1f5761;
   font-weight: 700;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   flex-shrink: 0;
 }
 
@@ -85,7 +85,7 @@
   color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-weight: 700;
-  font-size: 0.65rem;
+  font-size: 0.715rem;
   letter-spacing: 0.02em;
   border: 1px solid rgba(31, 111, 115, 0.4);
   border-radius: 4px;
@@ -138,7 +138,7 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   font-weight: 500;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   margin-bottom: 0.15rem;
 }
 
@@ -184,13 +184,13 @@
 .kwHeadingArrow {
   color: var(--color-accent-secondary);
   flex-shrink: 0;
-  font-size: 1.4rem;
+  font-size: 1.54rem;
 }
 
 .kwHeading {
   color: var(--color-accent-secondary);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.82rem;
+  font-size: 0.902rem;
   font-weight: 700;
   text-transform: lowercase;
 }
@@ -213,7 +213,7 @@
 
 .marketHeading {
   color: var(--color-text);
-  font-size: 0.75rem;
+  font-size: 0.825rem;
   font-weight: 600;
   margin: 0 0 0.6rem;
 }
@@ -236,7 +236,7 @@
 
 .marketSectionLabel {
   color: var(--color-muted);
-  font-size: 0.65rem;
+  font-size: 0.715rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   margin: 0 0 0.3rem;
@@ -254,7 +254,7 @@
 
 .barLabel {
   color: var(--color-muted);
-  font-size: 0.68rem;
+  font-size: 0.748rem;
   min-width: 60px;
 }
 
@@ -287,7 +287,7 @@
 
 .barCount {
   color: var(--color-muted);
-  font-size: 0.65rem;
+  font-size: 0.715rem;
   min-width: 16px;
   text-align: right;
 }
@@ -303,7 +303,7 @@
 
 .companyName {
   color: #5a6773;
-  font-size: 0.7rem;
+  font-size: 0.77rem;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -312,7 +312,7 @@
 
 .companyCount {
   color: var(--color-muted);
-  font-size: 0.65rem;
+  font-size: 0.715rem;
   flex-shrink: 0;
 }
 
@@ -332,7 +332,7 @@
   border: 1px solid #cfe3ea;
   border-radius: 3px;
   color: #2f6a8a;
-  font-size: 0.65rem;
+  font-size: 0.715rem;
   padding: 0.05rem 0.35rem;
 }
 
@@ -350,7 +350,7 @@
   border: 1px solid var(--color-border);
   border-radius: 3px;
   color: var(--color-muted);
-  font-size: 0.65rem;
+  font-size: 0.715rem;
   padding: 0.05rem 0.35rem;
 }
 
@@ -363,7 +363,7 @@
   color: #166534;
   display: inline-block;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.75rem;
+  font-size: 0.825rem;
   padding: 0.1rem 0.45rem;
 }
 
@@ -374,7 +374,7 @@
   color: #991b1b;
   display: inline-block;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.75rem;
+  font-size: 0.825rem;
   padding: 0.1rem 0.45rem;
 }
 
@@ -395,7 +395,7 @@
   border-radius: 4px;
   color: var(--color-accent);
   display: inline-flex;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   gap: 0.3rem;
   padding: 0.15rem 0.45rem;
 }
@@ -404,7 +404,7 @@
   background: #cfe3ea;
   border-radius: 3px;
   color: var(--color-accent-hover);
-  font-size: 0.65rem;
+  font-size: 0.715rem;
   font-weight: 700;
   padding: 0 0.3rem;
 }
@@ -414,13 +414,13 @@
   border: 1px solid #86efac;
   border-radius: 4px;
   color: #166534;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   padding: 0.15rem 0.45rem;
 }
 
 .analysisNote {
   color: var(--color-muted);
-  font-size: 0.7rem;
+  font-size: 0.77rem;
   margin: 0 0 0.2rem;
 }
 
@@ -438,7 +438,7 @@
   border: 1px solid var(--color-border);
   border-radius: 4px;
   display: inline-flex;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   overflow: hidden;
 }
 
@@ -477,7 +477,7 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.78rem;
+  font-size: 0.858rem;
   font-weight: 400;
 }
 
@@ -495,7 +495,7 @@
 .fetchUrl {
   color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   text-decoration: underline;
   text-underline-offset: 2px;
   word-break: break-all;
@@ -510,7 +510,7 @@
   border: 1px solid #86efac;
   border-radius: 4px;
   color: #166534;
-  font-size: 0.68rem;
+  font-size: 0.748rem;
   font-weight: 600;
   padding: 0.1rem 0.4rem;
   white-space: nowrap;
@@ -518,7 +518,7 @@
 
 .truncatedNote {
   color: #7a8694;
-  font-size: 0.65rem;
+  font-size: 0.715rem;
   font-style: italic;
 }
 
@@ -537,7 +537,7 @@
 .pending {
   color: var(--color-muted);
   font-style: italic;
-  font-size: 0.75rem;
+  font-size: 0.825rem;
   margin: 0;
 }
 
@@ -546,7 +546,7 @@
 .jobsSummary {
   color: #5a6773;
   margin: 0 0 0.5rem;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
 }
 
 .filteredNote {
@@ -563,7 +563,7 @@
 
 .agentsSummaryHeading {
   color: var(--color-accent);
-  font-size: 0.68rem;
+  font-size: 0.748rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -593,25 +593,25 @@
   color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-weight: 700;
-  font-size: 0.75rem;
+  font-size: 0.825rem;
   flex-shrink: 0;
 }
 
 .agentPillTraits {
   color: #2f6a8a;
   font-style: italic;
-  font-size: 0.66rem;
+  font-size: 0.726rem;
   flex-shrink: 0;
 }
 
 .agentPillTask {
   color: var(--color-muted);
-  font-size: 0.7rem;
+  font-size: 0.77rem;
 }
 
 .agentPillPending {
   color: var(--color-accent-secondary);
-  font-size: 0.66rem;
+  font-size: 0.726rem;
   font-style: italic;
   flex-shrink: 0;
 }
@@ -644,20 +644,20 @@
 .workerHeadingArrow {
   color: var(--color-accent);
   flex-shrink: 0;
-  font-size: 1.4rem;
+  font-size: 1.54rem;
 }
 
 .workerName {
   color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-weight: 700;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
 }
 
 .workerTraits {
   color: #2f6a8a;
   font-style: italic;
-  font-size: 0.68rem;
+  font-size: 0.748rem;
   letter-spacing: 0.02em;
 }
 
@@ -665,7 +665,7 @@
   color: var(--color-accent-secondary);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-weight: 700;
-  font-size: 0.65rem;
+  font-size: 0.715rem;
   letter-spacing: 0.02em;
   border: 1px solid rgba(63, 126, 160, 0.4);
   border-radius: 4px;
@@ -675,14 +675,14 @@
 
 .workerTask {
   color: var(--color-muted);
-  font-size: 0.7rem;
+  font-size: 0.77rem;
   margin: 0 0 0.5rem;
 }
 
 .workerSummary {
   color: var(--color-text);
   font-family: 'Courier Prime', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.74rem;
+  font-size: 0.814rem;
   line-height: 1.45;
   margin: 0 0 0.5rem;
 }
@@ -690,7 +690,7 @@
 .workerResponse {
   color: var(--color-text);
   font-family: 'Courier Prime', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.78rem;
+  font-size: 0.858rem;
   line-height: 1.5;
   margin: 0 0 0.5rem;
 }
@@ -713,7 +713,7 @@
   background: rgba(31, 111, 115, 0.1);
   border-radius: 3px;
   padding: 0.05em 0.3em;
-  font-size: 0.92em;
+  font-size: 1.012em;
 }
 
 .workerResponse a {
@@ -750,7 +750,7 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   font-weight: 500;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
 }
 
 .jobTitle:hover {
@@ -762,7 +762,7 @@
   border: 1px solid #86efac;
   border-radius: 3px;
   color: #166534;
-  font-size: 0.68rem;
+  font-size: 0.748rem;
   padding: 0.05rem 0.35rem;
   flex-shrink: 0;
 }
@@ -770,7 +770,7 @@
 .jobMeta {
   color: var(--color-muted);
   margin: 0 0 0.15rem;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
 }
 
 .jobTechRow {
@@ -785,7 +785,7 @@
   border: 1px solid #bcdbd8;
   border-radius: 3px;
   color: var(--color-accent);
-  font-size: 0.66rem;
+  font-size: 0.726rem;
   padding: 0.05rem 0.35rem;
   flex-shrink: 0;
 }
@@ -795,7 +795,7 @@
   margin: 0;
   line-height: 1.5;
   font-style: normal;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
 }
 
 /* Saved file viewer */
@@ -807,7 +807,7 @@
 }
 
 .savedFileIcon {
-  font-size: 0.9rem;
+  font-size: 0.99rem;
 }
 
 .savedFileBtn {
@@ -816,7 +816,7 @@
   color: var(--color-accent);
   cursor: pointer;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.78rem;
+  font-size: 0.858rem;
   padding: 0;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -834,7 +834,7 @@
 
 .savedFileErr {
   color: #991b1b;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
 }
 
 /* Modal overlay */
@@ -875,7 +875,7 @@
 .fileModalName {
   color: var(--color-text);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.82rem;
+  font-size: 0.902rem;
 }
 
 .fileModalClose {
@@ -883,7 +883,7 @@
   border: none;
   color: var(--color-muted);
   cursor: pointer;
-  font-size: 1.2rem;
+  font-size: 1.32rem;
   line-height: 1;
   padding: 0 0.2rem;
 }
@@ -895,7 +895,7 @@
 .fileModalContent {
   color: var(--color-text);
   font-family: 'Consolas', 'Courier New', monospace;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   line-height: 1.6;
   margin: 0;
   overflow-y: auto;
@@ -976,7 +976,7 @@
 .errorIcon {
   flex-shrink: 0;
   color: #c0575c;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   line-height: 1.4;
 }
 
@@ -984,7 +984,7 @@
   color: #8a3a3d;
   margin: 0;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.78rem;
+  font-size: 0.858rem;
   white-space: pre-wrap;
   word-break: break-all;
   line-height: 1.4;

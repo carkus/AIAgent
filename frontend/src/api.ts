@@ -85,7 +85,11 @@ export interface AgentBrief {
  * unrelated domains, advice-as-fact requests, a location-dependent
  * specialty with no location) and can accompany either a brief or a
  * question. Pass `priorQuestion`/`priorAnswer` after the user answers a
- * question to get the model to write the brief using that guidance. Throws
+ * question to get the model to write the brief using that guidance.
+ * `behaviors`/`traits` are the active Behavior toggle / Personality trait
+ * LABELS (e.g. "Max Delegation", "Meticulous") — the brief should actually
+ * account for and mention them, not just the specialty keywords, since they
+ * change what the agent will do just as much as a specialty does. Throws
  * on any failure — callers should fall back to the deterministic template
  * brief rather than surfacing this as a user-facing error.
  */
@@ -99,6 +103,8 @@ export async function fetchAgentBrief(
   priorQuestion?: string | null,
   priorAnswer?: string | null,
   maxDelegations?: number | null,
+  behaviors?: string[],
+  traits?: string[],
 ): Promise<AgentBrief> {
   const res = await fetch(`${API_URL}/brief`, {
     method: 'POST',
@@ -113,6 +119,8 @@ export async function fetchAgentBrief(
       priorQuestion: priorQuestion ?? undefined,
       priorAnswer: priorAnswer ?? undefined,
       maxDelegations: maxDelegations ?? undefined,
+      behaviors: behaviors && behaviors.length > 0 ? behaviors : undefined,
+      traits: traits && traits.length > 0 ? traits : undefined,
     }),
   });
   if (!res.ok) {
@@ -188,6 +196,7 @@ export interface AgentDraft {
   keywords: string[];
   location: string;
   traits: string[];
+  behaviorToggles?: string[];
   savedAt: number;
 }
 
@@ -214,11 +223,12 @@ export async function createAgentDraft(
   keywords: string[],
   location: string,
   traits: string[],
+  behaviorToggles: string[] = [],
 ): Promise<AgentDraft> {
   const res = await fetch(`${API_URL}/agent-drafts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agentName, agentType, keywords, location, traits }),
+    body: JSON.stringify({ agentName, agentType, keywords, location, traits, behaviorToggles }),
   });
   if (!res.ok) throw new Error('Failed to save agent profile');
   return res.json();

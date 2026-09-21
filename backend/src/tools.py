@@ -181,6 +181,23 @@ def search_jobs(what: str, where: str = "", country: str = "au",
         return {"status": "error", "error": str(exc), "listings": []}
 
 
+class _AttrDict(dict):
+    """dict that also supports attribute access (inputs.topic as well as
+    inputs['topic']). Generated tool implementations inconsistently use both
+    styles for the injected inputs dict despite the bootstrap prompt showing
+    bracket notation — this makes both work instead of the attribute form
+    crashing with AttributeError: 'dict' object has no attribute '...'."""
+
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(name)
+
+    def __setattr__(self, name, value):
+        self[name] = value
+
+
 def execute_tool(implementation: str, inputs: dict) -> object:
     """Execute a Claude-generated tool implementation in a restricted namespace.
 
@@ -197,6 +214,8 @@ def execute_tool(implementation: str, inputs: dict) -> object:
     import collections
     import urllib.parse
     import tempfile
+
+    inputs = _AttrDict(inputs)
 
     namespace = {
         "__builtins__": _SAFE_BUILTINS,

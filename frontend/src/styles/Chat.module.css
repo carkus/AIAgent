@@ -26,28 +26,12 @@
   min-width: 0;
 }
 
-.headerLogoBtn {
-  background: none;
-  border: none;
-  padding: 0;
+.headerLogo {
   margin-right: 0.9rem;
   flex-shrink: 0;
-  cursor: pointer;
-  line-height: 0;
-  opacity: 1;
-  transition: opacity 0.15s;
-}
-
-.headerLogoBtn:hover,
-.headerLogoBtn:focus-visible {
-  opacity: 0.8;
-}
-
-.headerLogo {
   height: 114px;
   width: auto;
   border-radius: 8px;
-  flex-shrink: 0;
 }
 
 .headerIdentityText {
@@ -60,7 +44,7 @@
   overflow-wrap: break-word;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-weight: 700;
-  font-size: 1.485rem;
+  font-size: 1.6335rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   /* Header/footer chrome is deliberately NOT wired to the chat content's
@@ -75,7 +59,7 @@
   max-width: 100%;
   overflow-wrap: break-word;
   color: #6b7785;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   margin: 0.15rem 0 0;
 }
 
@@ -83,7 +67,7 @@
   display: block;
   color: #3f7ea0;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.7rem;
+  font-size: 0.77rem;
   font-style: italic;
   letter-spacing: 0.02em;
   margin: 0.15rem 0 0.3rem;
@@ -94,7 +78,7 @@
 
 .headerPurpose {
   color: #6b7785;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   flex-basis: 100%;
   margin-top: 0.15rem;
 }
@@ -113,7 +97,7 @@
   border-radius: 5px;
   color: #053750;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   font-weight: 500;
   letter-spacing: 0.02em;
   padding: 0.15rem 0.5rem;
@@ -125,7 +109,7 @@
   background: transparent;
   border: 1px solid #cfe3ea;
   border-radius: 5px;
-  font-size: 0.7rem;
+  font-size: 0.77rem;
   font-weight: 600;
   padding: 0.1rem 0.4rem;
   margin: 0.6rem 0 0;
@@ -135,6 +119,11 @@
   cursor: default;
 }
 
+/* Auto-hiding toolbar — stays out of the way once the user has stopped
+   interacting with the header, fading back in on hover/keyboard focus
+   instead of permanently occupying space above the conversation.
+   focus-within (not just :hover) keeps it reachable for keyboard users:
+   tabbing into a button reveals it even without a mouse. */
 .headerActions {
   display: flex;
   flex-basis: 100%;
@@ -147,6 +136,16 @@
   border: 1px solid #ddd9cd;
   border-radius: 9px;
   padding: 0.3rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease 0.7s;
+}
+
+.header:hover .headerActions,
+.header:focus-within .headerActions {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.15s ease;
 }
 
 .headerActions button {
@@ -243,7 +242,7 @@ button.resetBtn:active {
   flex: 1;
   min-width: 180px;
   font-family: 'Inter', 'Space Grotesk', sans-serif;
-  font-size: 0.78rem;
+  font-size: 0.858rem;
   letter-spacing: 0.02em;
   outline: none;
   padding: 0.5rem 0.75rem;
@@ -266,7 +265,7 @@ button.resetBtn:active {
   color: #ffffff;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -291,7 +290,7 @@ button.resetBtn:active {
   color: #053750;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -307,7 +306,7 @@ button.resetBtn:active {
 .rosterFeedback {
   color: #053750;
   font-family: 'Inter', 'Space Grotesk', sans-serif;
-  font-size: 0.74rem;
+  font-size: 0.814rem;
   letter-spacing: 0.02em;
   margin: 0;
   padding: 0.4rem 1.25rem 0;
@@ -342,7 +341,7 @@ button.resetBtn:active {
   border-radius: 4px;
   color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.68rem;
+  font-size: 0.748rem;
   padding: 0.1rem 0.4rem;
 }
 
@@ -356,11 +355,18 @@ button.resetBtn:active {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
+  /* Single source of truth for chat text sizing: every text style in the
+     transcript (user/assistant messages, headings, meta lines) maps to one
+     of these three tiers — no other font-size appears below this point,
+     except on the mermaid diagram boxes (visual, not text). */
+  --chat-header-size: 1.122rem;
+  --chat-body-size: 0.88rem;
+  --chat-footer-size: 0.836rem;
 }
 
 .emptyHint {
   color: var(--color-muted);
-  font-size: 0.85rem;
+  font-size: var(--chat-body-size);
   margin: auto;
   text-align: center;
 }
@@ -383,7 +389,7 @@ button.resetBtn:active {
 .bubbleText {
   color: #f2f5f6;
   font-family: 'Courier Prime', 'Courier New', Courier, serif;
-  font-size: 0.78rem;
+  font-size: var(--chat-body-size);
   line-height: 1.5;
   margin: 0;
   overflow-wrap: break-word;
@@ -396,13 +402,16 @@ button.resetBtn:active {
 .markdown {
   color: var(--color-text);
   font-family: 'Courier Prime', 'Courier New', Courier, serif;
-  font-size: 0.84rem;
+  font-size: var(--chat-body-size);
   font-weight: 400;
   line-height: 1.58;
   letter-spacing: 0;
   min-width: 0;
   overflow-wrap: break-word;
   word-break: break-word;
+  /* Contains the floated square diagram boxes below so the bubble sizes to
+     include their height instead of collapsing around just the text. */
+  display: flow-root;
 }
 
 .markdown a {
@@ -426,7 +435,7 @@ button.resetBtn:active {
 
 .markdown h1 {
   color: var(--color-text);
-  font-size: 0.98rem;
+  font-size: var(--chat-header-size);
   font-weight: 700;
   margin: 1.2rem 0 0.5rem;
   padding-bottom: 0.3rem;
@@ -438,7 +447,7 @@ button.resetBtn:active {
   border-left: 3px solid var(--color-accent);
   border-radius: 0 5px 5px 0;
   color: var(--color-accent);
-  font-size: 0.76rem;
+  font-size: var(--chat-header-size);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -448,8 +457,8 @@ button.resetBtn:active {
 
 .markdown h3 {
   color: #233240;
-  font-size: 0.84rem;
-  font-weight: 600;
+  font-size: var(--chat-header-size);
+  font-weight: 700;
   margin: 0.9rem 0 0.3rem;
 }
 
@@ -457,8 +466,8 @@ button.resetBtn:active {
 .markdown h5,
 .markdown h6 {
   color: var(--color-text);
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: var(--chat-header-size);
+  font-weight: 700;
   margin: 0.75rem 0 0.25rem;
 }
 
@@ -511,7 +520,7 @@ button.resetBtn:active {
   border: 1px solid #bcdbd8;
   border-radius: 4px;
   color: #05384b;
-  font-size: 0.68rem;
+  font-size: 0.902rem;
   font-weight: 700;
   line-height: 1;
   min-width: 1.2rem;
@@ -520,7 +529,7 @@ button.resetBtn:active {
 }
 
 .markdown ol li a {
-  font-size: 0.8rem;
+  font-size: var(--chat-body-size);
 }
 
 .markdown strong {
@@ -539,7 +548,7 @@ button.resetBtn:active {
   border-radius: 3px;
   color: #1f5761;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.82rem;
+  font-size: var(--chat-body-size);
   overflow-wrap: anywhere;
   padding: 0.1rem 0.35rem;
 }
@@ -567,7 +576,7 @@ button.resetBtn:active {
 .codeBlockLang {
   color: var(--color-muted);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.68rem;
+  font-size: var(--chat-footer-size);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -578,7 +587,7 @@ button.resetBtn:active {
   border: none;
   color: var(--color-muted);
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: var(--chat-footer-size);
   line-height: 1;
   padding: 0.1rem 0.3rem;
 }
@@ -612,28 +621,45 @@ button.resetBtn:active {
   border-radius: 6px;
   margin: 0 0 0.75rem;
   padding: 0.4rem 0.5rem 0.1rem;
+  /* Same float containment as .markdown — the diagram box inside is
+     floated square, so this needs to size to include it. */
+  display: flow-root;
 }
 
 .planDiagramLabel {
   color: var(--color-muted);
   display: block;
-  font-size: 0.7rem;
+  font-size: var(--chat-footer-size);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
+/* The plain-language lead-in sentence agent_stream.py extracts from before
+   the ```mermaid-plan fence — the diagram alone doesn't explain what's about
+   to happen, this does. Text, so it uses the same body tier as everything
+   else in the transcript (see .messageList's --chat-*-size vars). */
+.planSummary {
+  color: var(--color-text);
+  font-size: var(--chat-body-size);
+  margin: 0.2rem 0 0.5rem;
+}
+
 /* Every rendered diagram — the compact plan preview and inline reply
-   diagrams alike — gets the same fixed-height, full-width preview box; a
-   diagram too detailed to read at 150px is opened full-size in
-   ImageViewer on tap instead of being given more inline space. */
+   diagrams alike — gets the same fixed-size square preview box, floated so
+   the takeaway paragraph that follows it (CLAUDE.md's "diagrams over prose"
+   rule) sits in a text column beside it instead of stacking full-width
+   below it; a diagram too detailed to read at this size is opened full-size
+   in ImageViewer on tap instead of being given more inline space. */
 .mermaidDiagram {
   background: #f5f6f4;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  margin: 0.6rem auto 0.9rem;
-  width: 100%;
-  height: 150px;
+  float: left;
+  margin: 0.6rem 1rem 0.6rem 0;
+  width: 50%;
+  max-width: 440px;
+  aspect-ratio: 1 / 1;
   cursor: zoom-in;
   overflow: hidden;
   padding: 0.5rem;
@@ -653,24 +679,22 @@ button.resetBtn:active {
 }
 
 /* The one-or-two-sentence "takeaway" the model writes right after a diagram
-   (CLAUDE.md's "diagrams over prose" rule) is just the next markdown
-   paragraph — give it the same side breathing room as the diagram box
-   above it instead of running edge-to-edge. */
+   flows in the column beside the floated square box above instead of
+   running edge-to-edge underneath it. */
 .mermaidDiagram + p {
-  margin-left: 20px;
-  margin-right: 20px;
+  margin-top: 0.6rem;
 }
 
 .mermaidLoading {
   color: var(--color-muted);
-  font-size: 0.8rem;
+  font-size: 1.056rem;
   font-style: italic;
   margin: 0.5rem 0;
 }
 
 .mermaidError {
   color: #b91c1c;
-  font-size: 0.75rem;
+  font-size: 0.99rem;
   margin: 0.5rem 0 0.25rem;
 }
 
@@ -696,7 +720,7 @@ button.resetBtn:active {
 }
 
 .markdown ul:has(li > a:only-child) li > a {
-  font-size: 0.78rem;
+  font-size: var(--chat-body-size);
 }
 
 .markdown blockquote {
@@ -719,7 +743,7 @@ button.resetBtn:active {
 
 .markdown table {
   border-collapse: collapse;
-  font-size: 0.88rem;
+  font-size: var(--chat-body-size);
   margin: 0;
   table-layout: auto;
   width: 100%;
@@ -758,7 +782,7 @@ button.resetBtn:active {
 .workingText {
   color: var(--color-muted);
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8rem;
+  font-size: var(--chat-footer-size);
   letter-spacing: 0.02em;
   margin: 0.5rem 0 0;
 }
@@ -779,7 +803,7 @@ button.resetBtn:active {
 
 .duration {
   color: var(--color-muted);
-  font-size: 0.68rem;
+  font-size: var(--chat-footer-size);
   margin: 0.35rem 0 0;
 }
 
@@ -793,7 +817,7 @@ button.resetBtn:active {
 
 .error {
   color: #b91c1c;
-  font-size: 0.82rem;
+  font-size: var(--chat-body-size);
   margin: 0;
   padding: 0.5rem 0;
 }
@@ -802,7 +826,7 @@ button.resetBtn:active {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.9rem 1.5rem;
+  padding: 0.2rem 1.5rem;
   background: #fbfdfd;
   border-top: 1px solid #ddd9cd;
   box-shadow: 0 -6px 16px rgba(22, 50, 74, 0.04);
@@ -816,10 +840,10 @@ button.resetBtn:active {
   color: #053750;
   flex: 1;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.88rem;
+  font-size: 0.968rem;
   letter-spacing: 0.01em;
   outline: none;
-  padding: 0.75rem 1.15rem;
+  padding: 0.45rem 1.15rem;
   transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
 }
 
@@ -849,11 +873,11 @@ button.resetBtn:active {
   color: #ffffff;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 0.78rem;
+  font-size: 0.858rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.75rem 1.4rem;
+  padding: 0.45rem 1.4rem;
   transition: opacity 0.15s, transform 0.1s;
   flex-shrink: 0;
 }
@@ -878,11 +902,11 @@ button.resetBtn:active {
   color: #b91c1c;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.75rem 1.4rem;
+  padding: 0.45rem 1.4rem;
   transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
   flex-shrink: 0;
@@ -916,7 +940,7 @@ button.resetBtn:active {
   color: var(--color-accent-secondary);
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 0.72rem;
+  font-size: 0.792rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, listAgentDrafts, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
 import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
 import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat } from '../chatStorage'
-import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat, SearchDefaults } from '../types'
+import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
 import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback } from '../modelLabel'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
@@ -58,6 +58,73 @@ function AgentTypeIcon({ id }: { id: AgentTemplateId }) {
   )
 }
 
+// Same mono line-art style as AgentTypeIcon above (stroke=currentColor, no
+// fill) — the behavior toggles previously used colorful emoji, which read
+// as a different, more novelty visual language than the rest of the picker
+// UI; these plain geometric glyphs match the site's own style instead.
+function BehaviorIcon({ id }: { id: string }) {
+  const common = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.75,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  }
+  switch (id) {
+    case 'concise':
+      return (
+        <svg {...common}>
+          <line x1="4" y1="7" x2="20" y2="7" />
+          <line x1="4" y1="12" x2="15" y2="12" />
+          <line x1="4" y1="17" x2="10" y2="17" />
+        </svg>
+      )
+    case 'skeptical':
+      return (
+        <svg {...common}>
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <line x1="20.5" y1="20.5" x2="15.3" y2="15.3" />
+          <path d="M8.7 8.8a1.8 1.8 0 1 1 2.9 1.4c-.9.7-1.1 1.1-1.1 2" />
+          <circle cx="10.5" cy="14.6" r="0.65" fill="currentColor" stroke="none" />
+        </svg>
+      )
+    case 'cite-sources':
+      return (
+        <svg {...common}>
+          <path d="M10 14a5 5 0 0 0 7.07 0l1.83-1.83a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
+          <path d="M14 10a5 5 0 0 0-7.07 0L5.1 11.83a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+        </svg>
+      )
+    case 'proactive':
+      return (
+        <svg {...common}>
+          <path d="M4 16 10 10l3 3 6-7" />
+          <path d="M16 6h4v4" />
+        </svg>
+      )
+    case 'formal':
+      return (
+        <svg {...common}>
+          <path d="M4 8l6 4-6 4Z" />
+          <path d="M20 8l-6 4 6 4Z" />
+          <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" />
+        </svg>
+      )
+    case 'max-delegation':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="5.3" r="1.6" />
+          <circle cx="5.3" cy="18.3" r="1.6" />
+          <circle cx="18.7" cy="18.3" r="1.6" />
+          <path d="M12 7v3.5M12 10.5 6.4 16.8M12 10.5l5.6 6.3" />
+        </svg>
+      )
+    default:
+      return null
+  }
+}
+
 const AGENT_TEMPLATES: AgentTemplate[] = [
   {
     id: 'general',
@@ -72,7 +139,7 @@ const AGENT_TEMPLATES: AgentTemplate[] = [
   {
     id: 'research',
     label: 'Researcher',
-    keywordPlaceholder: 'Type a keyword, press Enter…',
+    keywordPlaceholder: 'Buid your agent.',
     buildPurpose: (keywords, loc) =>
       `Research agent for the following keywords: ${keywords.join(', ')}` +
       `${loc ? ` in ${loc}` : ''}. ` +
@@ -108,7 +175,7 @@ interface BehaviorToggle {
 // Starting set of six — each is an independent axis (verbosity, epistemic
 // stance, sourcing, initiative, tone, delegation strategy) so combinations
 // stay meaningful rather than overlapping/contradicting each other.
-const BEHAVIOR_TOGGLES: BehaviorToggle[] = [
+export const BEHAVIOR_TOGGLES: BehaviorToggle[] = [
   {
     id: 'concise',
     label: 'Concise',
@@ -191,27 +258,56 @@ function buildDeterministicWarning(keywords: string[], agentType: AgentTemplateI
   return null
 }
 
-// Flavor traits for a saved agent *profile* (pre-bootstrap — there's no real
-// persona yet, that's invented at bootstrap time). Deterministically picked
-// from the agent's name so the same draft always shows the same "character"
-// rather than re-rolling on every save, echoing the persona.traits shown for
-// saved chats (a real bootstrapped agent) without pretending these are that.
-const CHARACTER_TRAITS: Record<AgentTemplateId, string[]> = {
-  research: ['Inquisitive', 'Meticulous', 'Analytical', 'Methodical', 'Curious'],
-  job_search: ['Persistent', 'Sharp-eyed', 'Resourceful', 'Diligent', 'Discerning'],
-  general: ['Adaptable', 'Practical', 'Attentive', 'Versatile', 'Observant'],
+interface PersonalityTrait {
+  id: string
+  label: string
+  // Appended verbatim to the bootstrap purpose string when selected — same
+  // compounding shape as BehaviorToggle.instruction above, so a chosen trait
+  // actually shapes the agent instead of being cosmetic flavor text.
+  instruction: string
 }
 
-function pickCharacterTraits(agentType: AgentTemplateId, seed: string): string[] {
-  const pool = CHARACTER_TRAITS[agentType] ?? CHARACTER_TRAITS.research
-  let hash = 0
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
-  const first = hash % pool.length
-  const second = (Math.floor(hash / pool.length)) % pool.length
-  return second === first ? [pool[first]] : [pool[first], pool[second]]
+// Personality traits the user picks per agent, scoped by agent type so the
+// pool stays relevant (a job-search agent doesn't need "Curious"). Unlike
+// the old auto-picked flavor traits this replaces, nothing here is chosen
+// for the user — an agent has no personality trait unless one is selected.
+export const PERSONALITY_TRAITS: Record<AgentTemplateId, PersonalityTrait[]> = {
+  research: [
+    { id: 'inquisitive', label: 'Inquisitive', instruction: 'Adopt an inquisitive personality: keep pulling on follow-up angles and related questions the user did not explicitly ask for, instead of stopping at the literal specialty.' },
+    { id: 'meticulous', label: 'Meticulous', instruction: 'Adopt a meticulous personality: double-check details, flag caveats and uncertainty explicitly, and never overstate how confident a finding is.' },
+    { id: 'analytical', label: 'Analytical', instruction: 'Adopt an analytical personality: structure findings as comparisons, patterns, and trends rather than a flat narrative summary.' },
+    { id: 'methodical', label: 'Methodical', instruction: 'Adopt a methodical personality: work through each specialty in clear, deliberate order and show the reasoning steps behind a conclusion, not just the conclusion.' },
+    { id: 'curious', label: 'Curious', instruction: 'Adopt a curious personality: call out surprising or noteworthy findings with genuine interest, rather than reporting everything in the same flat tone.' },
+  ],
+  job_search: [
+    { id: 'persistent', label: 'Persistent', instruction: 'Adopt a persistent personality: keep searching across more listings and phrasing variations before concluding nothing suitable exists.' },
+    { id: 'sharp-eyed', label: 'Sharp-eyed', instruction: 'Adopt a sharp-eyed personality: actively flag red flags, mismatches, or unusual terms buried in a listing rather than only reporting the headline fit.' },
+    { id: 'resourceful', label: 'Resourceful', instruction: 'Adopt a resourceful personality: when a search comes up short, try adjacent titles, skills, or locations before giving up.' },
+    { id: 'diligent', label: 'Diligent', instruction: 'Adopt a diligent personality: verify each listing’s requirements against the stated criteria point by point instead of skimming.' },
+    { id: 'discerning', label: 'Discerning', instruction: 'Adopt a discerning personality: rank and filter listings critically, and say plainly when a match is weak rather than padding out the results.' },
+  ],
+  general: [
+    { id: 'adaptable', label: 'Adaptable', instruction: 'Adopt an adaptable personality: shift depth and approach to fit each topic rather than applying one fixed format to all of them.' },
+    { id: 'practical', label: 'Practical', instruction: 'Adopt a practical personality: favor concrete, actionable takeaways over abstract discussion.' },
+    { id: 'attentive', label: 'Attentive', instruction: 'Adopt an attentive personality: track small details across topics and call back to them when relevant instead of treating each one in isolation.' },
+    { id: 'versatile', label: 'Versatile', instruction: 'Adopt a versatile personality: draw connections across the different topics covered rather than reporting on each in a silo.' },
+    { id: 'observant', label: 'Observant', instruction: 'Adopt an observant personality: note what has changed since anything already discussed, and highlight what is genuinely new.' },
+  ],
 }
 
 type SavedSectionId = 'searches' | 'drafts' | 'chats' | 'mcp'
+
+// The last line of a saved chat, shown in the saved-chats list so the user
+// has some actual context for which conversation this is instead of just a
+// name/timestamp — the name/keywords describe the agent, not what was said.
+const CHAT_PREVIEW_MAX_LEN = 90
+function lastChatLine(messages: SavedChatMessage[]): string | null {
+  const last = [...messages].reverse().find(m => m.content.trim().length > 0)
+  if (!last) return null
+  const text = last.content.trim().replace(/\s+/g, ' ')
+  const truncated = text.length > CHAT_PREVIEW_MAX_LEN ? `${text.slice(0, CHAT_PREVIEW_MAX_LEN - 1)}…` : text
+  return last.role === 'user' ? `You: ${truncated}` : truncated
+}
 
 function formatSavedAt(ts: number): string {
   return new Date(ts).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
@@ -245,10 +341,11 @@ interface Props {
   onDone: (config: AgentConfig) => void
   onError: (msg: string) => void
   onResumeChat: (chat: SavedChat) => void
+  onOpenCharacterGenerator: () => void
 }
 
-export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat }: Props) {
-  const [agentType, setAgentType] = useState<AgentTemplateId>('research')
+export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat, onOpenCharacterGenerator }: Props) {
+  const [agentType, setAgentType] = useState<AgentTemplateId>('general')
   const [keywords, setKeywords] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [location, setLocation] = useState('Melbourne, Australia')
@@ -384,6 +481,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [activeToggles, setActiveToggles] = useState<string[]>([])
   function toggleBehavior(id: string) {
     setActiveToggles(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
+  }
+  const [personalityOpen, setPersonalityOpen] = useState(false)
+  const [selectedTraits, setSelectedTraits] = useState<string[]>([])
+  function toggleTrait(id: string) {
+    setSelectedTraits(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
   }
   const [aiBrief, setAiBrief] = useState<AgentBrief | null>(null)
   const [briefLoading, setBriefLoading] = useState(false)
@@ -567,6 +669,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setKeywords([])
     setDraft('')
     setActiveToggles([])
+    setSelectedTraits([])
     setAiBrief(null)
     setBriefAnswer('')
     setCommissionHint(null)
@@ -666,15 +769,17 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }
   }
 
-  // Saves the whole draft — name, type, location, specialties, plus a
-  // deterministic character-trait pair — as a reusable agent profile,
-  // distinct from saveSearch() above (keywords only). Nothing is bootstrapped
-  // here; this only becomes a real running agent once Commission is clicked.
+  // Saves the whole draft — name, type, location, specialties, plus whichever
+  // personality traits the user actually selected — as a reusable agent
+  // profile, distinct from saveSearch() above (keywords only). Nothing is
+  // bootstrapped here; this only becomes a real running agent once
+  // Commission is clicked.
   async function saveAgentDraft() {
     if (keywords.length === 0) return
-    const traits = pickCharacterTraits(agentType, agentName)
+    const traitPool = PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research
+    const traits = traitPool.filter(t => selectedTraits.includes(t.id)).map(t => t.label)
     try {
-      const entry = await createAgentDraft(agentName, agentType, [...keywords], location.trim(), traits)
+      const entry = await createAgentDraft(agentName, agentType, [...keywords], location.trim(), traits, [...activeToggles])
       setDrafts(prev => [
         entry,
         ...prev.filter(d => !(
@@ -694,11 +799,16 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
 
   function loadDraft(d: AgentDraft) {
     if (bootstrapping) return
-    setAgentType(d.agentType ?? 'research')
+    const type = d.agentType ?? 'research'
+    setAgentType(type)
     setKeywords([...d.keywords])
     setDraft('')
     if (d.location) setLocation(d.location)
+    setActiveToggles([...(d.behaviorToggles ?? [])])
+    const pool = PERSONALITY_TRAITS[type] ?? PERSONALITY_TRAITS.research
+    setSelectedTraits(pool.filter(t => (d.traits ?? []).includes(t.label)).map(t => t.id))
     onAgentNameChange(d.agentName)
+    setFocusPanel('setup')
     inputRef.current?.focus()
   }
 
@@ -723,7 +833,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setKeywords([...(cfg.keywords ?? [])])
     setDraft('')
     if (cfg.location) setLocation(cfg.location)
+    setActiveToggles([...(cfg.active_toggles ?? [])])
+    setSelectedTraits([...(cfg.active_traits ?? [])])
     onAgentNameChange(chat.agentName)
+    setFocusPanel('setup')
     inputRef.current?.focus()
   }
 
@@ -756,6 +869,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
 
   function handleAgentTypeChange(type: AgentTemplateId) {
     setAgentType(type)
+    const pool = PERSONALITY_TRAITS[type] ?? PERSONALITY_TRAITS.research
+    setSelectedTraits(prev => prev.filter(id => pool.some(t => t.id === id)))
   }
 
   function toggleSavedSection(section: SavedSectionId) {
@@ -774,8 +889,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }
     const loc = location.trim()
     const activeInstructions = BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.instruction)
+    const traitPool = PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research
+    const traitInstructions = traitPool.filter(t => selectedTraits.includes(t.id)).map(t => t.instruction)
     const purpose = getTemplate(agentType).buildPurpose(keywords, loc) +
-      (activeInstructions.length > 0 ? ` ${activeInstructions.join(' ')}` : '')
+      (activeInstructions.length > 0 ? ` ${activeInstructions.join(' ')}` : '') +
+      (traitInstructions.length > 0 ? ` ${traitInstructions.join(' ')}` : '')
     onStart()
     setProgress(null)
     setToolsSoFar([])
@@ -802,6 +920,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         template: agentType,
         max_delegations: maxDelegations,
         search_defaults: searchDefaults,
+        active_toggles: activeToggles,
+        active_traits: selectedTraits,
       })
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unknown error')
@@ -834,6 +954,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         </button>
         <button
           type="button"
+          className={styles.characterGenBtn}
+          onClick={onOpenCharacterGenerator}
+          aria-label="Character generator"
+          title="Character generator"
+        >
+          🎭
+        </button>
+        <button
+          type="button"
           className={styles.brandLogoBtn}
           onClick={resetSearch}
           aria-label="Return to search"
@@ -863,6 +992,43 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
 
           <div className={styles.agentCardScroll}>
+            <div className={styles.personalityRow}>
+              <button
+                type="button"
+                className={styles.fieldLabelToggle}
+                onClick={() => setPersonalityOpen(o => !o)}
+                aria-expanded={personalityOpen}
+              >
+                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Personality (Optional)</span>
+                <span className={styles.fieldLabelRight}>
+                  {!personalityOpen && selectedTraits.length > 0 && (
+                    <span className={styles.fieldLabelCount}>{selectedTraits.length} on</span>
+                  )}
+                  <span className={styles.fieldLabelCaret} aria-hidden="true">{personalityOpen ? '▾' : '▸'}</span>
+                </span>
+              </button>
+              {personalityOpen && (
+                <div className={styles.behaviorTogglesRow}>
+                  {(PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research).map(t => {
+                    const active = selectedTraits.includes(t.id)
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={active ? styles.behaviorToggleActive : styles.behaviorToggle}
+                        onClick={() => toggleTrait(t.id)}
+                        disabled={bootstrapping}
+                        title={t.instruction}
+                        aria-pressed={active}
+                      >
+                        {t.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
             <div className={styles.specialtiesRow}>
               <button
                 type="button"
@@ -951,6 +1117,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         setKeywords([])
                         setDraft('')
                         setActiveToggles([])
+                        setSelectedTraits([])
                         onNewAgent()
                         inputRef.current?.focus()
                       }}
@@ -979,20 +1146,24 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 </span>
               </button>
               {specialInstructionsOpen && (
-                <div className={styles.behaviorTogglesRow}>
+                <div className={styles.behaviorIconRow}>
                   {BEHAVIOR_TOGGLES.map(t => {
                     const active = activeToggles.includes(t.id)
                     return (
                       <button
                         key={t.id}
                         type="button"
-                        className={active ? styles.behaviorToggleActive : styles.behaviorToggle}
+                        className={active ? styles.behaviorIconBtnActive : styles.behaviorIconBtn}
                         onClick={() => toggleBehavior(t.id)}
                         disabled={bootstrapping}
-                        title={t.description}
+                        aria-label={t.label}
                         aria-pressed={active}
                       >
-                        {t.label}
+                        <span className={styles.behaviorIconGlyph} aria-hidden="true"><BehaviorIcon id={t.id} /></span>
+                        <span className={styles.behaviorIconLabel}>{t.label}</span>
+                        <span className={styles.behaviorIconTooltip} role="tooltip">
+                          <span>{t.description}</span>
+                        </span>
                       </button>
                     )
                   })}
@@ -1007,116 +1178,123 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   ))}
                 </ul>
               )}
-            </div>
-
-            <div className={styles.agentSummaryRow}>
-              <button
-                type="button"
-                className={styles.fieldLabelToggle}
-                onClick={() => setBriefOpen(o => !o)}
-                aria-expanded={briefOpen}
-              >
-                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Brief</span>
-                <span className={styles.fieldLabelCaret} aria-hidden="true">{briefOpen ? '▾' : '▸'}</span>
-              </button>
-              {briefOpen && (
-                keywords.length === 0 ? (
-                  <p className={styles.agentSummaryText}>Add specialties above to generate this agent’s brief.</p>
-                ) : aiBrief?.type === 'question' ? (
-                  <>
-                    <div className={styles.briefQuestionBox}>
-                      <p className={styles.briefQuestionText}><span aria-hidden="true">🤔</span> {aiBrief.text}</p>
-                      <div className={styles.briefAnswerRow}>
-                        <input
-                          className={styles.briefAnswerInput}
-                          value={briefAnswer}
-                          onChange={e => setBriefAnswer(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleBriefAnswerSubmit() }}
-                          placeholder="Your answer…"
-                          disabled={answeringBrief}
-                        />
-                        <button
-                          type="button"
-                          className={styles.briefAnswerBtn}
-                          onClick={handleBriefAnswerSubmit}
-                          disabled={!briefAnswer.trim() || answeringBrief}
-                        >
-                          {answeringBrief ? '…' : 'Continue'}
-                        </button>
-                      </div>
-                    </div>
-                    {briefWarning && (
-                      <div className={styles.briefWarningBox}>
-                        <p className={styles.briefWarningText}><span aria-hidden="true">⚠</span> {briefWarning}</p>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <p className={styles.agentSummaryText}>
-                      {aiBrief?.text ?? buildAgentBrief(agentType, keywords, location.trim(), agentName)}
-                      {briefLoading && <span className={styles.briefLoadingHint}> · redrafting…</span>}
-                    </p>
-                    {briefWarning && (
-                      <div className={styles.briefWarningBox}>
-                        <p className={styles.briefWarningText}><span aria-hidden="true">⚠</span> {briefWarning}</p>
-                      </div>
-                    )}
-                  </>
-                )
+              {keywords.length > 0 && (
+                <div className={styles.specialtiesActionsRow}>
+                  <button
+                    type="button"
+                    className={styles.profileSaveBtn}
+                    onClick={saveAgentDraft}
+                    disabled={bootstrapping}
+                    title="Save this whole profile — name, type, location and specialties"
+                  >
+                    Save Agent
+                  </button>
+                </div>
               )}
             </div>
+
+          </div>
+
+          {/* Brief lives in its own subsection, outside the editable-fields
+              scroll list above — it's generated from Specialties/Behavior,
+              never typed into directly, so it reads as assembled output
+              rather than another field to fill in. */}
+          <div className={styles.briefSection}>
+            <button
+              type="button"
+              className={styles.fieldLabelToggle}
+              onClick={() => setBriefOpen(o => !o)}
+              aria-expanded={briefOpen}
+            >
+              <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Brief</span>
+              <span className={styles.fieldLabelCaret} aria-hidden="true">{briefOpen ? '▾' : '▸'}</span>
+            </button>
+            {briefOpen && (
+              keywords.length === 0 ? (
+                <p className={styles.agentSummaryText}>Add Specialties and behaviors to build this agent’s brief.</p>
+              ) : aiBrief?.type === 'question' ? (
+                <>
+                  <div className={styles.briefQuestionBox}>
+                    <p className={styles.briefQuestionText}><span aria-hidden="true">🤔</span> {aiBrief.text}</p>
+                    <div className={styles.briefAnswerRow}>
+                      <input
+                        className={styles.briefAnswerInput}
+                        value={briefAnswer}
+                        onChange={e => setBriefAnswer(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleBriefAnswerSubmit() }}
+                        placeholder="Your answer…"
+                        disabled={answeringBrief}
+                      />
+                      <button
+                        type="button"
+                        className={styles.briefAnswerBtn}
+                        onClick={handleBriefAnswerSubmit}
+                        disabled={!briefAnswer.trim() || answeringBrief}
+                      >
+                        {answeringBrief ? '…' : 'Continue'}
+                      </button>
+                    </div>
+                  </div>
+                  {briefWarning && (
+                    <div className={styles.briefWarningBox}>
+                      <p className={styles.briefWarningText}><span aria-hidden="true">⚠</span> {briefWarning}</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className={styles.agentSummaryText}>
+                    {aiBrief?.text ?? buildAgentBrief(agentType, keywords, location.trim(), agentName)}
+                    {briefLoading && <span className={styles.briefLoadingHint}> · redrafting…</span>}
+                  </p>
+                  {briefWarning && (
+                    <div className={styles.briefWarningBox}>
+                      <p className={styles.briefWarningText}><span aria-hidden="true">⚠</span> {briefWarning}</p>
+                    </div>
+                  )}
+                </>
+              )
+            )}
           </div>
 
           <div className={styles.profileCommissionRow}>
-            {commissionHint && (
-              <p className={styles.commissionHint} role="status">{commissionHint}</p>
-            )}
-            <div className={styles.commissionGroup}>
-              {keywords.length > 0 && (
-                <button
-                  type="button"
-                  className={`${styles.profileSaveBtn} ${styles.profileSaveBtnCommissionRow}`}
-                  onClick={saveAgentDraft}
-                  disabled={bootstrapping}
-                  title="Save this whole profile — name, type, location and specialties"
-                >
-                  Save<br />Agent
-                </button>
+              {commissionHint && (
+                <p className={styles.commissionHint} role="status">{commissionHint}</p>
               )}
-              <div className={styles.agentTypeSelector}>
-                <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
-                  {AGENT_TEMPLATES.map(t => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={agentType === t.id}
-                      aria-label={t.label}
-                      title={t.label}
-                      className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
-                      onClick={() => handleAgentTypeChange(t.id)}
-                      disabled={bootstrapping}
-                    >
-                      <span className={styles.agentTypePillIcon} aria-hidden="true">
-                        <AgentTypeIcon id={t.id} />
-                      </span>
-                    </button>
-                  ))}
+              <div className={styles.commissionGroup}>
+                <div className={styles.agentTypeSelector}>
+                  <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
+                    {AGENT_TEMPLATES.map(t => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={agentType === t.id}
+                        aria-label={t.label}
+                        title={t.label}
+                        className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
+                        onClick={() => handleAgentTypeChange(t.id)}
+                        disabled={bootstrapping}
+                      >
+                        <span className={styles.agentTypePillIcon} aria-hidden="true">
+                          <AgentTypeIcon id={t.id} />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <span className={styles.agentTypeLabel}>{getTemplate(agentType).label}</span>
                 </div>
-                <span className={styles.agentTypeLabel}>{getTemplate(agentType).label}</span>
+                <button
+                  type="submit"
+                  form="agentSetupForm"
+                  className={`${styles.profileCommissionBtn} ${keywords.length === 0 ? styles.profileCommissionBtnBlocked : ''}`}
+                  disabled={bootstrapping}
+                  aria-disabled={keywords.length === 0}
+                >
+                  {bootstrapping ? 'Configuring…' : 'Commission >'}
+                </button>
               </div>
-              <button
-                type="submit"
-                form="agentSetupForm"
-                className={`${styles.profileCommissionBtn} ${keywords.length === 0 ? styles.profileCommissionBtnBlocked : ''}`}
-                disabled={bootstrapping}
-                aria-disabled={keywords.length === 0}
-              >
-                {bootstrapping ? 'Configuring…' : 'Commission >'}
-              </button>
             </div>
-          </div>
         </div>
 
         <form
@@ -1232,7 +1410,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         <div
                           key={d.id}
                           className={`${styles.savedRow} ${bootstrapping ? styles.savedRowDisabled : ''}`}
-                          onClick={() => loadDraft(d)}
+                          onClick={ev => { ev.stopPropagation(); loadDraft(d) }}
                           title={bootstrapping ? 'Agent is being commissioned — profiles can’t be loaded right now' : 'Load this agent profile'}
                           aria-disabled={bootstrapping}
                         >
@@ -1246,6 +1424,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                                 <span key={kw} className={styles.savedChip}>{kw}</span>
                               ))}
                             </div>
+                            {d.behaviorToggles && d.behaviorToggles.length > 0 && (
+                              <div className={styles.savedBehaviorBadges}>
+                                {d.behaviorToggles.map(id => (
+                                  <span key={id} className={styles.savedBehaviorBadge}>
+                                    {BEHAVIOR_TOGGLES.find(t => t.id === id)?.label ?? id}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             <span className={styles.savedChatMeta}>
                               {d.location || 'No location set'} · {getTemplate(d.agentType ?? 'research').label} · {formatSavedAt(d.savedAt)}
                             </span>
@@ -1306,18 +1493,33 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         <div
                           key={c.id}
                           className={`${styles.savedRow} ${bootstrapping ? styles.savedRowDisabled : ''}`}
-                          onClick={() => loadChatDetails(c)}
+                          onClick={ev => { ev.stopPropagation(); loadChatDetails(c) }}
                           title={bootstrapping ? 'Agent is being commissioned — details can’t be loaded right now' : 'Load this agent’s details into the form'}
                           aria-disabled={bootstrapping}
                         >
                           <div className={styles.savedChatInfo}>
                             <span className={styles.savedChatName}>Agent {c.agentName}</span>
+                            {c.agentConfig.persona?.traits && c.agentConfig.persona.traits.length > 0 && (
+                              <span className={styles.savedChatTraits}>{c.agentConfig.persona.traits.join(' · ')}</span>
+                            )}
                             {c.agentConfig.keywords && c.agentConfig.keywords.length > 0 && (
                               <div className={styles.savedChips}>
                                 {[...c.agentConfig.keywords].sort((a, b) => a.localeCompare(b)).map(kw => (
                                   <span key={kw} className={styles.savedChip}>{kw}</span>
                                 ))}
                               </div>
+                            )}
+                            {c.agentConfig.active_toggles && c.agentConfig.active_toggles.length > 0 && (
+                              <div className={styles.savedBehaviorBadges}>
+                                {c.agentConfig.active_toggles.map(id => (
+                                  <span key={id} className={styles.savedBehaviorBadge}>
+                                    {BEHAVIOR_TOGGLES.find(t => t.id === id)?.label ?? id}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {lastChatLine(c.messages) && (
+                              <span className={styles.savedChatPreview}>{lastChatLine(c.messages)}</span>
                             )}
                             <span className={styles.savedChatMeta}>
                               {getTemplate(c.agentConfig.template).label} · {c.messages.length} message{c.messages.length === 1 ? '' : 's'} · {formatSavedAt(c.savedAt)}

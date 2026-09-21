@@ -2,10 +2,11 @@ import { useState } from 'react'
 import Setup from './components/Setup'
 import Chat from './components/Chat'
 import SplashScreen from './components/SplashScreen'
+import CharacterGenerator from './components/CharacterGenerator'
 import type { AgentConfig, SavedChat } from './types'
 import { SURNAMES } from './surnames'
 
-type Phase = 'splash' | 'setup' | 'bootstrapping' | 'chat'
+type Phase = 'splash' | 'setup' | 'bootstrapping' | 'chat' | 'characters'
 
 function randomSurname(): string {
   return SURNAMES[Math.floor(Math.random() * SURNAMES.length)]
@@ -52,11 +53,13 @@ export default function App() {
     setAgentName(randomSurname())
   }
 
+  // "Recommission" — restarts the conversation but keeps the same agent
+  // config (same search/keywords/purpose), so the user doesn't have to
+  // redo Setup to rerun an existing search. Not a return to Setup at all;
+  // it's essentially a restart-chat, just under the existing button name.
   function handleReset() {
-    setAgentConfig(null)
-    setAgentName(randomSurname())
     setResumedChat(null)
-    setPhase('setup')
+    setChatKey(k => k + 1)
   }
 
   // Drop straight back into Chat with a saved conversation's full history,
@@ -85,7 +88,10 @@ export default function App() {
           onDone={handleBootstrapDone}
           onError={handleBootstrapError}
           onResumeChat={handleResumeChat}
+          onOpenCharacterGenerator={() => setPhase('characters')}
         />
+      ) : phase === 'characters' ? (
+        <CharacterGenerator onBack={() => setPhase('setup')} />
       ) : agentConfig ? (
         <Chat
           key={chatKey}

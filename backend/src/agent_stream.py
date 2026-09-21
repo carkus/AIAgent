@@ -29,27 +29,34 @@ _UNFENCED_PLAN_RE = re.compile(
 )
 
 
-def _extract_plan_diagram(content: str) -> tuple[str | None, str]:
+def _extract_plan_diagram(content: str) -> tuple[str | None, str | None, str]:
     """
     Pulls a plan flowchart (fenced, or bare text — see _UNFENCED_PLAN_RE) out
-    of an assistant response. Returns (diagram_or_None,
-    content_with_diagram_removed) — the caller uses the stripped content
-    everywhere else (tool-call detection, history, final answer) so the plan
-    text never leaks into any of those.
+    of an assistant response, plus the one-sentence plain-language summary
+    the system prompt (rule 6) asks the model to write immediately before the
+    fence — a diagram alone doesn't tell a user what's about to happen, only
+    the sentence does. Returns (diagram_or_None, summary_or_None,
+    content_with_both_removed) — the caller uses the stripped content
+    everywhere else (tool-call detection, history, final answer) so neither
+    the diagram nor its lead-in sentence ever leaks into those.
     """
     match = _PLAN_FENCE_RE.search(content)
     if match:
         diagram = match.group(1).strip()
-        remaining = (content[:match.start()] + content[match.end():]).strip()
-        return diagram or None, remaining
+        summary = content[:match.start()].strip() or None
+        remaining = content[match.end():].strip()
+        return diagram or None, summary, remaining
 
     unfenced = _UNFENCED_PLAN_RE.match(content)
     if unfenced:
+        # No lead-in sentence is available in this fallback shape — the
+        # match starts at the very beginning of the response (^\s*), so
+        # there's nothing before it to have been a summary.
         diagram = unfenced.group(1).strip()
         remaining = content[unfenced.end():].strip()
-        return diagram or None, remaining
+        return diagram or None, None, remaining
 
-    return None, content
+    return None, None, content
 
 # Confirmed against qwen2.5-coder:7b via Ollama: after a long tool-schema-
 # heavy conversation, the model occasionally answers a plain question (no
@@ -280,6 +287,23 @@ _DELEGATE_TOOL = {
 
 MAX_DELEGATIONS_PER_REQUEST = 6
 
+# Hard ceiling on total tool calls processed in a SINGLE assistant turn,
+# regardless of tool type. MAX_DELEGATIONS_PER_REQUEST only bounds how many
+# delegate_to_worker calls actually spawn a worker — it does nothing about
+# the calls beyond that limit, which the loop below still iterates over,
+# logs, and streams. Confirmed live: a model can spiral into a degenerate
+# repetition loop and emit ~90 near-duplicate delegate_to_worker calls in
+# one response (e.g. "fix a leaky shower drain flange" / "...plug" /
+# "...lid" / "...strainer" ad infinitum) — even capped at 6 real spawns,
+# the other ~84 still each got a tool_start/tool_result round trip and a
+# tool_calls_log entry, flooding the UI and bloating the next turn's
+# context for no benefit. Calls beyond this cap are rejected cheaply (no
+# execution, no worker spawn, no stream event) with a short tool-result
+# error telling the model to stop and answer — one response per
+# tool_call_id is still required or the next API call errors on a missing
+# tool result.
+MAX_TOOL_CALLS_PER_TURN = 20
+
 
 def _delegation_rule_body(keywords: list[str], max_delegations: int) -> str:
     """
@@ -334,7 +358,7 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
     Generator that yields event dicts as the agent loop runs.
 
     Event shapes:
-      {"type": "plan",        "diagram": "..."}  # emitted at most once, before the first tool_start
+      {"type": "plan",        "diagram": "...", "summary": "..." | None}  # emitted at most once, before the first tool_start
       {"type": "tool_start",  "tool": "name", "inputs": {...}}
       {"type": "tool_result", "tool": "name", "result": "..."}
       {"type": "done",        "response": "...", "tool_calls": [...], "duration_seconds": N}
@@ -373,21 +397,31 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
    stages), draw a Mermaid diagram in a ```mermaid fenced code block instead of
    restating the numbers in prose — use `pie` or `xychart-beta` for distributions/
    comparisons, `flowchart`/`graph` for a process or relationship, `mindmap` for a
-   grouped breakdown of topics. Follow the diagram with at most one or two short
-   sentences of takeaway — not a paragraph re-explaining what the diagram already
-   shows. For a single flat fact (one number, one listing), just say it plainly;
-   don't force a diagram where there's nothing to compare.
+   grouped breakdown of topics. A diagram MUST NEVER stand alone with no
+   explanation — always follow it with one or two short sentences, in plain
+   human language, that say what it shows (e.g. "Melbourne pays the most,
+   Perth the least — a $15k spread across the three cities."), not a
+   paragraph re-explaining every number the diagram already shows. For a
+   single flat fact (one number, one listing), just say it plainly; don't
+   force a diagram where there's nothing to compare.
 
 6. BEFORE doing anything else this turn, if the task needs more than one step
    (multiple tool calls, delegated workers, or several distinct pieces of
    research), sketch your plan as a short Mermaid flowchart in a
    ```mermaid-plan fenced code block (a different fence from ```mermaid,
    which is reserved for a diagram in your FINAL answer) as the very first
-   thing in your response, before making any tool calls. It MUST start with
-   `flowchart LR` (or `flowchart TD`) on its own line, then the actual steps
-   you're about to take, e.g.:
+   thing in your response, before making any tool calls. Immediately before
+   that fence, on its own line, write ONE short plain-language sentence
+   summarizing what you're about to do — this is the only context the user
+   sees for the plan diagram, so it MUST always be there, e.g. "I'll look up
+   listings for each role and compare their pay." Then the fence. It MUST
+   start with `flowchart LR` (or `flowchart TD`) on its own line, then the
+   actual steps you're about to take, e.g.:
+   I'll look up listings for each role and compare their pay.
+   ```mermaid-plan
    flowchart LR
      Start --> A[Search X] --> B[Search Y] --> C[Compare] --> Answer
+   ```
    Max ~8 nodes. Skip this entirely for a simple, single-step question that
    needs no tools or just one tool call.
 """ + (f"""
@@ -462,9 +496,9 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
             # into any of those, and stream it as its own event right away.
             raw_content = message.content
             if iteration == 0 and raw_content:
-                plan_diagram, raw_content = _extract_plan_diagram(raw_content)
+                plan_diagram, plan_summary, raw_content = _extract_plan_diagram(raw_content)
                 if plan_diagram:
-                    yield {"type": "plan", "diagram": plan_diagram}
+                    yield {"type": "plan", "diagram": plan_diagram, "summary": plan_summary}
 
             # Append assistant turn to history. Dump the full raw message rather
             # than hand-picking fields (id/type/function) — Gemini's "thinking"
@@ -588,6 +622,21 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                     tool_inputs = json.loads(tc.function.arguments)
                 except json.JSONDecodeError:
                     tool_inputs = {}
+
+                if idx >= MAX_TOOL_CALLS_PER_TURN:
+                    result_str = json.dumps({
+                        "error": (
+                            f"Tool-call limit for this turn ({MAX_TOOL_CALLS_PER_TURN}) "
+                            "reached — stop calling tools and answer now with what "
+                            "you already have."
+                        )
+                    })
+                    tool_result_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result_str,
+                    })
+                    continue
 
                 tool_def = tool_def_map.get(tool_name)
                 source = "mcp" if tool_def and tool_def.get("source") == "mcp" else (

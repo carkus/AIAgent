@@ -117,6 +117,8 @@ def brief():
         prior_question=(body.get("priorQuestion") or "").strip() or None,
         prior_answer=(body.get("priorAnswer") or "").strip() or None,
         max_delegations=body.get("maxDelegations"),
+        behaviors=body.get("behaviors") or None,
+        traits=body.get("traits") or None,
     )
     if result is None:
         return jsonify({"error": "Could not generate a brief"}), 502
@@ -171,7 +173,8 @@ def agent_drafts_collection():
     agent_type = body.get("agentType") or None
     location = body.get("location") or ""
     traits = body.get("traits") or []
-    entry = agent_drafts.add_draft(agent_name, agent_type, keywords, location, traits)
+    behavior_toggles = body.get("behaviorToggles") or []
+    entry = agent_drafts.add_draft(agent_name, agent_type, keywords, location, traits, behavior_toggles)
     return jsonify(entry), 201
 
 

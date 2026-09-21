@@ -3,7 +3,8 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { publishAgent, runAgent } from '../api'
 import { saveChat } from '../chatStorage'
-import { buildChatPdf, type PdfMessage } from '../chatPdf'
+import { buildChatPdf, type PdfAgentContext, type PdfMessage } from '../chatPdf'
+import { BEHAVIOR_TOGGLES, PERSONALITY_TRAITS } from './Setup'
 import ToolActivity from './ToolActivity'
 import MermaidDiagram from './MermaidDiagram'
 import CodeBlock from './CodeBlock'
@@ -100,6 +101,10 @@ interface ChatMessage {
   // ```mermaid diagram embedded in `content` itself. Rendered at the top of
   // the assistant bubble, i.e. right after the preceding user message.
   planDiagram?: string
+  // The one-sentence plain-language lead-in the backend extracts from
+  // immediately before the ```mermaid-plan fence (agent_stream.py rule 6) —
+  // the diagram alone doesn't tell a user what's about to happen.
+  planSummary?: string
   durationSeconds?: number
   usage?: { input_tokens: number; output_tokens: number }
   rateLimits?: { tokens_remaining: string | null; tokens_limit: string | null; requests_remaining: string | null; tokens_reset: string | null }
@@ -169,8 +174,8 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
       id: chatIdRef.current,
       agentName,
       agentConfig,
-      messages: messages.map(({ role, content, toolCalls, planDiagram, durationSeconds, usage, rateLimits }) => ({
-        role, content, toolCalls, planDiagram, durationSeconds, usage, rateLimits,
+      messages: messages.map(({ role, content, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits }) => ({
+        role, content, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits,
       })),
       savedAt: Date.now(),
     }
@@ -236,7 +241,21 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
           usage: m.usage,
         }))
         .filter(m => m.content || m.toolCallCount)
-      const doc = buildChatPdf(`Agent ${agentName}`, pdfMessages)
+
+      const traitPool = PERSONALITY_TRAITS[agentConfig.template ?? 'research'] ?? PERSONALITY_TRAITS.research
+      const context: PdfAgentContext = {
+        purpose: agentConfig.purpose,
+        keywords: agentConfig.keywords,
+        location: agentConfig.location,
+        model: describeModel(agentConfig.provider, agentConfig.ollama_model),
+        persona: agentConfig.persona,
+        behaviorToggles: (agentConfig.active_toggles ?? [])
+          .map(id => BEHAVIOR_TOGGLES.find(t => t.id === id)?.label ?? id),
+        personalityTraits: (agentConfig.active_traits ?? [])
+          .map(id => traitPool.find(t => t.id === id)?.label ?? id),
+        tools: agentConfig.tools.map(t => t.name),
+      }
+      const doc = buildChatPdf(`Agent ${agentName}`, pdfMessages, context)
       const safeName = agentName.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'agent'
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
       const filename = `chat-${safeName}-${stamp}.pdf`
@@ -295,7 +314,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
       await runAgent(apiMessages, agentConfig, (event: StreamEvent) => {
         switch (event.type) {
           case 'plan':
-            updateLastMessage(msg => ({ ...msg, planDiagram: event.diagram }))
+            updateLastMessage(msg => ({ ...msg, planDiagram: event.diagram, planSummary: event.summary ?? undefined }))
             break
 
           case 'tool_start':
@@ -373,15 +392,12 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
     <div className={styles.root}>
       <header className={styles.header}>
         <div className={styles.headerIdentity}>
-          <button
-            type="button"
-            className={styles.headerLogoBtn}
-            onClick={onReset}
-            aria-label="Return to search"
-            title="Return to search"
-          >
-            <img src={splashLogo} alt="Agent One" className={styles.headerLogo} />
-          </button>
+          {/* Decorative branding only — this used to double as a reset
+              button, which meant tapping the logo silently wiped the
+              current conversation. That's what "New agent" in the toolbar
+              is for, explicitly. */}
+          <img src={splashLogo} alt="Agent One" className={styles.headerLogo} />
+
           <div className={styles.headerIdentityText}>
             <span className={styles.headerTitle}>Agent {agentName}</span>
             {agentConfig.persona?.traits && agentConfig.persona.traits.length > 0 && (
@@ -491,10 +507,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
         {messages.map((msg, i) => (
           <div key={i} className={msg.role === 'user' ? styles.userBubble : styles.assistantBubble}>
             {msg.planDiagram && (
-              <div className={styles.planDiagram}>
-                <span className={styles.planDiagramLabel}>Plan</span>
-                <MermaidDiagram chart={msg.planDiagram} />
-              </div>
+              <MermaidDiagram chart={msg.planDiagram} label="Plan" caption={msg.planSummary} />
             )}
             {msg.liveToolCalls && msg.liveToolCalls.length > 0 && (
               <ToolActivity
@@ -606,7 +619,7 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
           className={styles.recommissionBtn}
           onClick={onReset}
           disabled={thinking}
-          title="Retire this agent and commission a new one"
+          title="Restart the chat — same search, fresh conversation"
         >
           Recommission
         </button>

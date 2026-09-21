@@ -16,10 +16,11 @@ function ensureInitialized() {
   // pastel set (includes a washed-out pink) if left unset. Pinning both to
   // the app's own teal/steel-blue/navy palette keeps every chart type
   // consistent instead of just flowcharts.
-  const fontFamily = "'Space Grotesk', 'Inter', sans-serif"
+  const fontFamily = "'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
   mermaid.initialize({
     startOnLoad: false,
     theme: 'base',
+    look: 'classic',
     themeVariables: {
       background: '#f5f6f4',
       primaryColor: '#e6f2f1',
@@ -28,7 +29,7 @@ function ensureInitialized() {
       lineColor: GRAPH_ACCENT,
       secondaryColor: '#eaf3f7',
       tertiaryColor: '#f0efe9',
-      fontSize: '9px',
+      fontSize: '9.9px',
       fontFamily,
       pie1: GRAPH_ACCENT,
       pie2: '#3f7ea0',
@@ -66,7 +67,7 @@ function ensureInitialized() {
     // (often large) pixel size and CSS max-width just clips it — labels
     // end up overlapping nodes/slices instead of the whole chart shrinking
     // to fit the chat bubble.
-    flowchart: { useMaxWidth: true },
+    flowchart: { useMaxWidth: true, curve: 'linear' },
     pie: { useMaxWidth: true },
     mindmap: { useMaxWidth: true },
     xyChart: { useMaxWidth: true },
@@ -84,10 +85,39 @@ function adaptChartForWidth(chart: string, screenWidth: number): string {
   return chart.replace(/^(\s*(?:flowchart|graph)\s+)(LR|RL)\b/im, '$1TD')
 }
 
+// Confirmed against a real failure: the model very often ends a flowchart's
+// last edge with a bare `end` node (`--> end`, `-->|done| end`, even
+// `end[Finish]`) — a completely natural word choice that mermaid's parser
+// rejects, because lowercase `end` is reserved (it's what closes a
+// `subgraph` block). Capitalizing it to `End` is mermaid's own documented
+// workaround and doesn't collide with a real `subgraph ... end` closer,
+// since that always sits alone on its own line with no arrow — only lines
+// that contain an edge get the identifier rewritten.
+const EDGE_LINE_RE = /-->|---|-\.-|==>|~~~/
+const BARE_END_RE = /\bend\b/g
+
+function fixReservedEndKeyword(chart: string): string {
+  return chart
+    .split('\n')
+    .map(line => (EDGE_LINE_RE.test(line) ? line.replace(BARE_END_RE, 'End') : line))
+    .join('\n')
+}
+
+interface Props {
+  chart: string
+  // Set only by the plan-preview usage (Chat.tsx) — when present, this
+  // component owns the whole labeled box (heading + lead-in sentence) and,
+  // critically, shows none of it — not even a loading placeholder — until
+  // the diagram has actually finished rendering. A "Plan" box appearing
+  // before its diagram is drawn reads as broken, not as loading.
+  label?: string
+  caption?: string
+}
+
 // Renders a ```mermaid fenced code block from the agent's reply as an actual
 // diagram (flowchart, pie/bar chart, mind map, etc.) instead of raw text —
 // the "prefer a diagram over a wordy paragraph" output style.
-export default function MermaidDiagram({ chart }: { chart: string }) {
+export default function MermaidDiagram({ chart, label, caption }: Props) {
   ensureInitialized()
   const id = useId().replace(/:/g, '-')
   const [svg, setSvg] = useState<string | null>(null)
@@ -96,25 +126,29 @@ export default function MermaidDiagram({ chart }: { chart: string }) {
 
   useEffect(() => {
     let cancelled = false
-    const adapted = adaptChartForWidth(chart, window.innerWidth)
+    const adapted = fixReservedEndKeyword(adaptChartForWidth(chart, window.innerWidth))
     mermaid.render(`mermaid-${id}`, adapted)
       .then(result => { if (!cancelled) setSvg(result.svg) })
       .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : 'Diagram failed to render') })
     return () => { cancelled = true }
   }, [chart, id])
 
-  if (error) {
-    return (
-      <div>
-        <p className={styles.mermaidError}>Diagram failed to render — showing raw source.</p>
-        <pre>{chart}</pre>
-      </div>
-    )
+  if (!svg && !error) {
+    // A labeled box (the plan preview) shows nothing at all while the
+    // diagram is still being drawn, rather than an empty/half-finished box
+    // with a heading and no picture. The plain inline-fence usage (no
+    // label) keeps the lightweight loading line, since it isn't wrapped in
+    // its own box to begin with.
+    if (label) return null
+    return <p className={styles.mermaidLoading}>Rendering diagram…</p>
   }
 
-  if (!svg) return <p className={styles.mermaidLoading}>Rendering diagram…</p>
-
-  return (
+  const body = error ? (
+    <div>
+      <p className={styles.mermaidError}>Diagram failed to render — showing raw source.</p>
+      <pre>{chart}</pre>
+    </div>
+  ) : (
     <>
       <div
         className={styles.mermaidDiagram}
@@ -128,9 +162,19 @@ export default function MermaidDiagram({ chart }: { chart: string }) {
             setViewerOpen(true)
           }
         }}
-        dangerouslySetInnerHTML={{ __html: svg }}
+        dangerouslySetInnerHTML={{ __html: svg ?? '' }}
       />
-      {viewerOpen && <ImageViewer svg={svg} onClose={() => setViewerOpen(false)} />}
+      {viewerOpen && svg && <ImageViewer svg={svg} onClose={() => setViewerOpen(false)} />}
     </>
+  )
+
+  if (!label) return body
+
+  return (
+    <div className={styles.planDiagram}>
+      <span className={styles.planDiagramLabel}>{label}</span>
+      {caption && <p className={styles.planSummary}>{caption}</p>}
+      {body}
+    </div>
   )
 }

@@ -16,6 +16,20 @@ import type { ToolCall } from './types'
  * from the same parse react-markdown already did — one source of truth.
  */
 
+/** Agent-config context shown once, before the transcript — what the agent was set up to do. */
+export interface PdfAgentContext {
+  purpose: string
+  keywords?: string[]
+  location?: string
+  model?: string
+  persona?: { name: string; traits: string[]; rationale: string }
+  /** Already-resolved labels (Setup.tsx's BEHAVIOR_TOGGLES ids -> label), not raw ids. */
+  behaviorToggles?: string[]
+  /** Already-resolved labels (Setup.tsx's PERSONALITY_TRAITS ids -> label), not raw ids. */
+  personalityTraits?: string[]
+  tools?: string[]
+}
+
 export interface PdfMessage {
   role: 'user' | 'assistant'
   content: string
@@ -166,6 +180,7 @@ const META_COLOR: [number, number, number] = [120, 120, 120]
 const LABEL_COLOR_USER: [number, number, number] = [79, 110, 247]
 const LABEL_COLOR_ASSISTANT: [number, number, number] = [31, 111, 115]
 const WORKER_LABEL_COLOR: [number, number, number] = [63, 126, 160]
+const CONTEXT_HEADING_COLOR: [number, number, number] = [22, 50, 74]
 
 const PAGE_MARGIN = 48
 const HEADING_SIZE: Record<number, number> = { 1: 16, 2: 14, 3: 12.5, 4: 11.5, 5: 11, 6: 11 }
@@ -425,8 +440,31 @@ function formatMeta(msg: PdfMessage): string | null {
   return parts.length ? parts.join(' · ') : null
 }
 
+/** What the agent was configured to do, drawn once before the transcript so the PDF stands on its own without the chat UI. */
+function drawContextSection(layout: PdfLayout, ctx: PdfAgentContext) {
+  layout.label('Agent Context', CONTEXT_HEADING_COLOR)
+
+  if (ctx.persona) {
+    const traitsText = ctx.persona.traits.length ? ` (${ctx.persona.traits.join(', ')})` : ''
+    layout.plainText(`${ctx.persona.name}${traitsText}`, PAGE_MARGIN, layout.contentWidth, BODY_SIZE)
+    if (ctx.persona.rationale) layout.plainText(ctx.persona.rationale, PAGE_MARGIN, layout.contentWidth, BODY_SIZE)
+  }
+
+  layout.plainText(ctx.purpose, PAGE_MARGIN, layout.contentWidth, BODY_SIZE)
+
+  if (ctx.keywords?.length) layout.meta(`Specialties: ${ctx.keywords.join(', ')}`)
+  if (ctx.location) layout.meta(`Location: ${ctx.location}`)
+  if (ctx.model) layout.meta(`Model: ${ctx.model}`)
+  if (ctx.behaviorToggles?.length) layout.meta(`Behavior: ${ctx.behaviorToggles.join(', ')}`)
+  if (ctx.personalityTraits?.length) layout.meta(`Personality: ${ctx.personalityTraits.join(', ')}`)
+  if (ctx.tools?.length) layout.meta(`Tools (${ctx.tools.length}): ${ctx.tools.join(', ')}`)
+
+  layout.gap(4)
+  layout.rule()
+}
+
 /** Builds the chat PDF and returns the jsPDF document without saving it (for preview-before-download). */
-export function buildChatPdf(title: string, messages: PdfMessage[]): jsPDF {
+export function buildChatPdf(title: string, messages: PdfMessage[], context?: PdfAgentContext): jsPDF {
   const layout = new PdfLayout()
 
   layout.pdf.setFont(FONT_BODY, 'bold')
@@ -435,7 +473,9 @@ export function buildChatPdf(title: string, messages: PdfMessage[]): jsPDF {
   layout.cursor.y += 15
   layout.pdf.text(title, PAGE_MARGIN, layout.cursor.y)
   layout.meta(`Exported ${new Date().toLocaleString()}`)
-  layout.rule()
+
+  if (context) drawContextSection(layout, context)
+  else layout.rule()
 
   for (const msg of messages) {
     if (msg.role === 'user') {

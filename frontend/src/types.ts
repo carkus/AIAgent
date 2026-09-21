@@ -56,6 +56,17 @@ export interface AgentConfig {
   // which fall back to the backend's own defaults (agent_stream.py).
   max_delegations?: number | null;
   search_defaults?: SearchDefaults;
+  // Behavior toggle ids active at bootstrap time (Setup.tsx's BEHAVIOR_TOGGLES) —
+  // already baked into `purpose` as compounded instructions; kept here too,
+  // undefined/[] on older saved chats/drafts, purely so a resumed chat or a
+  // reloaded draft can show/restore which toggles were on.
+  active_toggles?: string[];
+  // Personality trait ids selected at bootstrap time (Setup.tsx's
+  // PERSONALITY_TRAITS) — same shape as active_toggles above: already baked
+  // into `purpose` as compounded instructions, kept here purely so a resumed
+  // chat can restore which traits were selected. undefined/[] on older saved
+  // chats predating this field.
+  active_traits?: string[];
 }
 
 export interface ToolCall {
@@ -80,7 +91,7 @@ export type StreamEvent =
   // ```mermaid-plan fence, extracted from its first response only) — emitted
   // at most once, before any tool_start, distinct from a ```mermaid diagram
   // the agent may separately embed in its final answer text.
-  | { type: 'plan'; diagram: string }
+  | { type: 'plan'; diagram: string; summary: string | null }
   | { type: 'tool_start'; tool: string; inputs: Record<string, unknown>; source?: ToolCall['source']; call_index: number }
   | { type: 'tool_result'; tool: string; result: string; source?: ToolCall['source']; call_index: number }
   | {
@@ -120,6 +131,7 @@ export interface SavedChatMessage {
   content: string;
   toolCalls?: ToolCall[];
   planDiagram?: string;
+  planSummary?: string;
   durationSeconds?: number;
   usage?: { input_tokens: number; output_tokens: number };
   rateLimits?: {

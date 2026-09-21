@@ -63,7 +63,7 @@
   height: 2.1rem;
   color: var(--color-muted);
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.99rem;
   line-height: 1;
   z-index: 1;
   transition: background-color 0.15s, color 0.15s;
