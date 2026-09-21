@@ -95,6 +95,58 @@ function getTemplate(id: AgentTemplateId | undefined): AgentTemplate {
   return AGENT_TEMPLATES.find(t => t.id === id) ?? AGENT_TEMPLATES[0]
 }
 
+interface BehaviorToggle {
+  id: string
+  label: string
+  description: string
+  // Appended verbatim to the bootstrap purpose string when the toggle is
+  // on. Several toggles can be on at once — their instructions just
+  // concatenate, so effects compound rather than one replacing another.
+  instruction: string
+}
+
+// Starting set of six — each is an independent axis (verbosity, epistemic
+// stance, sourcing, initiative, tone, delegation strategy) so combinations
+// stay meaningful rather than overlapping/contradicting each other.
+const BEHAVIOR_TOGGLES: BehaviorToggle[] = [
+  {
+    id: 'concise',
+    label: 'Concise',
+    description: 'Short answers — bullets over paragraphs, no preamble.',
+    instruction: 'Keep every response as short as possible. Prefer bullet points over paragraphs, skip preamble and restating the question, and never pad an answer to sound more thorough than it is.',
+  },
+  {
+    id: 'skeptical',
+    label: 'Skeptical',
+    description: 'Challenges weak or unverified claims instead of repeating them.',
+    instruction: 'Treat every claim, source, and tool result critically. Call out weak, biased, outdated, or unverified information explicitly instead of repeating it at face value.',
+  },
+  {
+    id: 'cite-sources',
+    label: 'Cite Sources',
+    description: 'Attaches the source URL behind every fact it states.',
+    instruction: 'Whenever you state a fact drawn from a tool result or fetched page, cite the source URL or reference inline next to the claim.',
+  },
+  {
+    id: 'proactive',
+    label: 'Proactive',
+    description: 'Surfaces risks, gaps, and next steps unprompted.',
+    instruction: "Don't just answer literally — proactively flag risks, gaps, or good next steps you notice along the way, even when not asked.",
+  },
+  {
+    id: 'formal',
+    label: 'Formal Tone',
+    description: 'Professional register — no slang, contractions, or asides.',
+    instruction: 'Write in a formal, professional register. Avoid slang, contractions, humor, and casual asides.',
+  },
+  {
+    id: 'max-delegation',
+    label: 'Max Delegation',
+    description: 'Splits work across worker agents even for single-topic requests.',
+    instruction: 'Prefer delegating sub-tasks to worker agents even for single-topic requests — split research into narrower parallel slices whenever there is more than one angle to cover, rather than researching everything yourself.',
+  },
+]
+
 function joinNatural(items: string[]): string {
   if (items.length === 0) return ''
   if (items.length === 1) return items[0]
@@ -329,7 +381,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [specialtiesOpen, setSpecialtiesOpen] = useState(true)
   const [briefOpen, setBriefOpen] = useState(true)
   const [specialInstructionsOpen, setSpecialInstructionsOpen] = useState(false)
-  const [specialInstructions, setSpecialInstructions] = useState('')
+  const [activeToggles, setActiveToggles] = useState<string[]>([])
+  function toggleBehavior(id: string) {
+    setActiveToggles(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
+  }
   const [aiBrief, setAiBrief] = useState<AgentBrief | null>(null)
   const [briefLoading, setBriefLoading] = useState(false)
   const [briefAnswer, setBriefAnswer] = useState('')
@@ -511,7 +566,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     if (bootstrapping) return
     setKeywords([])
     setDraft('')
-    setSpecialInstructions('')
+    setActiveToggles([])
     setAiBrief(null)
     setBriefAnswer('')
     setCommissionHint(null)
@@ -718,9 +773,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       return
     }
     const loc = location.trim()
-    const extraInstructions = specialInstructions.trim()
+    const activeInstructions = BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.instruction)
     const purpose = getTemplate(agentType).buildPurpose(keywords, loc) +
-      (extraInstructions ? ` Special instructions from the user, follow these exactly: ${extraInstructions}` : '')
+      (activeInstructions.length > 0 ? ` ${activeInstructions.join(' ')}` : '')
     onStart()
     setProgress(null)
     setToolsSoFar([])
@@ -895,7 +950,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       onClick={() => {
                         setKeywords([])
                         setDraft('')
-                        setSpecialInstructions('')
+                        setActiveToggles([])
                         onNewAgent()
                         inputRef.current?.focus()
                       }}
@@ -905,6 +960,52 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     </button>
                   </div>
                 </div>
+              )}
+            </div>
+
+            <div className={styles.specialInstructionsRow}>
+              <button
+                type="button"
+                className={styles.fieldLabelToggle}
+                onClick={() => setSpecialInstructionsOpen(o => !o)}
+                aria-expanded={specialInstructionsOpen}
+              >
+                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Behavior (Optional)</span>
+                <span className={styles.fieldLabelRight}>
+                  {!specialInstructionsOpen && activeToggles.length > 0 && (
+                    <span className={styles.fieldLabelCount}>{activeToggles.length} on</span>
+                  )}
+                  <span className={styles.fieldLabelCaret} aria-hidden="true">{specialInstructionsOpen ? '▾' : '▸'}</span>
+                </span>
+              </button>
+              {specialInstructionsOpen && (
+                <div className={styles.behaviorTogglesRow}>
+                  {BEHAVIOR_TOGGLES.map(t => {
+                    const active = activeToggles.includes(t.id)
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={active ? styles.behaviorToggleActive : styles.behaviorToggle}
+                        onClick={() => toggleBehavior(t.id)}
+                        disabled={bootstrapping}
+                        title={t.description}
+                        aria-pressed={active}
+                      >
+                        {t.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {specialInstructionsOpen && activeToggles.length > 0 && (
+                <ul className={styles.behaviorEffectsList}>
+                  {BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => (
+                    <li key={t.id}>
+                      <span className={styles.behaviorEffectLabel}>{t.label}:</span> {t.description}
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
 
@@ -963,34 +1064,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     )}
                   </>
                 )
-              )}
-            </div>
-
-            <div className={styles.specialInstructionsRow}>
-              <button
-                type="button"
-                className={styles.fieldLabelToggle}
-                onClick={() => setSpecialInstructionsOpen(o => !o)}
-                aria-expanded={specialInstructionsOpen}
-              >
-                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Special Instructions (Optional)</span>
-                <span className={styles.fieldLabelRight}>
-                  {!specialInstructionsOpen && specialInstructions.trim() && (
-                    <span className={styles.fieldLabelCount}>Set</span>
-                  )}
-                  <span className={styles.fieldLabelCaret} aria-hidden="true">{specialInstructionsOpen ? '▾' : '▸'}</span>
-                </span>
-              </button>
-              {specialInstructionsOpen && (
-                <textarea
-                  className={styles.specialInstructionsInput}
-                  value={specialInstructions}
-                  onChange={e => setSpecialInstructions(e.target.value.slice(0, 500))}
-                  placeholder="Anything specific this agent should always do or avoid — appended to its instructions as-is."
-                  disabled={bootstrapping}
-                  maxLength={500}
-                  rows={3}
-                />
               )}
             </div>
           </div>

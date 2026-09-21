@@ -466,17 +466,21 @@
   border-top: 1px dashed var(--color-border);
 }
 
+/* Generated from the specialties/special-instructions above, not something
+   typed directly into this field — no full border or inset shadow (those
+   read as "editable"), just a quoted-output left rule so it's visually
+   clear this text is computed, not entered. */
 .agentSummaryText {
   margin: 0;
   color: var(--color-text);
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.88rem;
+  font-style: italic;
   line-height: 1.55;
-  background: var(--color-surface);
-  border: 1px solid #e2ded2;
-  border-radius: 6px;
+  background: #f2f0e6;
+  border-left: 3px solid var(--color-accent-secondary);
+  border-radius: 0 6px 6px 0;
   padding: 0.65rem 0.75rem;
-  box-shadow: inset 0 1px 3px rgba(22, 50, 74, 0.08);
 }
 
 .briefLoadingHint {
@@ -579,25 +583,71 @@
   border-top: 1px dashed var(--color-border);
 }
 
-.specialInstructionsInput {
-  margin: 0;
-  color: var(--color-text);
-  font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.88rem;
-  line-height: 1.55;
-  background: var(--color-surface);
-  border: 1px solid #e2ded2;
-  border-radius: 6px;
-  padding: 0.6rem 0.75rem;
-  box-shadow: inset 0 1px 3px rgba(22, 50, 74, 0.08);
-  resize: vertical;
-  outline: none;
-  box-sizing: border-box;
-  width: 100%;
+.behaviorTogglesRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
-.specialInstructionsInput:focus {
+/* Text-label pills, same rest/hover/active language as .agentTypePill but
+   sized for a word instead of an icon — several can be active at once and
+   their effects compound, so "active" reads as "pressed in", not "selected
+   from a set". */
+.behaviorToggle,
+.behaviorToggleActive {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.6rem;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s, transform 0.15s;
+}
+
+.behaviorToggle:hover:not(:disabled) {
   border-color: var(--color-accent);
+  color: var(--color-text);
+  transform: translateY(-1px);
+}
+
+.behaviorToggle:disabled,
+.behaviorToggleActive:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.behaviorToggleActive {
+  background: rgba(11, 73, 94, 0.1);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* One line per active toggle, appearing/growing as they're switched on —
+   makes the compounding effect legible instead of leaving the user to
+   remember what each pill's title tooltip said. */
+.behaviorEffectsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.5rem 0 0;
+  padding: 0.55rem 0.7rem;
+  list-style: none;
+  background: #f2f0e6;
+  border-left: 3px solid var(--color-accent-secondary);
+  border-radius: 0 6px 6px 0;
+  color: var(--color-text);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.behaviorEffectLabel {
+  color: var(--color-accent);
+  font-weight: 600;
 }
 
 .fieldLabel {
