@@ -26,11 +26,27 @@
   min-width: 0;
 }
 
+.headerLogoBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-right: 0.9rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  line-height: 0;
+  opacity: 1;
+  transition: opacity 0.15s;
+}
+
+.headerLogoBtn:hover,
+.headerLogoBtn:focus-visible {
+  opacity: 0.8;
+}
+
 .headerLogo {
   height: 114px;
   width: auto;
   border-radius: 8px;
-  margin-right: 0.9rem;
   flex-shrink: 0;
 }
 
@@ -50,7 +66,7 @@
   /* Header/footer chrome is deliberately NOT wired to the chat content's
      var(--color-*) palette — it keeps its own fixed look, independent of
      index.css's shared text/accent variables used below. */
-  color: #0b495e;
+  color: #053750;
   margin-right: 0.75rem;
 }
 
@@ -95,7 +111,7 @@
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 5px;
-  color: #0b495e;
+  color: #053750;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 0.72rem;
   font-weight: 500;
@@ -106,17 +122,17 @@
 .modelBadge {
   display: block;
   color: #3f7ea0;
-  background: #eaf3f7;
+  background: transparent;
   border: 1px solid #cfe3ea;
   border-radius: 5px;
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.1rem 0.4rem;
-  margin: 0.25rem 0 0;
+  margin: 0.6rem 0 0;
   width: fit-content;
   max-width: 100%;
   overflow-wrap: break-word;
-  cursor: help;
+  cursor: default;
 }
 
 .headerActions {
@@ -145,7 +161,7 @@
   background: #e9f3f2;
   border: 1px solid #a8cdd6;
   border-radius: 7px;
-  color: #0b495e;
+  color: #053750;
   cursor: pointer;
   transition: background-color 0.12s, border-color 0.12s, opacity 0.12s;
 }
@@ -165,8 +181,8 @@
 }
 
 button.resetBtn {
-  background: #0b495e;
-  border-color: #0b495e;
+  background: #053750;
+  border-color: #053750;
   color: #ffffff;
   font-weight: 700;
 }
@@ -239,13 +255,13 @@ button.resetBtn:active {
 }
 
 .rosterInput:focus {
-  border-color: #0b495e;
+  border-color: #053750;
   box-shadow: 0 0 0 2px rgba(31, 111, 115, 0.15);
 }
 
 .rosterConfirmBtn {
-  background: #0b495e;
-  border: 1px solid #0b495e;
+  background: #053750;
+  border: 1px solid #053750;
   border-radius: 6px;
   color: #ffffff;
   cursor: pointer;
@@ -270,9 +286,9 @@ button.resetBtn:active {
 
 .rosterCancelBtn {
   background: #f7f5f0;
-  border: 1px solid #0b495e;
+  border: 1px solid #053750;
   border-radius: 6px;
-  color: #0b495e;
+  color: #053750;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.72rem;
@@ -289,7 +305,7 @@ button.resetBtn:active {
 }
 
 .rosterFeedback {
-  color: #0b495e;
+  color: #053750;
   font-family: 'Inter', 'Space Grotesk', sans-serif;
   font-size: 0.74rem;
   letter-spacing: 0.02em;
@@ -379,7 +395,7 @@ button.resetBtn:active {
 
 .markdown {
   color: var(--color-text);
-  font-family: 'Inter', 'Space Grotesk', sans-serif;
+  font-family: 'Courier Prime', 'Courier New', Courier, serif;
   font-size: 0.84rem;
   font-weight: 400;
   line-height: 1.58;
@@ -422,7 +438,6 @@ button.resetBtn:active {
   border-left: 3px solid var(--color-accent);
   border-radius: 0 5px 5px 0;
   color: var(--color-accent);
-  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -547,6 +562,48 @@ button.resetBtn:active {
   padding: 0;
 }
 
+/* The agent's own step-by-step plan for the turn (agent_stream.py's
+   ```mermaid-plan fence) — rendered at the very top of the assistant
+   bubble, i.e. immediately after the user's message above it. Dashed
+   border + small label distinguishes it from a ```mermaid diagram the
+   agent may separately embed further down in its final answer. */
+.planDiagram {
+  border: 1px dashed var(--color-border);
+  border-radius: 6px;
+  margin: 0 0 0.75rem;
+  padding: 0.4rem 0.5rem 0.1rem;
+}
+
+.planDiagramLabel {
+  color: var(--color-muted);
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Overrides the generic .mermaidDiagram sizing below (higher specificity:
+   two classes vs. one) specifically for the compact plan preview — instead
+   of shrinking to fit the bubble's width (which made a multi-node flowchart
+   render too small to read), it fills a fixed height and lets width scroll
+   horizontally so node text stays at natural, readable size. */
+.planDiagram .mermaidDiagram {
+  height: 75px;
+  max-height: 75px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 0.4rem 0;
+}
+
+.planDiagram .mermaidDiagram svg {
+  height: 100%;
+  max-height: 75px;
+  width: auto;
+  max-width: none;
+}
+
 .mermaidDiagram {
   background: #f5f6f4;
   border: 1px solid var(--color-border);
@@ -639,7 +696,6 @@ button.resetBtn:active {
 
 .markdown table {
   border-collapse: collapse;
-  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 0.88rem;
   margin: 0;
   table-layout: auto;
@@ -731,29 +787,30 @@ button.resetBtn:active {
 }
 
 .input {
-  background: #ffffff;
-  border: 1px solid #cfe0e4;
-  border-radius: 999px;
-  color: #16324a;
+  background: #e9f3f2;
+  border: 1px solid #a8cdd6;
+  border-radius: 9px;
+  color: #053750;
   flex: 1;
-  font-family: 'Inter', 'Space Grotesk', sans-serif;
-  font-size: 0.92rem;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.88rem;
   letter-spacing: 0.01em;
   outline: none;
   padding: 0.75rem 1.15rem;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
 }
 
 .input::placeholder {
-  color: #8ba3ac;
+  color: rgba(5, 55, 80, 0.45);
 }
 
 .input:hover:not(:disabled) {
-  border-color: #a8cdd6;
+  border-color: #7fb3bf;
 }
 
 .input:focus {
-  border-color: #0b495e;
+  background: #ffffff;
+  border-color: #053750;
   box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.15);
 }
 
@@ -763,9 +820,9 @@ button.resetBtn:active {
 }
 
 .sendBtn {
-  background: #0b495e;
-  border: 1px solid #0b495e;
-  border-radius: 999px;
+  background: #053750;
+  border: 1px solid #053750;
+  border-radius: 9px 9px 0 9px;
   color: #ffffff;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
@@ -794,7 +851,7 @@ button.resetBtn:active {
 .stopBtn {
   background: #f7f5f0;
   border: 1px solid #e3a3a3;
-  border-radius: 999px;
+  border-radius: 9px 9px 0 9px;
   color: #b91c1c;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;

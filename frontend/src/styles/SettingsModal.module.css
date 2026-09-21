@@ -253,6 +253,16 @@
   margin: 0.25rem 0 0;
 }
 
+.providerWarning {
+  color: #b45309;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  margin: 0.4rem 0 0;
+  padding: 0.4rem 0.55rem;
+}
+
 .numberInput {
   background: #f8f4e7;
   border: 1px solid #ddd0a5;

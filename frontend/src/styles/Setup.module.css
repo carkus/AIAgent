@@ -18,12 +18,28 @@
   position: relative;
 }
 
-.brandLogo {
+.brandLogoBtn {
   display: block;
   align-self: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: -10px 0 1rem;
+  cursor: pointer;
+  line-height: 0;
+  opacity: 1;
+  transition: opacity 0.15s;
+}
+
+.brandLogoBtn:hover,
+.brandLogoBtn:focus-visible {
+  opacity: 0.8;
+}
+
+.brandLogo {
+  display: block;
   height: 127px;
   width: auto;
-  margin: -10px 0 1rem;
   border-radius: 10px;
 }
 
@@ -118,10 +134,12 @@
   flex: 0 0 220px;
   width: 220px;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
   min-width: 0;
   outline: none;
-  font-family: inherit;
+  font-family: 'Share Tech Mono', monospace;
   padding: 0.25rem 0.6rem;
   margin-left: 0.15rem;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -135,6 +153,8 @@
 .chipInput::placeholder {
   color: #6b9895;
   font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .keywordTally {
@@ -162,6 +182,12 @@
   font-size: 0.7rem;
   margin: 0;
   text-align: right;
+}
+
+.specialtiesHint {
+  color: #8a94a0;
+  font-size: 0.72rem;
+  margin: 0 0 0.3rem;
 }
 
 .profileActions {
@@ -336,6 +362,28 @@
   color: var(--color-muted);
   font-size: 0.66rem;
   text-align: left;
+}
+
+.modelLiner {
+  display: block;
+  color: #3f7ea0;
+  background: #eaf3f7;
+  border: 1px solid #cfe3ea;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 0.66rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  margin: 0.4rem 0 0.35rem;
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  cursor: pointer;
+}
+
+.modelLiner:hover,
+.modelLiner:focus-visible {
+  background: #d9ebf1;
 }
 
 .agentCard {
@@ -979,7 +1027,7 @@
 }
 
 .savedKeywordChip:focus-visible {
-  outline: 2px solid #1f6f73;
+  outline: 2px solid var(--color-text);
   outline-offset: 1px;
 }
 
@@ -1120,18 +1168,24 @@
 .savedResume {
   display: inline-flex;
   align-items: center;
-  background: none;
-  border: none;
-  color: var(--color-muted);
+  justify-content: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: var(--color-accent);
   cursor: pointer;
-  font-size: 1.05rem;
-  line-height: 1;
-  padding: 0 0.2rem;
+  width: 2.6rem;
+  height: 1.5rem;
+  padding: 0;
+  margin-right: 0.5rem;
   flex-shrink: 0;
+  transition: background-color 0.15s, color 0.15s;
 }
 
 .savedResume:hover:not(:disabled) {
-  color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .savedResume:disabled {
@@ -1140,18 +1194,20 @@
 }
 
 .savedDelete {
+  /* Plain-text danger glyph, matching .savedKeywordDelete in Specialties. */
   background: none;
   border: none;
-  color: var(--color-muted);
+  color: #b91c1c;
   cursor: pointer;
-  font-size: 1rem;
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
   line-height: 1;
   padding: 0 0.15rem;
-  flex-shrink: 0;
 }
 
 .savedDelete:hover {
-  color: #b91c1c;
+  color: #8f1414;
 }
 
 /* Action row */
@@ -1175,6 +1231,19 @@
   line-height: 1.4;
 }
 
+.errorBody {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.errorMessageRow {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
 .errorHeadline {
   margin: 0 0 0.2rem;
   color: #8a3a3d;
@@ -1190,10 +1259,43 @@
   word-break: break-word;
 }
 
+.errorRetry {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.3rem;
+  background: #fff;
+  border: 1px solid #e2a5a7;
+  border-radius: 6px;
+  color: #8a3a3d;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.44rem 0.875rem;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.errorRetry:hover {
+  background: #c0575c;
+  border-color: #c0575c;
+  color: #fff;
+}
+
+/* The bootstrapping "thinking" panel — styled as the same white card
+   (border/radius/shadow) as .agentCard rather than bare centered text, so it
+   reads as part of the app's UI instead of a plain loading message. */
 .loadingHint {
-  color: #5a6773;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(28, 40, 51, 0.06);
+  color: var(--color-muted);
   font-size: 0.85rem;
   margin-top: 1rem;
+  padding: 0.85rem 1rem;
   text-align: center;
 }
 

@@ -76,6 +76,11 @@ export interface Message {
 
 // Stream events emitted by the agent loop
 export type StreamEvent =
+  // The agent's own step-by-step plan for this turn (agent_stream.py's
+  // ```mermaid-plan fence, extracted from its first response only) — emitted
+  // at most once, before any tool_start, distinct from a ```mermaid diagram
+  // the agent may separately embed in its final answer text.
+  | { type: 'plan'; diagram: string }
   | { type: 'tool_start'; tool: string; inputs: Record<string, unknown>; source?: ToolCall['source']; call_index: number }
   | { type: 'tool_result'; tool: string; result: string; source?: ToolCall['source']; call_index: number }
   | {
@@ -114,6 +119,7 @@ export interface SavedChatMessage {
   role: 'user' | 'assistant';
   content: string;
   toolCalls?: ToolCall[];
+  planDiagram?: string;
   durationSeconds?: number;
   usage?: { input_tokens: number; output_tokens: number };
   rateLimits?: {

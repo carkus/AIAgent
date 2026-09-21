@@ -3,6 +3,7 @@ import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, delet
 import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
 import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat, SearchDefaults } from '../types'
+import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback } from '../modelLabel'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
 import SettingsModal from './SettingsModal'
@@ -204,11 +205,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // localStorage idiom as chatStorage.ts/aiagent_saved_chats — otherwise the
   // provider choice silently reverted to Auto (Gemini-first) on every new
   // agent, with no visible indicator on the main screen that it had reset.
+  // Defaults to local-only (Ollama) rather than the cloud-first Auto cascade —
+  // this app's Gemini usage was costing real money, so a fresh browser with no
+  // saved preference should not silently default to the paid provider. An
+  // explicit choice on the Settings screen still overrides this via localStorage.
   const [provider, setProvider] = useState<LlmProvider>(
-    () => (localStorage.getItem('aiagent_provider') as LlmProvider) || null
+    () => (localStorage.getItem('aiagent_provider') as LlmProvider) || 'ollama'
   )
   const [ollamaModel, setOllamaModel] = useState<string | null>(
-    () => localStorage.getItem('aiagent_ollama_model') || null
+    () => localStorage.getItem('aiagent_ollama_model') || DEFAULT_OLLAMA_MODEL
   )
   function handleProviderChange(p: LlmProvider) {
     setProvider(p)
@@ -340,7 +345,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     listOllamaModels().then(models => {
       setAvailableModels(models)
       setModelsLoaded(true)
-      if (models.length > 0) setOllamaModel(prev => prev ?? models[0])
+      if (models.length > 0) setOllamaModel(prev => (prev && models.includes(prev)) ? prev : models[0])
     })
   }, [provider, modelsLoaded])
 
@@ -492,6 +497,25 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     const next = [...keywords, kw]
     setKeywords(next)
     setDraft('')
+    inputRef.current?.focus()
+  }
+
+  // Tapping the brand logo is "start a fresh search" everywhere in the app —
+  // from Chat it fully remounts Setup (App.tsx's onReset), which already
+  // wipes this in-progress state for free; from Setup itself the component
+  // stays mounted (setup/bootstrapping share one instance so a failed
+  // bootstrap doesn't lose the typed-in keywords — see the phase-conditional
+  // render in App.tsx), so the current unsaved search has to be cleared here
+  // explicitly instead of relying on a remount that isn't going to happen.
+  function resetSearch() {
+    if (bootstrapping) return
+    setKeywords([])
+    setDraft('')
+    setSpecialInstructions('')
+    setAiBrief(null)
+    setBriefAnswer('')
+    setCommissionHint(null)
+    setFocusPanel('setup')
     inputRef.current?.focus()
   }
 
@@ -683,8 +707,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setOpenSavedSections(prev => ({ ...prev, [section]: !prev[section] }))
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  // Extracted from handleSubmit so a post-error "Retry" button can re-run the
+  // exact same commission attempt (form state is untouched after a failed
+  // bootstrap — Setup stays mounted across setup/bootstrapping phases) without
+  // needing a form submit event.
+  async function runBootstrap() {
     if (bootstrapping) return
     if (keywords.length === 0) {
       setCommissionHint('Add at least one specialty above — the brief needs it before this agent can be commissioned.')
@@ -726,6 +753,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    await runBootstrap()
+  }
+
   const briefWarning = keywords.length === 0
     ? null
     : aiBrief
@@ -745,7 +777,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         >
           ⚙
         </button>
-        <img src={splashLogo} alt="Agent One" className={styles.brandLogo} />
+        <button
+          type="button"
+          className={styles.brandLogoBtn}
+          onClick={resetSearch}
+          aria-label="Return to search"
+          title="Return to search"
+        >
+          <img src={splashLogo} alt="Agent One" className={styles.brandLogo} />
+        </button>
 
         <div className={styles.focusStack}>
         <div
@@ -756,6 +796,14 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             <div className={styles.agentCardInfo}>
               <h1 className={styles.title}>Agent {agentName}</h1>
               <p className={styles.locationLiner}>📍 {location || 'No location set'}</p>
+              <button
+                type="button"
+                className={styles.modelLiner}
+                onClick={ev => { ev.stopPropagation(); setSettingsOpen(true) }}
+                title={describeModelFallback(provider)}
+              >
+                🧠 {describeModel(provider, ollamaModel)}
+              </button>
             </div>
           </div>
 
@@ -775,6 +823,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   <span className={styles.fieldLabelCaret} aria-hidden="true">{specialtiesOpen ? '▾' : '▸'}</span>
                 </span>
               </button>
+              {specialtiesOpen && (
+                <p className={styles.specialtiesHint}>
+                  Type a keyword and press Enter, or select a Saved Specialty from the Agent Dossier below
+                </p>
+              )}
               {specialtiesOpen && (
                 <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
                   {keywords.map(kw => (
@@ -798,7 +851,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     onChange={e => setDraft(e.target.value.slice(0, 50))}
                     onKeyDown={handleKeyDown}
                     onBlur={() => { if (draft.trim()) addKeyword() }}
-                    placeholder={keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : '+ New Agent Specialty'}
+                    placeholder={keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : '+ Add Speciality'}
                     disabled={bootstrapping}
                     maxLength={50}
                   />
@@ -1311,9 +1364,14 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             ) : error ? (
               <div className={styles.errorPanel}>
                 <span className={styles.errorIcon} aria-hidden="true">⚠</span>
-                <div>
-                  <p className={styles.errorHeadline}>Couldn't design this agent</p>
-                  <p className={styles.errorDetail}>{error}</p>
+                <div className={styles.errorMessageRow}>
+                  <div className={styles.errorBody}>
+                    <p className={styles.errorHeadline}>Couldn't design this agent</p>
+                    <p className={styles.errorDetail}>{error}</p>
+                  </div>
+                  <button type="button" className={styles.errorRetry} onClick={runBootstrap}>
+                    ↻ Retry
+                  </button>
                 </div>
               </div>
             ) : null}

@@ -9,6 +9,48 @@ import mcp_client
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 
+# A distinct fence from the ```mermaid the agent uses inside its own final
+# answer (diagram-first output, see the CRITICAL TOOL RULES below) — this one
+# is the model's own step-by-step plan for the turn, extracted from its FIRST
+# response only and streamed as its own `plan` event so the frontend can show
+# it right after the user's message, before the assistant's reply.
+_PLAN_FENCE_RE = re.compile(r"```mermaid-plan\s*(.*?)\s*```", re.DOTALL)
+
+# Confirmed against a real turn: a weaker model followed the "sketch your
+# plan" instruction but skipped the ```mermaid-plan fence entirely, writing
+# `flowchart LR Start --> ...` as bare text at the very start of its
+# response, immediately followed by its (also unfenced) tool-call JSON. Catch
+# that shape too — the fence is what we ask for, not what every model
+# reliably produces — stopping at the first blank line or the first `{`
+# (where tool-call JSON would start) so it doesn't swallow anything else.
+_UNFENCED_PLAN_RE = re.compile(
+    r"^\s*(flowchart\s+(?:LR|RL|TD|TB)\b.*?)(?=\n\s*\n|\{|\Z)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _extract_plan_diagram(content: str) -> tuple[str | None, str]:
+    """
+    Pulls a plan flowchart (fenced, or bare text — see _UNFENCED_PLAN_RE) out
+    of an assistant response. Returns (diagram_or_None,
+    content_with_diagram_removed) — the caller uses the stripped content
+    everywhere else (tool-call detection, history, final answer) so the plan
+    text never leaks into any of those.
+    """
+    match = _PLAN_FENCE_RE.search(content)
+    if match:
+        diagram = match.group(1).strip()
+        remaining = (content[:match.start()] + content[match.end():]).strip()
+        return diagram or None, remaining
+
+    unfenced = _UNFENCED_PLAN_RE.match(content)
+    if unfenced:
+        diagram = unfenced.group(1).strip()
+        remaining = content[unfenced.end():].strip()
+        return diagram or None, remaining
+
+    return None, content
+
 # Confirmed against qwen2.5-coder:7b via Ollama: after a long tool-schema-
 # heavy conversation, the model occasionally answers a plain question (no
 # tool calls at all) with a single bare word echoed from a JSON-schema key
@@ -74,12 +116,81 @@ def _extract_text_tool_calls(content: str | None, valid_names: set[str]):
         try:
             obj = json.loads(line)
         except json.JSONDecodeError:
+            calls = None
+            break
+        call = _as_call(obj)
+        if not call:
+            calls = None
+            break
+        calls.append(call)
+    if calls:
+        return calls
+
+    # Fall back further to a JSON array of calls embedded inside narration —
+    # confirmed against qwen2.5-coder:7b: instead of populating tool_calls,
+    # the model narrates its plan in prose, emits a `[...]` array of the
+    # actual (distinct) calls it intends to make, then narrates again
+    # ("I will wait for each worker..."). Deliberately requires an ARRAY
+    # specifically (not a bare single `{...}`) before ignoring surrounding
+    # text: a lone JSON object floating in an explanation is far more often
+    # a genuinely illustrative example ("here's what a call looks like: ...")
+    # than an intended call, whereas a model bundling multiple real calls
+    # into one text turn consistently wraps them in an array — the shape
+    # its tool_calls list would have had if the structured field had worked.
+    decoder = json.JSONDecoder()
+    array_start = text.find("[")
+    if array_start != -1:
+        try:
+            obj, _end = decoder.raw_decode(text, array_start)
+        except json.JSONDecodeError:
+            obj = None
+        if isinstance(obj, list) and obj:
+            calls = [c for c in (_as_call(c) for c in obj) if c]
+            if len(calls) == len(obj):
+                return calls
+
+    # Fall back further to whitespace-concatenated JSON objects with no
+    # separators at all. Two distinct shapes land here:
+    #   (a) confirmed against qwen2.5-coder:7b — a stuck local model
+    #       repeating the SAME tool-call object over and over on one line
+    #       (e.g. `{"name": "search_jobs", ...} {"name": "search_jobs",
+    #       ...} ...`) with no natural stop, until max_tokens cuts it off;
+    #   (b) confirmed against a real turn — several genuinely DISTINCT tool
+    #       calls back to back with no array wrapper and no newlines between
+    #       them at all (e.g. search_jobs, then fetch_page, then
+    #       save_output), which the array/per-line fallbacks above don't
+    #       catch because there's no `[` and no `\n` to split on.
+    # Only accepted when the WHOLE text decodes this way with nothing left
+    # over — a real call followed by genuine trailing prose fails to parse
+    # past that point and is correctly rejected (prose isn't valid JSON), so
+    # this can't misfire on "here's an example call: {...} anyway, ...".
+    calls = []
+    pos = 0
+    length = len(text)
+    while pos < length:
+        while pos < length and text[pos].isspace():
+            pos += 1
+        if pos >= length:
+            break
+        try:
+            obj, end = decoder.raw_decode(text, pos)
+        except json.JSONDecodeError:
             return None
         call = _as_call(obj)
         if not call:
             return None
         calls.append(call)
-    return calls or None
+        pos = end
+
+    if not calls:
+        return None
+    # A degenerate repeat of the exact same call collapses to one instance —
+    # the model only meant to make it once. Otherwise, the distinct calls are
+    # each real and are returned as-is.
+    seen = {(name, json.dumps(args, sort_keys=True)) for name, args in calls}
+    if len(seen) == 1 and len(calls) >= 2:
+        return [calls[0]]
+    return calls
 
 _PRIMITIVE_TOOLS = [
     {
@@ -223,6 +334,7 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
     Generator that yields event dicts as the agent loop runs.
 
     Event shapes:
+      {"type": "plan",        "diagram": "..."}  # emitted at most once, before the first tool_start
       {"type": "tool_start",  "tool": "name", "inputs": {...}}
       {"type": "tool_result", "tool": "name", "result": "..."}
       {"type": "done",        "response": "...", "tool_calls": [...], "duration_seconds": N}
@@ -265,9 +377,22 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
    sentences of takeaway — not a paragraph re-explaining what the diagram already
    shows. For a single flat fact (one number, one listing), just say it plainly;
    don't force a diagram where there's nothing to compare.
+
+6. BEFORE doing anything else this turn, if the task needs more than one step
+   (multiple tool calls, delegated workers, or several distinct pieces of
+   research), sketch your plan as a short Mermaid flowchart in a
+   ```mermaid-plan fenced code block (a different fence from ```mermaid,
+   which is reserved for a diagram in your FINAL answer) as the very first
+   thing in your response, before making any tool calls. It MUST start with
+   `flowchart LR` (or `flowchart TD`) on its own line, then the actual steps
+   you're about to take, e.g.:
+   flowchart LR
+     Start --> A[Search X] --> B[Search Y] --> C[Compare] --> Answer
+   Max ~8 nodes. Skip this entirely for a simple, single-step question that
+   needs no tools or just one tool call.
 """ + (f"""
-6. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [], max_delegations)}
-7. Once your workers report back, do NOT restate or re-summarize each one's
+7. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [], max_delegations)}
+8. Once your workers report back, do NOT restate or re-summarize each one's
    full findings in your own reply — the user already sees each worker's
    complete response individually, attributed to that worker, in the UI.
    Your own reply should be short: at most a few sentences comparing or
@@ -313,7 +438,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
     max_iterations = 25
 
     try:
-        for _ in range(max_iterations):
+        for iteration in range(max_iterations):
             response = create_chat_completion(
                 provider=provider,
                 model=model,
@@ -330,6 +455,17 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                 total_input_tokens += response.usage.prompt_tokens
                 total_output_tokens += response.usage.completion_tokens
 
+            # The model's own step-by-step plan (system prompt rule 6) only
+            # makes sense on the very first turn, before any tool calls have
+            # run — strip it out of the content used everywhere else below
+            # (tool-call detection, history, final answer) so it never leaks
+            # into any of those, and stream it as its own event right away.
+            raw_content = message.content
+            if iteration == 0 and raw_content:
+                plan_diagram, raw_content = _extract_plan_diagram(raw_content)
+                if plan_diagram:
+                    yield {"type": "plan", "diagram": plan_diagram}
+
             # Append assistant turn to history. Dump the full raw message rather
             # than hand-picking fields (id/type/function) — Gemini's "thinking"
             # models attach a thought_signature to each function-call part and
@@ -341,7 +477,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
             # dropping them.
             assistant_msg = message.model_dump(exclude_none=True)
             assistant_msg["role"] = "assistant"
-            assistant_msg["content"] = assistant_msg.get("content") or ""
+            assistant_msg["content"] = raw_content or ""
 
             # Some models (confirmed: qwen2.5-coder:7b via Ollama's OpenAI-
             # compatible endpoint) don't populate the structured tool_calls
@@ -351,7 +487,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
             effective_tool_calls = message.tool_calls
             synthetic_calls = None
             if not effective_tool_calls:
-                extracted = _extract_text_tool_calls(message.content, tool_names)
+                extracted = _extract_text_tool_calls(raw_content, tool_names)
                 if extracted:
                     synthetic_calls = [
                         SimpleNamespace(
@@ -379,7 +515,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
 
             # No tool calls → final response
             if not effective_tool_calls:
-                final_text = message.content or ""
+                final_text = raw_content or ""
                 if (
                     not nudged
                     and finish_reason == "stop"

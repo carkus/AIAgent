@@ -16,10 +16,10 @@
      content, headings, body copy) reads this one variable instead of
      splitting "headings" and "body text" into two separately-tracked
      values. */
-  --color-text: #1f6f73;
+  --color-text: #1f5373;
   --color-muted: #6b7785;
   --color-border: #ddd9cd;
-  --color-accent: #0b495e;
+  --color-accent: #053750;
   --color-accent-hover: #164a4e;
   --color-accent-secondary: #3f7ea0;
 }

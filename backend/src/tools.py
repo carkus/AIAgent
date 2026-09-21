@@ -212,6 +212,14 @@ def execute_tool(implementation: str, inputs: dict) -> object:
         "collections": collections,
         "urllib": urllib,
         "TEMP_DIR": tempfile.gettempdir(),  # platform-correct temp dir
+        # Generated implementations sometimes assume these primitives are
+        # callable Python functions (bootstrap tells the model they're
+        # "always available to the agent", which is true at the tool-call
+        # level but not automatically true inside this exec() sandbox) —
+        # expose the real functions so that code doesn't crash with a
+        # NameError when it does this.
+        "search_jobs": search_jobs,
+        "fetch_page": fetch_page,
         "result": None,
     }
 

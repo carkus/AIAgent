@@ -8,25 +8,9 @@ import ToolActivity from './ToolActivity'
 import MermaidDiagram from './MermaidDiagram'
 import PdfPreviewModal from './PdfPreviewModal'
 import type { AgentConfig, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
+import { describeModel, describeModelFallback } from '../modelLabel'
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/splash_logo.png'
-
-// Mirrors backend/src/llm_client.py's cascade: Gemini first (cloud, cheap),
-// falling back to local Ollama on any provider error — unless the agent's
-// own provider choice pins it to just one link in that chain.
-const GEMINI_MODEL_NAME = 'gemini-3.6-flash'
-const DEFAULT_OLLAMA_MODEL = 'qwen2.5'
-
-function describeModel(provider: AgentConfig['provider'], ollamaModel?: string | null): string {
-  if (provider === 'ollama') return `Ollama: ${ollamaModel ?? DEFAULT_OLLAMA_MODEL}`
-  return `Gemini (${GEMINI_MODEL_NAME})`
-}
-
-function describeModelFallback(provider: AgentConfig['provider']): string {
-  if (provider === 'ollama') return 'Pinned to local Ollama — no cloud fallback for this agent'
-  if (provider === 'gemini') return 'Pinned to cloud Gemini — no local fallback for this agent'
-  return `Auto cascade: Gemini first, falls back to local Ollama (${DEFAULT_OLLAMA_MODEL}) if Gemini is unavailable`
-}
 
 type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent'
 
@@ -110,6 +94,11 @@ interface ChatMessage {
   content: string
   toolCalls?: ToolCall[]
   liveToolCalls?: LiveToolCall[]
+  // The agent's own step-by-step plan for this turn (agent_stream.py's
+  // ```mermaid-plan fence) — distinct from the tool-call trace and from any
+  // ```mermaid diagram embedded in `content` itself. Rendered at the top of
+  // the assistant bubble, i.e. right after the preceding user message.
+  planDiagram?: string
   durationSeconds?: number
   usage?: { input_tokens: number; output_tokens: number }
   rateLimits?: { tokens_remaining: string | null; tokens_limit: string | null; requests_remaining: string | null; tokens_reset: string | null }
@@ -179,8 +168,8 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
       id: chatIdRef.current,
       agentName,
       agentConfig,
-      messages: messages.map(({ role, content, toolCalls, durationSeconds, usage, rateLimits }) => ({
-        role, content, toolCalls, durationSeconds, usage, rateLimits,
+      messages: messages.map(({ role, content, toolCalls, planDiagram, durationSeconds, usage, rateLimits }) => ({
+        role, content, toolCalls, planDiagram, durationSeconds, usage, rateLimits,
       })),
       savedAt: Date.now(),
     }
@@ -304,6 +293,10 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
     try {
       await runAgent(apiMessages, agentConfig, (event: StreamEvent) => {
         switch (event.type) {
+          case 'plan':
+            updateLastMessage(msg => ({ ...msg, planDiagram: event.diagram }))
+            break
+
           case 'tool_start':
             updateLastMessage(msg => ({
               ...msg,
@@ -379,7 +372,15 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
     <div className={styles.root}>
       <header className={styles.header}>
         <div className={styles.headerIdentity}>
-          <img src={splashLogo} alt="Agent One" className={styles.headerLogo} />
+          <button
+            type="button"
+            className={styles.headerLogoBtn}
+            onClick={onReset}
+            aria-label="Return to search"
+            title="Return to search"
+          >
+            <img src={splashLogo} alt="Agent One" className={styles.headerLogo} />
+          </button>
           <div className={styles.headerIdentityText}>
             <span className={styles.headerTitle}>Agent {agentName}</span>
             {agentConfig.persona?.traits && agentConfig.persona.traits.length > 0 && (
@@ -488,6 +489,12 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
         )}
         {messages.map((msg, i) => (
           <div key={i} className={msg.role === 'user' ? styles.userBubble : styles.assistantBubble}>
+            {msg.planDiagram && (
+              <div className={styles.planDiagram}>
+                <span className={styles.planDiagramLabel}>Plan</span>
+                <MermaidDiagram chart={msg.planDiagram} />
+              </div>
+            )}
             {msg.liveToolCalls && msg.liveToolCalls.length > 0 && (
               <ToolActivity
                 toolCalls={msg.liveToolCalls.map(tc => ({

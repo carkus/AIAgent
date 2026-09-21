@@ -53,6 +53,7 @@ Two primitive tools are pre-built and always available to the agent — do NOT i
 - `search_jobs` — real job search via the Adzuna API (not scraping). Takes `what` (required, job title/keywords), `where` (optional location), `country` (optional, default "au"), `results_per_page` (optional, default 20), `page` (optional, default 1), `distance_km` (optional radius around `where`). Returns `{{status_code, total_count, returned, mean_salary, listings: [{{title, company, location, salary_min, salary_max, redirect_url, description, created, contract_type, category}}]}}`.
 
 Instruct the agent to call these directly rather than reinventing them.
+IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write `search_jobs(...)` or `fetch_page(...)` inside an `implementation` string; if a tool needs that capability, don't generate it as a Python implementation at all — instruct the agent (via the system_prompt) to call the primitive tool itself instead.
 
 Vetted MCP tools (real, independently-maintained servers — prefer these over writing your own implementation when one already covers the need):
 {mcp_catalog}
@@ -310,6 +311,10 @@ def generate_agent_config(
         config, error = _try_parse(text)
 
     if config is None:
+        logger.warning(
+            "Bootstrap JSON parse failed after retry (error at char %d: %s). Raw response:\n%s",
+            error.pos, error.msg, text,
+        )
         raise ValueError(
             f"Bootstrap response was not valid JSON after one retry. "
             f"Error at char {error.pos}: {error.msg}. "
@@ -488,6 +493,10 @@ def generate_agent_config_stream(
             return
 
     if config is None:
+        logger.warning(
+            "Bootstrap JSON parse failed after retry (error at char %d: %s). Raw response:\n%s",
+            error.pos, error.msg, text,
+        )
         yield {"type": "error", "message": (
             f"Bootstrap response was not valid JSON after one retry. "
             f"Error at char {error.pos}: {error.msg}. "

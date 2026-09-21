@@ -672,20 +672,47 @@ function RawResult({ result }: { result: string }) {
         </p>
       )
     }
+    const SKIP_RESULT_KV = new Set(['title', 'url', 'snippet'])
     return (
       <div>
-        {results.map((r, i) => (
-          <div key={i} className={styles.searchResult}>
-            {r.url ? (
-              <a href={r.url as string} target="_blank" rel="noreferrer" className={styles.resultTitle}>
-                {(r.title ?? r.url) as string}
-              </a>
-            ) : (
-              <span className={styles.resultTitle}>{r.title as string}</span>
-            )}
-            {Boolean(r.snippet) && <p className={styles.resultSnippet}>{r.snippet as string}</p>}
-          </div>
-        ))}
+        {results.map((r, i) => {
+          const extra = Object.entries(r).filter(([k, v]) =>
+            !SKIP_RESULT_KV.has(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+          )
+          return (
+            <div key={i} className={styles.searchResult}>
+              {r.url ? (
+                <a href={r.url as string} target="_blank" rel="noreferrer" className={styles.resultTitle}>
+                  {(r.title ?? r.url) as string}
+                </a>
+              ) : (
+                <span className={styles.resultTitle}>{r.title as string}</span>
+              )}
+              {Boolean(r.snippet) && <p className={styles.resultSnippet}>{r.snippet as string}</p>}
+              {extra.length > 0 && (
+                <div className={styles.kvPills}>
+                  {extra.map(([k, v]) => {
+                    const s = String(v)
+                    const isUrl = /^https?:\/\//i.test(s)
+                    return (
+                      <span key={k} className={styles.kvPill}>
+                        <span className={styles.kvKey}>{k}</span>
+                        {isUrl ? (
+                          <a href={s} target="_blank" rel="noreferrer" className={styles.kvValLink}>
+                            {s.replace(/^https?:\/\//, '').slice(0, 60)}
+                            {s.replace(/^https?:\/\//, '').length > 60 ? '…' : ''}
+                          </a>
+                        ) : (
+                          <span className={styles.kvVal}>{s}</span>
+                        )}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     )
   }

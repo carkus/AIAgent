@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LlmProvider, SearchDefaults } from '../types'
 import { listMcpTools, type McpServerInfo } from '../api'
+import { isTinyOllamaModel } from '../modelLabel'
 import styles from '../styles/SettingsModal.module.css'
 
 // Mirrors backend/src/agent_stream.py's MAX_DELEGATIONS_PER_REQUEST — shown
@@ -174,8 +175,14 @@ export default function SettingsModal({
                   {availableModels.length > 0
                     ? 'Different local models vary a lot in tool-calling/JSON reliability — worth trying a few.'
                     : 'No pulled models detected — is `ollama serve` running? Try `ollama pull qwen2.5:7b`.'}
-                  {' '}Only works with `sam local` / the local dev server, not a deployed agent.
                 </p>
+                {isTinyOllamaModel(ollamaModel) && (
+                  <p className={styles.providerWarning}>
+                    ⚠ {ollamaModel} is a small model (≤3B params) — it frequently fails to
+                    return valid AgentConfig JSON for bootstrap. If design fails, try Cloud
+                    (Gemini) or a larger local model instead.
+                  </p>
+                )}
               </>
             )}
           </section>

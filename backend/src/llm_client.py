@@ -15,7 +15,9 @@ developer's localhost).
 Env vars:
   GEMINI_API_KEY   - required to use Gemini at all; if unset, Gemini is skipped
   OLLAMA_BASE_URL  - default http://localhost:11434/v1
-  OLLAMA_MODEL     - default qwen2.5 (solid tool-calling/JSON compliance for its size)
+  OLLAMA_MODEL     - default qwen2.5-coder:7b (per CLAUDE.md, the only locally-pulled
+                     model that reliably returns valid JSON for this app's bootstrap
+                     tool-schema output; plain qwen2.5 was not reliable enough)
   LLM_PROVIDER     - "gemini" or "ollama" to force a single provider instead of
                      cascading (e.g. LLM_PROVIDER=ollama for offline/no-cost dev)
 """
@@ -33,7 +35,7 @@ GEMINI_MODEL = "gemini-3.6-flash"
 # from GEMINI_MODEL since it's a different model family (embedding, not chat).
 GEMINI_EMBED_MODEL = "gemini-embedding-2-preview"
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:7b")
 # Native Ollama API (for /api/tags — model listing isn't part of the OpenAI-compatible surface)
 OLLAMA_HOST = OLLAMA_BASE_URL.removesuffix("/v1").removesuffix("/")
 
@@ -116,7 +118,15 @@ def list_ollama_models() -> list[str]:
     try:
         resp = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=3)
         resp.raise_for_status()
-        return sorted(m["name"] for m in resp.json().get("models", []))
+        # /api/tags lists every pulled model, including embedding-only ones
+        # (this project's own nomic-embed-text among them) that 400 on a
+        # chat completion call. This list only ever feeds the Setup screen's
+        # chat-model picker, so those are filtered out here rather than left
+        # for the picker to stumble into.
+        return sorted(
+            m["name"] for m in resp.json().get("models", [])
+            if "embed" not in m["name"].lower()
+        )
     except Exception as e:
         logger.info("Could not list Ollama models: %s", e)
         return []
