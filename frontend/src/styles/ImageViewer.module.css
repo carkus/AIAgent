@@ -1,0 +1,75 @@
+/* A soft white frost over the app behind it, rather than the usual dark
+   scrim — the enlarged diagram is meant to read as a new page sliding on
+   top of the current screen, not as a modal dialog interrupting it. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 2rem;
+  animation: overlayFadeIn 0.15s ease-out;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.page {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  width: min(1100px, 96vw);
+  height: min(90vh, 900px);
+  overflow: auto;
+  padding: 2.5rem;
+  box-shadow: 0 24px 64px rgba(28, 40, 51, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pageRiseIn 0.18s ease-out;
+}
+
+@keyframes pageRiseIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.image {
+  width: 100%;
+}
+
+.image svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+
+.closeBtn {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  width: 2.1rem;
+  height: 2.1rem;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  z-index: 1;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.closeBtn:hover {
+  background: #eef1f0;
+  color: var(--color-text);
+}

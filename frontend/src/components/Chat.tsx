@@ -6,6 +6,7 @@ import { saveChat } from '../chatStorage'
 import { buildChatPdf, type PdfMessage } from '../chatPdf'
 import ToolActivity from './ToolActivity'
 import MermaidDiagram from './MermaidDiagram'
+import CodeBlock from './CodeBlock'
 import PdfPreviewModal from './PdfPreviewModal'
 import type { AgentConfig, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import { describeModel, describeModelFallback } from '../modelLabel'
@@ -520,6 +521,13 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
+                        pre({ children }) {
+                          const codeEl = children as React.ReactElement<{ className?: string }> | undefined
+                          const className = codeEl?.props?.className ?? ''
+                          if (className === 'language-mermaid') return <>{children}</>
+                          const lang = /language-(\S+)/.exec(className)?.[1] ?? 'text'
+                          return <CodeBlock language={lang}>{children}</CodeBlock>
+                        },
                         code({ className, children, ...props }) {
                           const isMermaid = className === 'language-mermaid'
                           if (isMermaid) {
@@ -592,6 +600,16 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
             Send
           </button>
         )}
+        <span className={styles.composerDivider} aria-hidden="true" />
+        <button
+          type="button"
+          className={styles.recommissionBtn}
+          onClick={onReset}
+          disabled={thinking}
+          title="Retire this agent and commission a new one"
+        >
+          Recommission
+        </button>
       </form>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react'
 import mermaid from 'mermaid'
 import styles from '../styles/Chat.module.css'
+import ImageViewer from './ImageViewer'
 
 const GRAPH_ACCENT = '#05384b'
 
@@ -91,6 +92,7 @@ export default function MermaidDiagram({ chart }: { chart: string }) {
   const id = useId().replace(/:/g, '-')
   const [svg, setSvg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [viewerOpen, setViewerOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -112,5 +114,23 @@ export default function MermaidDiagram({ chart }: { chart: string }) {
 
   if (!svg) return <p className={styles.mermaidLoading}>Rendering diagram…</p>
 
-  return <div className={styles.mermaidDiagram} dangerouslySetInnerHTML={{ __html: svg }} />
+  return (
+    <>
+      <div
+        className={styles.mermaidDiagram}
+        role="button"
+        tabIndex={0}
+        aria-label="Open diagram in full view"
+        onClick={() => setViewerOpen(true)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setViewerOpen(true)
+          }
+        }}
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+      {viewerOpen && <ImageViewer svg={svg} onClose={() => setViewerOpen(false)} />}
+    </>
+  )
 }

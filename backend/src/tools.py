@@ -202,6 +202,7 @@ def execute_tool(implementation: str, inputs: dict) -> object:
         "__builtins__": _SAFE_BUILTINS,
         "inputs": inputs,
         "input_data": inputs,   # alias — Claude sometimes generates this name
+        "input": inputs,        # alias — Claude sometimes generates this name too (singular, not the builtin)
         **inputs,               # bare names: query, location, filename, etc.
         "requests": requests,
         "json": json,

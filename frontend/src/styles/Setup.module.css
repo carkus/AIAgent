@@ -1169,14 +1169,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-surface);
+  background: #eef6ec;
   border: 1px solid var(--color-border);
   border-radius: 4px;
   box-sizing: border-box;
   color: var(--color-accent);
   cursor: pointer;
   width: 2.6rem;
-  height: 1.5rem;
+  height: 1.3rem;
   padding: 0;
   margin-right: 0.5rem;
   flex-shrink: 0;
@@ -1293,7 +1293,8 @@
   border-radius: 10px;
   box-shadow: 0 6px 18px rgba(28, 40, 51, 0.06);
   color: var(--color-muted);
-  font-size: 0.85rem;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.76rem;
   margin-top: 1rem;
   padding: 0.85rem 1rem;
   text-align: center;
