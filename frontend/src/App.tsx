@@ -62,6 +62,15 @@ export default function App() {
     setChatKey(k => k + 1)
   }
 
+  // Actual return to Setup — leaves agentConfig/messages alone (no reset of
+  // any kind), just switches which screen is showing. If the user comes
+  // back to Setup and starts a new search, that naturally replaces
+  // agentConfig on the next bootstrap; nothing here deletes the current
+  // conversation.
+  function handleBackToSetup() {
+    setPhase('setup')
+  }
+
   // Drop straight back into Chat with a saved conversation's full history,
   // bypassing bootstrap entirely — the saved AgentConfig already has
   // everything the agent loop needs (see types.ts's SavedChat).
@@ -98,6 +107,7 @@ export default function App() {
           agentConfig={agentConfig}
           agentName={agentName}
           onReset={handleReset}
+          onBackToSetup={handleBackToSetup}
           initialMessages={resumedChat?.messages}
           chatId={resumedChat?.id}
         />

@@ -46,7 +46,7 @@
 .title {
   margin: 0 0 0.5rem;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 2.035rem;
+  font-size: var(--font-size-xl);
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -56,7 +56,7 @@
 .subtitle {
   margin: 0 0 2rem;
   color: var(--color-muted);
-  font-size: 1.045rem;
+  font-size: var(--font-size-lg);
 }
 
 .form {
@@ -103,7 +103,7 @@
   color: var(--color-accent);
   display: inline-flex;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.836rem;
+  font-size: var(--font-size-sm);
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -116,7 +116,7 @@
   border: none;
   color: #6b9895;
   cursor: pointer;
-  font-size: 1.1rem;
+  font-size: var(--font-size-lg);
   line-height: 1;
   padding: 0 0.1rem;
 }
@@ -133,7 +133,7 @@
   color: var(--color-accent);
   flex: 0 0 220px;
   width: 220px;
-  font-size: 0.825rem;
+  font-size: var(--font-size-sm);
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -152,7 +152,7 @@
 
 .chipInput::placeholder {
   color: #6b9895;
-  font-size: 0.77rem;
+  font-size: var(--font-size-sm);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -167,7 +167,7 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.935rem;
+  font-size: var(--font-size-base);
   font-weight: 400;
   height: 1.7rem;
   min-width: 1.7rem;
@@ -179,14 +179,14 @@
 
 .charHint {
   color: #8a94a0;
-  font-size: 0.77rem;
+  font-size: var(--font-size-sm);
   margin: 0;
   text-align: right;
 }
 
 .specialtiesHint {
   color: #8a94a0;
-  font-size: 0.792rem;
+  font-size: var(--font-size-sm);
   margin: 0 0 0.3rem;
 }
 
@@ -235,7 +235,7 @@
 .agentTypeLabel {
   color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.66rem;
+  font-size: var(--font-size-xs);
   font-weight: 400;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -248,7 +248,7 @@
 
 .commissionHint {
   color: #b45309;
-  font-size: 0.825rem;
+  font-size: var(--font-size-sm);
   margin: 0 auto 0 0;
 }
 
@@ -263,7 +263,7 @@
   align-items: center;
   height: 2.6rem;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.935rem;
+  font-size: var(--font-size-base);
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -293,7 +293,7 @@
   color: var(--color-accent);
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.726rem;
+  font-size: var(--font-size-xs);
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -318,7 +318,7 @@
   color: #a34b4b;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.726rem;
+  font-size: var(--font-size-xs);
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -347,7 +347,7 @@
 .locationLiner {
   margin: -0.35rem 0 0.15rem;
   color: var(--color-muted);
-  font-size: 0.726rem;
+  font-size: var(--font-size-xs);
   text-align: left;
 }
 
@@ -358,7 +358,7 @@
   border: 1px solid #cfe3ea;
   border-radius: 5px;
   font-family: inherit;
-  font-size: 0.726rem;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   padding: 0.1rem 0.4rem;
   margin: 0.4rem 0 0.35rem;
@@ -438,7 +438,7 @@
 .saveFeedbackText {
   margin: 0;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.77rem;
+  font-size: var(--font-size-sm);
   font-weight: 500;
   letter-spacing: 0.02em;
   text-align: right;
@@ -474,7 +474,7 @@
   margin: 0;
   color: var(--color-text);
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.968rem;
+  font-size: var(--font-size-base);
   line-height: 1.55;
   background: #f2f0e6;
   border-left: 3px solid var(--color-accent-secondary);
@@ -485,6 +485,20 @@
 .briefLoadingHint {
   color: #8a8572;
   font-style: italic;
+}
+
+/* Empty-state hint shown before any Specialty exists — deliberately lighter
+   than .agentSummaryText's generated-content card treatment (no colored
+   background/left rule), so an unfilled Brief doesn't read as if it
+   already has real output. */
+.briefPlaceholderText {
+  margin: 0;
+  color: var(--color-muted);
+  font-family: 'Inter', 'Space Grotesk', sans-serif;
+  font-style: italic;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  padding: 0.4rem 0.1rem;
 }
 
 .briefQuestionBox {
@@ -502,7 +516,7 @@
   margin: 0;
   color: #6b4d1f;
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.968rem;
+  font-size: var(--font-size-base);
   line-height: 1.5;
 }
 
@@ -518,7 +532,7 @@
   color: var(--color-text);
   flex: 1;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.836rem;
+  font-size: var(--font-size-sm);
   outline: none;
   padding: 0.4rem 0.6rem;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -540,7 +554,7 @@
   color: #ffffff;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.792rem;
+  font-size: var(--font-size-sm);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 0.4rem 0.85rem;
@@ -570,7 +584,7 @@
   margin: 0;
   color: #8f1414;
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.902rem;
+  font-size: var(--font-size-base);
   line-height: 1.5;
 }
 
@@ -608,7 +622,7 @@
   color: var(--color-muted);
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.792rem;
+  font-size: var(--font-size-sm);
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -661,13 +675,13 @@
   display: none;
 }
 
-/* Typewritten label — the sole visible content of the chip now that the
-   icon glyph is hidden; the hover tooltip (below) still carries the
-   longer description. */
+/* Same font weight/size as .behaviorToggle's label text (Personality) —
+   the sole visible content of the chip now that the icon glyph is hidden;
+   the hover tooltip (below) still carries the longer description. */
 .behaviorIconLabel {
-  font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-sm);
+  font-weight: 400;
   letter-spacing: 0.03em;
   line-height: 1.15;
   text-align: center;
@@ -716,7 +730,7 @@
   border-radius: 2px;
   padding: 0.4rem 0.55rem;
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.748rem;
+  font-size: var(--font-size-xs);
   line-height: 1.35;
   text-transform: none;
   letter-spacing: normal;
@@ -758,7 +772,7 @@
   border-radius: 0 6px 6px 0;
   color: var(--color-text);
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.858rem;
+  font-size: var(--font-size-sm);
   line-height: 1.4;
 }
 
@@ -775,7 +789,7 @@
   gap: 0.4rem;
   color: var(--color-accent-secondary);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.77rem;
+  font-size: var(--font-size-sm);
   font-weight: 400;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -783,7 +797,7 @@
 
 .fieldLabel span {
   color: var(--color-accent);
-  font-size: 0.66rem;
+  font-size: var(--font-size-xs);
 }
 
 .fieldLabelToggle {
@@ -808,7 +822,7 @@
 
 .fieldLabelCaret {
   color: var(--color-accent);
-  font-size: 1.43rem;
+  font-size: var(--font-size-xl);
   flex-shrink: 0;
 }
 
@@ -816,7 +830,7 @@
   background: #eef1f0;
   border-radius: 999px;
   color: var(--color-accent);
-  font-size: 0.748rem;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   padding: 0.05rem 0.45rem;
   flex-shrink: 0;
@@ -831,7 +845,7 @@
   border-radius: 999px;
   color: var(--color-accent);
   cursor: pointer;
-  font-size: 1.5675rem;
+  font-size: var(--font-size-xl);
   line-height: 1;
   width: 3rem;
   height: 3rem;
@@ -855,7 +869,7 @@
   border-radius: 999px;
   color: var(--color-accent);
   cursor: pointer;
-  font-size: 1.35rem;
+  font-size: var(--font-size-lg);
   line-height: 1;
   width: 3rem;
   height: 3rem;
@@ -935,7 +949,7 @@
   border-radius: 6px;
   color: var(--color-text);
   font-family: inherit;
-  font-size: 0.935rem;
+  font-size: var(--font-size-base);
   outline: none;
   padding: 0.3rem 0.6rem;
   width: 100%;
@@ -965,7 +979,7 @@
 
 .locationSuggestions li {
   color: var(--color-text);
-  font-size: 0.902rem;
+  font-size: var(--font-size-base);
   padding: 0.45rem 0.5rem;
   border-radius: 4px;
   cursor: pointer;
@@ -982,7 +996,7 @@
   border-radius: 6px;
   color: var(--color-text);
   font-family: inherit;
-  font-size: 0.935rem;
+  font-size: var(--font-size-base);
   outline: none;
   padding: 0.3rem 1.75rem 0.3rem 0.6rem;
   flex: 1;
@@ -1002,7 +1016,7 @@
 
 .providerHint {
   color: #8a94a0;
-  font-size: 0.792rem;
+  font-size: var(--font-size-sm);
   margin: -0.35rem 0 0;
 }
 
@@ -1060,7 +1074,7 @@
   border-radius: 7.13px 7.13px 0 0;
   color: #6b5a32;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.968rem;
+  font-size: var(--font-size-base);
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1077,7 +1091,7 @@
   border: 2.25px solid var(--color-accent);
   border-radius: 6px;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.99rem;
+  font-size: var(--font-size-base);
   font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1120,7 +1134,7 @@
 
 .savedSectionCaret {
   color: #6b5a32;
-  font-size: 1.54rem;
+  font-size: var(--font-size-xl);
   width: 1.6rem;
   flex-shrink: 0;
 }
@@ -1128,7 +1142,7 @@
 .savedSectionTitle {
   color: var(--color-text);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.858rem;
+  font-size: var(--font-size-sm);
   font-weight: 400;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1140,7 +1154,7 @@
   background: #eef1f0;
   border-radius: 999px;
   color: var(--color-accent);
-  font-size: 0.77rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   padding: 0.1rem 0.5rem;
   flex-shrink: 0;
@@ -1153,7 +1167,7 @@
 
 .savedEmpty {
   color: #8a94a0;
-  font-size: 0.88rem;
+  font-size: var(--font-size-base);
   margin: 0;
 }
 
@@ -1163,7 +1177,7 @@
   border-radius: 6px;
   color: var(--color-accent);
   cursor: pointer;
-  font-size: 0.825rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   padding: 0.4rem 0.6rem;
   margin-bottom: 0.5rem;
@@ -1237,7 +1251,7 @@
 .savedKeywordLabel {
   color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.836rem;
+  font-size: var(--font-size-sm);
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -1251,7 +1265,7 @@
   color: #b91c1c;
   cursor: pointer;
   flex-shrink: 0;
-  font-size: 1.045rem;
+  font-size: var(--font-size-lg);
   font-weight: 700;
   line-height: 1;
   padding: 0;
@@ -1268,7 +1282,7 @@
   color: var(--color-accent);
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.825rem;
+  font-size: var(--font-size-sm);
   font-weight: 400;
   padding: 0.2rem 0.6rem;
 }
@@ -1322,7 +1336,7 @@
   border-radius: 5px;
   color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.792rem;
+  font-size: var(--font-size-sm);
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -1342,7 +1356,7 @@
   border-radius: 5px;
   color: #ffffff;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.792rem;
+  font-size: var(--font-size-sm);
   font-weight: 400;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -1360,7 +1374,7 @@
 .savedChatName {
   color: var(--color-accent);
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 0.902rem;
+  font-size: var(--font-size-base);
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -1368,7 +1382,7 @@
 
 .savedChatTraits {
   color: var(--color-accent);
-  font-size: 0.792rem;
+  font-size: var(--font-size-sm);
   font-style: italic;
 }
 
@@ -1387,7 +1401,7 @@
   border-radius: 4px;
   padding: 0.1rem 0.4rem;
   margin: 0.1rem 0;
-  font-size: 0.792rem;
+  font-size: var(--font-size-sm);
   font-style: italic;
   line-height: 1.3;
   overflow: hidden;
@@ -1405,7 +1419,7 @@
 
 .savedChatMeta {
   color: var(--color-muted);
-  font-size: 0.682rem;
+  font-size: var(--font-size-xs);
 }
 
 .savedResume {
@@ -1443,7 +1457,7 @@
   color: #b91c1c;
   cursor: pointer;
   flex-shrink: 0;
-  font-size: 1.045rem;
+  font-size: var(--font-size-lg);
   font-weight: 700;
   line-height: 1;
   padding: 0 0.15rem;
@@ -1470,7 +1484,7 @@
 .errorIcon {
   flex-shrink: 0;
   color: #c0575c;
-  font-size: 1.045rem;
+  font-size: var(--font-size-lg);
   line-height: 1.4;
 }
 
@@ -1491,13 +1505,13 @@
   margin: 0 0 0.2rem;
   color: #8a3a3d;
   font-weight: 600;
-  font-size: 0.935rem;
+  font-size: var(--font-size-base);
 }
 
 .errorDetail {
   margin: 0;
   color: #a15a5d;
-  font-size: 0.858rem;
+  font-size: var(--font-size-sm);
   line-height: 1.4;
   word-break: break-word;
 }
@@ -1513,7 +1527,7 @@
   color: #8a3a3d;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.9625rem;
+  font-size: var(--font-size-base);
   font-weight: 400;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1537,7 +1551,7 @@
   box-shadow: 0 6px 18px rgba(28, 40, 51, 0.06);
   color: var(--color-muted);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.836rem;
+  font-size: var(--font-size-sm);
   margin-top: 1rem;
   padding: 0.85rem 1rem;
   text-align: center;
@@ -1561,7 +1575,7 @@
   border-radius: 999px;
   color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: 0.792rem;
+  font-size: var(--font-size-sm);
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 0.2rem 0.65rem;
@@ -1627,6 +1641,16 @@
   flex: 1 1 auto;
 }
 
+/* When the dossier is the selected panel, shrink the now-collapsed setup
+   panel's peek strip from the generic 30% down to 20% — since the dossier
+   itself grows to fill whatever's left (flex: auto, above), that extra 10
+   percentage points of .focusStack's height goes straight to the dossier,
+   letting it come up further. Scoped to .agentCard specifically so the
+   reverse case (setup active, dossier collapsed) keeps its own 30% peek. */
+.focusStack .agentCard.panelCollapsed {
+  flex: 1 1 20%;
+}
+
 /* Collapsed content stays visible (cropped) but inert — a tap anywhere
    on the panel should just expand it, not fire the button/link
    underneath the user's thumb. */
@@ -1688,11 +1712,11 @@
   /* Saved Specialties pool + its section header read too small to tap/read
      comfortably on a phone at the base desktop-tuned sizes above. */
   .savedSectionTitle {
-    font-size: 0.968rem;
+    font-size: var(--font-size-base);
   }
 
   .savedSectionCount {
-    font-size: 0.858rem;
+    font-size: var(--font-size-sm);
     padding: 0.15rem 0.55rem;
   }
 
@@ -1702,15 +1726,15 @@
   }
 
   .savedKeywordLabel {
-    font-size: 0.968rem;
+    font-size: var(--font-size-base);
   }
 
   .savedKeywordDelete {
-    font-size: 1.155rem;
+    font-size: var(--font-size-lg);
   }
 
   .savedKeywordAddNew {
-    font-size: 0.946rem;
+    font-size: var(--font-size-base);
     padding: 0.35rem 0.75rem;
   }
 }

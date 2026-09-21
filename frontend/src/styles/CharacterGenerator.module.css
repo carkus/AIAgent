@@ -24,7 +24,7 @@
   color: var(--color-accent-secondary);
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 0.9rem;
+  font-size: var(--font-size-base);
   padding: 0.3rem 0.4rem;
 }
 
@@ -35,7 +35,7 @@
 .pageTitle {
   margin: 0;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 1.05rem;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--color-text);
 }
@@ -75,7 +75,7 @@
   border: 2.25px solid var(--color-accent);
   border-radius: 6px;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.8rem;
+  font-size: var(--font-size-sm);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   padding: 0.2rem 0.55rem;
@@ -86,7 +86,7 @@
 .letterhead {
   margin: 0 0 0.75rem;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.7rem;
+  font-size: var(--font-size-xs);
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--color-muted);
@@ -95,7 +95,7 @@
 .name {
   margin: 0;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 1.5rem;
+  font-size: var(--font-size-xl);
   font-weight: 400;
   letter-spacing: 0.03em;
   color: var(--color-accent);
@@ -105,7 +105,7 @@
   margin: 0.2rem 0 0;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-style: italic;
-  font-size: 0.9rem;
+  font-size: var(--font-size-base);
   color: var(--color-accent-secondary);
 }
 
@@ -118,13 +118,13 @@
 .roleLine {
   margin: 0;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.95rem;
+  font-size: var(--font-size-base);
   color: var(--color-text);
 }
 
 .bureauLine {
   margin: 0.15rem 0 0;
-  font-size: 0.82rem;
+  font-size: var(--font-size-sm);
   color: var(--color-muted);
 }
 
@@ -141,7 +141,7 @@
   border-radius: 5px;
   color: var(--color-muted);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.68rem;
+  font-size: var(--font-size-xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 0.2rem 0.5rem;
@@ -150,7 +150,7 @@
 .tagline {
   margin: 0;
   font-style: italic;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   color: var(--color-text);
   line-height: 1.4;
 }
@@ -159,14 +159,14 @@
   display: flex;
   justify-content: space-between;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   color: var(--color-muted);
 }
 
 .clearance {
   margin: 0.3rem 0 0;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.68rem;
+  font-size: var(--font-size-xs);
   letter-spacing: 0.08em;
   color: var(--color-accent);
   text-align: right;
@@ -186,7 +186,7 @@
   color: #fff;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   padding: 0.65rem 1rem;
@@ -204,7 +204,7 @@
   color: var(--color-text);
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   padding: 0.65rem 1rem;

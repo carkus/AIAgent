@@ -20,6 +20,12 @@ toward (the underlying goal, or which specialty is load-bearing when they
 pull different ways), not just restate each keyword back into the template
 slots. If a generated brief ever reads like a keyword list wearing a
 sentence, that's a prompt regression, not an acceptable output.
+
+Active Behavior toggles and Personality traits (Setup.tsx's BEHAVIOR_TOGGLES
+/ PERSONALITY_TRAITS — e.g. "Max Delegation", "Meticulous") change what the
+bootstrapped agent will actually do just as much as a specialty does, so the
+brief must fold their real effect into the same paragraph rather than only
+ever discussing the keywords. See generate_brief's `behaviors`/`traits` args.
 """
 import json
 from llm_client import create_chat_completion
@@ -30,10 +36,12 @@ Agent type: {agent_type}
 Agent name: {agent_name}
 Specialties/keywords: {keywords}
 Location focus: {location}
+Active behaviors: {behaviors}
+Active personality traits: {traits}
 {prior_qa}
 Most of the time, just write the brief directly and confidently — you don't need the user's permission to interpret a reasonable set of specialties. Only when the specialties are genuinely ambiguous, sparse, or pulling in conflicting directions (e.g. a single very broad word with no other context, two contradictory domains, or a location need that isn't clear) should you ask the user ONE short, specific clarifying question instead of guessing — don't ask just because you *could* be more specific.
 
-When writing the brief: one tight paragraph, 2-3 sentences, third person, in this house style — "Agent {agent_name} reads these specialties as a mandate to <interpret/act on the topics>{location_clause}. If commissioned, it will <2-3 concrete actions> and report back with <what>." Treat that shape as a scaffold, not a mold: actually work out what direction the specialties point in together — the underlying goal they share, or which one is load-bearing if they pull in different directions — and write THAT. Do not just walk the keyword list in order and restate each one into a slot; if the brief would read the same with the keywords shuffled, rewrite it.
+When writing the brief: one tight paragraph, 2-3 sentences, third person, in this house style — "Agent {agent_name} reads these specialties as a mandate to <interpret/act on the topics>{location_clause}. If commissioned, it will <2-3 concrete actions> and report back with <what>." Treat that shape as a scaffold, not a mold: actually work out what direction the specialties point in together — the underlying goal they share, or which one is load-bearing if they pull in different directions — and write THAT. Do not just walk the keyword list in order and restate each one into a slot; if the brief would read the same with the keywords shuffled, rewrite it. If any behaviors or personality traits are active (not "(none)"), the brief MUST also actually account for them — work their real effect on how the agent will act into the same paragraph (e.g. a "Max Delegation" behavior means it will split the work across worker agents; a "Meticulous" trait means it will flag caveats and uncertainty) rather than only ever discussing the specialties. Do not just tack a trait/behavior's label onto the end as a dangling clause — write the sentence as if that behavior/trait actually governs how the actions in it get carried out.
 
 Separately from the ambiguity check above, also assess whether commissioning this agent as specified is likely to go badly, and if so add ONE short, specific warning (a plain sentence, no hedging disclaimer boilerplate). Flag it when you see:
 - More than {max_delegations} distinct specialties/topics — the platform delegates one worker per topic with a cap of {max_delegations} per turn, so extras will be dropped or starved rather than covered.
@@ -58,6 +66,8 @@ def generate_brief(
     prior_question: str | None = None,
     prior_answer: str | None = None,
     max_delegations: int | None = None,
+    behaviors: list[str] | None = None,
+    traits: list[str] | None = None,
 ) -> dict | None:
     """
     Returns {"type": "brief" | "question", "text": "...", "warning": "..." | None}
@@ -80,6 +90,8 @@ def generate_brief(
         agent_name=agent_name or "Agent",
         keywords=", ".join(keywords) if keywords else "(none yet)",
         location=location or "(none specified)",
+        behaviors=", ".join(behaviors) if behaviors else "(none)",
+        traits=", ".join(traits) if traits else "(none)",
         location_clause=location_clause,
         prior_qa=prior_qa,
         max_delegations=max_delegations or 6,

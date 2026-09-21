@@ -25,8 +25,13 @@
   background: #ffffff;
   border: 1px solid var(--color-border);
   border-radius: 14px;
-  width: min(1100px, 96vw);
-  height: min(90vh, 900px);
+  /* Shrink/grow to the image's own size — a small diagram gets a small
+     page instead of being stretched to fill a fixed box, and a large one
+     is capped at the viewport with scroll/zoom taking over from there. */
+  width: auto;
+  height: auto;
+  max-width: 96vw;
+  max-height: min(90vh, 900px);
   overflow: auto;
   padding: 2.5rem;
   box-shadow: 0 24px 64px rgba(28, 40, 51, 0.22);
@@ -42,14 +47,32 @@
 }
 
 .image {
-  width: 100%;
+  transform-origin: center center;
+  cursor: zoom-in;
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .image svg {
   display: block;
-  width: 100%;
+  width: auto;
   height: auto;
   max-width: 100%;
+  max-height: 100%;
+}
+
+.zoomBadge {
+  position: absolute;
+  top: 0.9rem;
+  left: 0.9rem;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+  z-index: 1;
 }
 
 .closeBtn {
@@ -63,7 +86,7 @@
   height: 2.1rem;
   color: var(--color-muted);
   cursor: pointer;
-  font-size: 0.99rem;
+  font-size: var(--font-size-base);
   line-height: 1;
   z-index: 1;
   transition: background-color 0.15s, color 0.15s;

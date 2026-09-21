@@ -156,6 +156,40 @@ def _extract_text_tool_calls(content: str | None, valid_names: set[str]):
             if len(calls) == len(obj):
                 return calls
 
+    # Fall back further to one-or-more bare JSON call objects, each on its
+    # own line, allowed to be preceded by ordinary narration lines. Confirmed
+    # against a real turn: "I'm about to fetch the population data for
+    # Sydney, Melbourne, and Brisbane.\n\n{\"name\": \"fetch_page\", ...}\n
+    # {...}\n{...}" — case 2 above requires EVERY line to be JSON, so it
+    # aborts on that leading sentence and the raw JSON gets shown to the user
+    # as the final answer instead of being executed. Once the first line
+    # starting with '{' appears, every subsequent non-blank line must itself
+    # be a valid call — a stray '{' inside genuine prose that isn't followed
+    # by more call lines still fails this and falls through, so an isolated
+    # illustrative example is not mistaken for a real call.
+    calls = []
+    started = False
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if not started:
+            if not line.startswith("{"):
+                continue
+            started = True
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            calls = None
+            break
+        call = _as_call(obj)
+        if not call:
+            calls = None
+            break
+        calls.append(call)
+    if calls:
+        return calls
+
     # Fall back further to whitespace-concatenated JSON objects with no
     # separators at all. Two distinct shapes land here:
     #   (a) confirmed against qwen2.5-coder:7b — a stuck local model
@@ -403,7 +437,13 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
    Perth the least — a $15k spread across the three cities."), not a
    paragraph re-explaining every number the diagram already shows. For a
    single flat fact (one number, one listing), just say it plainly; don't
-   force a diagram where there's nothing to compare.
+   force a diagram where there's nothing to compare. In a `pie` or
+   `xychart-beta` block, every value MUST be a bare number Mermaid can
+   parse (e.g. `"Sydney" : 5200000`) — never a unit suffix or word like
+   `5M`, `$120k`, or `"about 5 million"`; that fails to parse and the
+   diagram silently doesn't render at all. Put the unit in the title or
+   the follow-up sentence instead (e.g. title `"Population (millions)"`
+   with bare values `5.2`).
 
 6. BEFORE doing anything else this turn, if the task needs more than one step
    (multiple tool calls, delegated workers, or several distinct pieces of
@@ -432,7 +472,16 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
    Your own reply should be short: at most a few sentences comparing or
    synthesizing across workers (or noting anything none of them covered),
    never a repeat of content they already reported.
----""" if allow_delegation else "\n---")
+9. DRIVE THE CONVERSATION FORWARD.""" if allow_delegation else """
+7. DRIVE THE CONVERSATION FORWARD.""") + """ Close your reply with one
+   short, concrete sentence suggesting a specific next move — a follow-up
+   question worth digging into, a comparison to add, a next report to run
+   — phrased as a suggestion the user can accept or ignore, not a vague
+   "let me know if you have any questions." Base it on what you just
+   found, not a generic prompt. Skip this only for a trivial exchange: a
+   greeting, a reply that is itself a clarifying question back to the
+   user, or a case where there is genuinely nowhere further to take it.
+---"""
 
     tool_definitions = agent_config["tools"]
 

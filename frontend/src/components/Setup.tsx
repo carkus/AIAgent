@@ -221,17 +221,23 @@ function joinNatural(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
 }
 
-function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], loc: string, agentName: string): string {
+// Same-turn fallback while the AI-drafted brief (backend/src/brief.py) is
+// loading or has failed — must still mention active behaviors/traits, not
+// just the specialty keywords, since those change what the agent will
+// actually do just as much as a specialty does (see brief.py's own note).
+function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], loc: string, agentName: string, behaviors: string[] = [], traits: string[] = []): string {
   const topics = joinNatural(keywords)
   const beat = loc ? ` in ${loc}` : ''
   const name = `Agent ${agentName}`
+  const extras = [...behaviors, ...traits]
+  const extrasClause = extras.length > 0 ? ` It will do this with ${joinNatural(extras)} behavior active.` : ''
   switch (agentType) {
     case 'research':
-      return `${name} reads these specialties as a mandate to research and analyze ${topics}${beat}. If commissioned, it will search, cross-reference sources, and report back with findings and key data points.`
+      return `${name} reads these specialties as a mandate to research and analyze ${topics}${beat}. If commissioned, it will search, cross-reference sources, and report back with findings and key data points.${extrasClause}`
     case 'job_search':
-      return `${name} reads these specialties as a mandate to find roles in ${topics}${beat}. If commissioned, it will search listings, screen them against your criteria, and report back the strongest matches.`
+      return `${name} reads these specialties as a mandate to find roles in ${topics}${beat}. If commissioned, it will search listings, screen them against your criteria, and report back the strongest matches.${extrasClause}`
     default:
-      return `${name} reads these specialties as a mandate to track ${topics}${beat}. If commissioned, it will monitor developments and report back on what's most relevant.`
+      return `${name} reads these specialties as a mandate to track ${topics}${beat}. If commissioned, it will monitor developments and report back on what's most relevant.${extrasClause}`
   }
 }
 
@@ -552,9 +558,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }
     window.clearTimeout(briefDebounceRef.current)
     const requestId = ++briefRequestIdRef.current
+    const behaviorLabels = BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.label)
+    const traitLabels = (PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research)
+      .filter(t => selectedTraits.includes(t.id)).map(t => t.label)
     briefDebounceRef.current = window.setTimeout(() => {
       setBriefLoading(true)
-      fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel, undefined, undefined, maxDelegations)
+      fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel, undefined, undefined, maxDelegations, behaviorLabels, traitLabels)
         .then(result => {
           if (requestId !== briefRequestIdRef.current) return
           setAiBrief(result)
@@ -570,14 +579,17 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }, 700)
     return () => window.clearTimeout(briefDebounceRef.current)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentType, keywords, location, agentName, maxDelegations])
+  }, [agentType, keywords, location, agentName, maxDelegations, activeToggles, selectedTraits])
 
   function handleBriefAnswerSubmit() {
     const answer = briefAnswer.trim()
     if (!answer || !aiBrief || aiBrief.type !== 'question' || answeringBrief) return
     setAnsweringBrief(true)
     const requestId = ++briefRequestIdRef.current
-    fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel, aiBrief.text, answer, maxDelegations)
+    const behaviorLabels = BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.label)
+    const traitLabels = (PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research)
+      .filter(t => selectedTraits.includes(t.id)).map(t => t.label)
+    fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel, aiBrief.text, answer, maxDelegations, behaviorLabels, traitLabels)
       .then(result => {
         if (requestId !== briefRequestIdRef.current) return
         setAiBrief(result)
@@ -1211,7 +1223,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </button>
             {briefOpen && (
               keywords.length === 0 ? (
-                <p className={styles.agentSummaryText}>Add Specialties and behaviors to build this agent’s brief.</p>
+                <p className={styles.briefPlaceholderText}>Add Specialties and behaviors to build this agent’s brief.</p>
               ) : aiBrief?.type === 'question' ? (
                 <>
                   <div className={styles.briefQuestionBox}>
@@ -1244,7 +1256,14 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               ) : (
                 <>
                   <p className={styles.agentSummaryText}>
-                    {aiBrief?.text ?? buildAgentBrief(agentType, keywords, location.trim(), agentName)}
+                    {aiBrief?.text ?? buildAgentBrief(
+                      agentType,
+                      keywords,
+                      location.trim(),
+                      agentName,
+                      BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.label),
+                      (PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research).filter(t => selectedTraits.includes(t.id)).map(t => t.label),
+                    )}
                     {briefLoading && <span className={styles.briefLoadingHint}> · redrafting…</span>}
                   </p>
                   {briefWarning && (

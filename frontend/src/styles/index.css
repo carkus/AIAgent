@@ -22,6 +22,17 @@
   --color-accent: #053750;
   --color-accent-hover: #164a4e;
   --color-accent-secondary: #3f7ea0;
+
+  /* Site-wide type scale — five sizes, full stop. Every component's
+     font-size should read one of these instead of a one-off literal;
+     that's what let ~40 slightly-different rem values (each picked
+     independently, component by component, over time) collapse back
+     down to a single deliberate scale. */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.75rem;
 }
 
 html, body {

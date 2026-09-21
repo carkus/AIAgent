@@ -16,6 +16,25 @@ import splashLogo from '../assets/splash_logo.png'
 
 type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent'
 
+// Lenient on purpose (trailing whitespace after the fence marker, CRLF,
+// casing, trailing blank lines before the closing fence) — the earlier,
+// strict ```mermaid\n version silently failed to match real model output
+// whose fence didn't line up exactly, which left every diagram unrendered
+// instead of just falling back to a plain code block.
+const MERMAID_FENCE_RE = /```mermaid[ \t]*\r?\n([\s\S]*?)\r?\n?```/gi
+
+// Pulls every ```mermaid fence out of an assistant reply's prose so it can be
+// rendered as its own dedicated block (same treatment planDiagram already
+// gets) instead of sitting inline mid-paragraph inside the flowing markdown.
+function extractMermaidDiagrams(content: string): { text: string; diagrams: string[] } {
+  const diagrams: string[] = []
+  const text = content.replace(MERMAID_FENCE_RE, (_match, chart: string) => {
+    diagrams.push(chart.trim())
+    return ''
+  })
+  return { text, diagrams }
+}
+
 // Mono line icons for the header toolbar — same stroke-based style as
 // Setup.tsx's AgentTypeIcon (currentColor, no fill), styled after plain
 // Office-suite toolbar glyphs (floppy-disk save, clipboard roster, document
@@ -114,13 +133,17 @@ interface Props {
   agentConfig: AgentConfig
   agentName: string
   onReset: () => void
+  // Navigates back to the Setup/search screen without touching the current
+  // conversation's state — distinct from onReset (which recommissions this
+  // same agent, wiping its messages). Wired to the header logo below.
+  onBackToSetup: () => void
   // Present when jumping straight in from a saved chat (App.tsx's
   // onResumeChat), bypassing bootstrap entirely.
   initialMessages?: SavedChatMessage[]
   chatId?: string
 }
 
-export default function Chat({ agentConfig, agentName, onReset, initialMessages, chatId }: Props) {
+export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, initialMessages, chatId }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages ?? [])
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
@@ -392,11 +415,15 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
     <div className={styles.root}>
       <header className={styles.header}>
         <div className={styles.headerIdentity}>
-          {/* Decorative branding only — this used to double as a reset
-              button, which meant tapping the logo silently wiped the
-              current conversation. That's what "New agent" in the toolbar
-              is for, explicitly. */}
-          <img src={splashLogo} alt="Agent One" className={styles.headerLogo} />
+          {/* Goes back to the Setup/search screen — navigation only, unlike
+              "New agent" in the toolbar (which recommissions this same agent
+              and wipes its messages). A past version of this logo doubled as
+              that reset button, which silently lost the conversation; this
+              button calls a distinct onBackToSetup instead, so the chat
+              state itself is left untouched. */}
+          <button type="button" className={styles.headerLogoBtn} onClick={onBackToSetup} aria-label="Back to search">
+            <img src={splashLogo} alt="Agent One" className={styles.headerLogo} />
+          </button>
 
           <div className={styles.headerIdentityText}>
             <span className={styles.headerTitle}>Agent {agentName}</span>
@@ -523,44 +550,51 @@ export default function Chat({ agentConfig, agentName, onReset, initialMessages,
             )}
             {msg.content && (
               msg.role === 'assistant'
-                ? (
-                  <div
-                    className={styles.markdown}
-                    ref={el => {
-                      if (el) markdownRefs.current.set(i, el)
-                      else markdownRefs.current.delete(i)
-                    }}
-                  >
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        pre({ children }) {
-                          const codeEl = children as React.ReactElement<{ className?: string }> | undefined
-                          const className = codeEl?.props?.className ?? ''
-                          if (className === 'language-mermaid') return <>{children}</>
-                          const lang = /language-(\S+)/.exec(className)?.[1] ?? 'text'
-                          return <CodeBlock language={lang}>{children}</CodeBlock>
-                        },
-                        code({ className, children, ...props }) {
-                          const isMermaid = className === 'language-mermaid'
-                          if (isMermaid) {
-                            return <MermaidDiagram chart={String(children).trim()} />
-                          }
-                          return <code className={className} {...props}>{children}</code>
-                        },
-                        table({ children, ...props }) {
-                          return (
-                            <div className={styles.tableWrap}>
-                              <table {...props}>{children}</table>
-                            </div>
-                          )
-                        },
-                      }}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
-                )
+                ? (() => {
+                    const { text, diagrams } = extractMermaidDiagrams(msg.content)
+                    return (
+                      <>
+                        {diagrams.length > 0 && (
+                          <div className={styles.extractedDiagrams}>
+                            {diagrams.map((chart, di) => (
+                              <MermaidDiagram key={di} chart={chart} />
+                            ))}
+                          </div>
+                        )}
+                        <div
+                          className={styles.markdown}
+                          ref={el => {
+                            if (el) markdownRefs.current.set(i, el)
+                            else markdownRefs.current.delete(i)
+                          }}
+                        >
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              pre({ children }) {
+                                const codeEl = children as React.ReactElement<{ className?: string }> | undefined
+                                const className = codeEl?.props?.className ?? ''
+                                const lang = /language-(\S+)/.exec(className)?.[1] ?? 'text'
+                                return <CodeBlock language={lang}>{children}</CodeBlock>
+                              },
+                              code({ className, children, ...props }) {
+                                return <code className={className} {...props}>{children}</code>
+                              },
+                              table({ children, ...props }) {
+                                return (
+                                  <div className={styles.tableWrap}>
+                                    <table {...props}>{children}</table>
+                                  </div>
+                                )
+                              },
+                            }}
+                          >
+                            {text}
+                          </ReactMarkdown>
+                        </div>
+                      </>
+                    )
+                  })()
                 : <p className={styles.bubbleText}>{msg.content}</p>
             )}
             {msg.toolCalls && <ToolActivity toolCalls={msg.toolCalls} live={false} location={agentConfig.location} />}
