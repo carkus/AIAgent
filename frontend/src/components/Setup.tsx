@@ -3,23 +3,12 @@ import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, delet
 import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
 import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
+import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect } from '../agentTypes'
 import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback } from '../modelLabel'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
 import SettingsModal from './SettingsModal'
-
-// Each template controls both the purpose text sent to bootstrap (which
-// determines what tools/behaviour Claude designs) and what the keyword
-// chips mean in that context. `search_jobs` (live Adzuna listings) and
-// `fetch_page` (general web fetch) are the two built-in primitives every
-// agent gets — see backend/src/agent_stream.py — so "Job search" leans on
-// the former, "Research" the latter, and "General" leaves it up to bootstrap.
-interface AgentTemplate {
-  id: AgentTemplateId
-  label: string
-  keywordPlaceholder: string
-  buildPurpose: (keywords: string[], location: string) => string
-}
+import CharacterGenerator from './CharacterGenerator'
 
 // Mono line icons matching the app's stroke-based visual style — plain
 // geometric shapes (magnifier / briefcase / compass), not emoji, so they
@@ -125,41 +114,21 @@ function BehaviorIcon({ id }: { id: string }) {
   }
 }
 
-const AGENT_TEMPLATES: AgentTemplate[] = [
-  {
-    id: 'general',
-    label: 'General assistant',
-    keywordPlaceholder: 'Type a topic, press Enter…',
-    buildPurpose: (keywords, loc) =>
-      `General-purpose assistant covering the following topics: ${keywords.join(', ')}` +
-      `${loc ? ` (relevant to ${loc})` : ''}. ` +
-      `Decide what information or tools each topic needs and present clear, ` +
-      `well-organised findings.`,
-  },
-  {
-    id: 'research',
-    label: 'Researcher',
-    keywordPlaceholder: 'Buid your agent.',
-    buildPurpose: (keywords, loc) =>
-      `Research agent for the following keywords: ${keywords.join(', ')}` +
-      `${loc ? ` in ${loc}` : ''}. ` +
-      `Search for relevant information, analyse patterns and trends, ` +
-      `and present clear findings for each keyword.`,
-  },
-  {
-    id: 'job_search',
-    label: 'Job search',
-    keywordPlaceholder: 'Type a job title or skill, press Enter…',
-    buildPurpose: (keywords, loc) =>
-      `Job search agent for the following roles or skills: ${keywords.join(', ')}` +
-      `${loc ? ` in ${loc}` : ''}. ` +
-      `Search live job listings, compare requirements and salary across postings, ` +
-      `and present clear, ranked findings for each role or skill.`,
-  },
-]
-
-function getTemplate(id: AgentTemplateId | undefined): AgentTemplate {
-  return AGENT_TEMPLATES.find(t => t.id === id) ?? AGENT_TEMPLATES[0]
+// Same mono line-art style as AgentTypeIcon/BehaviorIcon above — a plain
+// drama-mask outline (face + notched ears + eyes/mouth) standing in for the
+// old 🎭 emoji, so the character generator button reads as part of the
+// site's own icon language instead of a colorful one-off glyph.
+function CharacterGenIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 10V9a5 5 0 0 1 10 0v1" />
+      <path d="M7 10a5 5 0 0 0 10 0" />
+      <path d="M9 11v1M15 11v1" />
+      <path d="M9.5 15c1.6 1 3.4 1 5 0" />
+      <path d="M5.5 9c-1.2 0-2 .9-2 2v1c0 1.1.8 2 2 2" />
+      <path d="M18.5 9c1.2 0 2 .9 2 2v1c0 1.1-.8 2-2 2" />
+    </svg>
+  )
 }
 
 interface BehaviorToggle {
@@ -264,43 +233,6 @@ function buildDeterministicWarning(keywords: string[], agentType: AgentTemplateI
   return null
 }
 
-interface PersonalityTrait {
-  id: string
-  label: string
-  // Appended verbatim to the bootstrap purpose string when selected — same
-  // compounding shape as BehaviorToggle.instruction above, so a chosen trait
-  // actually shapes the agent instead of being cosmetic flavor text.
-  instruction: string
-}
-
-// Personality traits the user picks per agent, scoped by agent type so the
-// pool stays relevant (a job-search agent doesn't need "Curious"). Unlike
-// the old auto-picked flavor traits this replaces, nothing here is chosen
-// for the user — an agent has no personality trait unless one is selected.
-export const PERSONALITY_TRAITS: Record<AgentTemplateId, PersonalityTrait[]> = {
-  research: [
-    { id: 'inquisitive', label: 'Inquisitive', instruction: 'Adopt an inquisitive personality: keep pulling on follow-up angles and related questions the user did not explicitly ask for, instead of stopping at the literal specialty.' },
-    { id: 'meticulous', label: 'Meticulous', instruction: 'Adopt a meticulous personality: double-check details, flag caveats and uncertainty explicitly, and never overstate how confident a finding is.' },
-    { id: 'analytical', label: 'Analytical', instruction: 'Adopt an analytical personality: structure findings as comparisons, patterns, and trends rather than a flat narrative summary.' },
-    { id: 'methodical', label: 'Methodical', instruction: 'Adopt a methodical personality: work through each specialty in clear, deliberate order and show the reasoning steps behind a conclusion, not just the conclusion.' },
-    { id: 'curious', label: 'Curious', instruction: 'Adopt a curious personality: call out surprising or noteworthy findings with genuine interest, rather than reporting everything in the same flat tone.' },
-  ],
-  job_search: [
-    { id: 'persistent', label: 'Persistent', instruction: 'Adopt a persistent personality: keep searching across more listings and phrasing variations before concluding nothing suitable exists.' },
-    { id: 'sharp-eyed', label: 'Sharp-eyed', instruction: 'Adopt a sharp-eyed personality: actively flag red flags, mismatches, or unusual terms buried in a listing rather than only reporting the headline fit.' },
-    { id: 'resourceful', label: 'Resourceful', instruction: 'Adopt a resourceful personality: when a search comes up short, try adjacent titles, skills, or locations before giving up.' },
-    { id: 'diligent', label: 'Diligent', instruction: 'Adopt a diligent personality: verify each listing’s requirements against the stated criteria point by point instead of skimming.' },
-    { id: 'discerning', label: 'Discerning', instruction: 'Adopt a discerning personality: rank and filter listings critically, and say plainly when a match is weak rather than padding out the results.' },
-  ],
-  general: [
-    { id: 'adaptable', label: 'Adaptable', instruction: 'Adopt an adaptable personality: shift depth and approach to fit each topic rather than applying one fixed format to all of them.' },
-    { id: 'practical', label: 'Practical', instruction: 'Adopt a practical personality: favor concrete, actionable takeaways over abstract discussion.' },
-    { id: 'attentive', label: 'Attentive', instruction: 'Adopt an attentive personality: track small details across topics and call back to them when relevant instead of treating each one in isolation.' },
-    { id: 'versatile', label: 'Versatile', instruction: 'Adopt a versatile personality: draw connections across the different topics covered rather than reporting on each in a silo.' },
-    { id: 'observant', label: 'Observant', instruction: 'Adopt an observant personality: note what has changed since anything already discussed, and highlight what is genuinely new.' },
-  ],
-}
-
 type SavedSectionId = 'searches' | 'drafts' | 'chats' | 'mcp'
 
 // The last line of a saved chat, shown in the saved-chats list so the user
@@ -347,10 +279,9 @@ interface Props {
   onDone: (config: AgentConfig) => void
   onError: (msg: string) => void
   onResumeChat: (chat: SavedChat) => void
-  onOpenCharacterGenerator: () => void
 }
 
-export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat, onOpenCharacterGenerator }: Props) {
+export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat }: Props) {
   const [agentType, setAgentType] = useState<AgentTemplateId>('general')
   const [keywords, setKeywords] = useState<string[]>([])
   const [draft, setDraft] = useState('')
@@ -476,6 +407,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
   const [locationDetecting, setLocationDetecting] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [characterGenOpen, setCharacterGenOpen] = useState(false)
   // The setup form and the dossier are both too tall to show fully at once
   // without crowding the page, so tapping into either one expands it to
   // ~70% height and collapses the other, at every viewport width (see
@@ -966,15 +898,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         </button>
         <button
           type="button"
-          className={styles.characterGenBtn}
-          onClick={onOpenCharacterGenerator}
-          aria-label="Character generator"
-          title="Character generator"
-        >
-          🎭
-        </button>
-        <button
-          type="button"
           className={styles.brandLogoBtn}
           onClick={resetSearch}
           aria-label="Return to search"
@@ -999,6 +922,17 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 title={describeModelFallback(provider)}
               >
                 🧠 {describeModel(provider, ollamaModel)}
+              </button>
+            </div>
+            <div className={styles.characterGenGroup}>
+              <button
+                type="button"
+                className={styles.characterGenBtn}
+                onClick={ev => { ev.stopPropagation(); setCharacterGenOpen(true) }}
+                aria-label="Agent generator"
+                title="Agent generator"
+              >
+                <span className={styles.characterGenIcon} aria-hidden="true"><CharacterGenIcon /></span>
               </button>
             </div>
           </div>
@@ -1038,6 +972,17 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     )
                   })}
                 </div>
+              )}
+              {personalityOpen && selectedTraits.length > 0 && (
+                <ul className={styles.behaviorEffectsList}>
+                  {(PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research)
+                    .filter(t => selectedTraits.includes(t.id))
+                    .map(t => (
+                      <li key={t.id}>
+                        <span className={styles.behaviorEffectLabel}>{t.label}:</span> {describeTraitEffect(t)}
+                      </li>
+                    ))}
+                </ul>
               )}
             </div>
 
@@ -1168,14 +1113,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         className={active ? styles.behaviorIconBtnActive : styles.behaviorIconBtn}
                         onClick={() => toggleBehavior(t.id)}
                         disabled={bootstrapping}
+                        title={t.description}
                         aria-label={t.label}
                         aria-pressed={active}
                       >
                         <span className={styles.behaviorIconGlyph} aria-hidden="true"><BehaviorIcon id={t.id} /></span>
                         <span className={styles.behaviorIconLabel}>{t.label}</span>
-                        <span className={styles.behaviorIconTooltip} role="tooltip">
-                          <span>{t.description}</span>
-                        </span>
                       </button>
                     )
                   })}
@@ -1696,6 +1639,17 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         searchDefaults={searchDefaults}
         onSearchDefaultsChange={handleSearchDefaultsChange}
         disabled={bootstrapping}
+      />
+
+      <CharacterGenerator
+        isOpen={characterGenOpen}
+        agentType={agentType}
+        onClose={() => setCharacterGenOpen(false)}
+        onEmploy={character => {
+          onAgentNameChange(character.surname)
+          setAgentType(character.agentType)
+          setSelectedTraits(character.traitIds)
+        }}
       />
     </div>
   )

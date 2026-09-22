@@ -203,6 +203,7 @@
   justify-content: flex-end;
   gap: 0.6rem;
   margin-top: calc(20px - 0.85rem);
+  margin-right: 10px;
   flex-shrink: 0;
 }
 
@@ -474,7 +475,7 @@
   margin: 0;
   color: var(--color-text);
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   line-height: 1.55;
   background: #f2f0e6;
   border-left: 3px solid var(--color-accent-secondary);
@@ -516,7 +517,7 @@
   margin: 0;
   color: #6b4d1f;
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   line-height: 1.5;
 }
 
@@ -584,7 +585,7 @@
   margin: 0;
   color: #8f1414;
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   line-height: 1.5;
 }
 
@@ -707,56 +708,6 @@
   color: var(--color-accent);
 }
 
-/* Speech-bubble tooltip (now just the longer description — the label itself
-   is always visible under the icon, see .behaviorIconLabel above) — a
-   plain fade, no bounce/scale-in, to match the flat terminal-readout style
-   of the button itself. Pops DOWNWARD, not upward: this row lives inside
-   .agentCardScroll, which is overflow-y: auto, and a scrollable ancestor
-   clips absolutely-positioned content that overflows above its current
-   scroll position — an upward tooltip was getting silently cut off there.
-   Popping down stays within the scrollable content instead of escaping it. */
-.behaviorIconTooltip {
-  position: absolute;
-  top: calc(100% + 0.55rem);
-  left: 50%;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  width: max-content;
-  max-width: 12rem;
-  background: var(--color-text);
-  color: var(--color-surface);
-  border-radius: 2px;
-  padding: 0.4rem 0.55rem;
-  font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--font-size-xs);
-  line-height: 1.35;
-  text-transform: none;
-  letter-spacing: normal;
-  pointer-events: none;
-  opacity: 0;
-  transform: translate(-50%, 0);
-  transition: opacity 0.15s;
-}
-
-.behaviorIconTooltip::after {
-  content: '';
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-bottom-color: var(--color-text);
-}
-
-.behaviorIconBtn:hover .behaviorIconTooltip,
-.behaviorIconBtn:focus-visible .behaviorIconTooltip,
-.behaviorIconBtnActive:hover .behaviorIconTooltip,
-.behaviorIconBtnActive:focus-visible .behaviorIconTooltip {
-  opacity: 1;
-}
-
 /* One line per active toggle, appearing/growing as they're switched on —
    makes the compounding effect legible instead of leaving the user to
    remember what each pill's title tooltip said. */
@@ -860,22 +811,52 @@
   background: rgba(31, 111, 115, 0.08);
 }
 
-.characterGenBtn {
-  position: absolute;
-  top: 1.1rem;
-  right: 4.6rem;
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  color: var(--color-accent);
-  cursor: pointer;
-  font-size: var(--font-size-lg);
-  line-height: 1;
-  width: 3rem;
-  height: 3rem;
+/* Same beige padded-container treatment as .commissionGroup, so the
+   character-gen action reads as a matching "grouped control" unit rather
+   than a bare icon button floating in the header row. */
+.characterGenGroup {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
+  background: #f2efe4;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.4rem;
+  margin-right: 10px;
+}
+
+.characterGenBtn {
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  box-sizing: border-box;
+  color: var(--color-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s, transform 0.15s;
+}
+
+.characterGenBtn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+  transform: translateY(-1px);
+}
+
+.characterGenIcon {
+  display: inline-flex;
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.characterGenIcon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .characterGenBtn:hover {
@@ -1621,6 +1602,30 @@
 .panelActive {
   flex: 1 1 auto;
   opacity: 1;
+  /* Cap the selected panel so it can never crowd the collapsed one down to
+     nothing — the dossier (whose content is genuinely unbounded) stays
+     readable at up to 70% of the stack instead of claiming the full 100%
+     .panelActive's flex-grow would otherwise pull it to. */
+  max-height: 70%;
+}
+
+/* The setup panel hugs its own content instead of stretching to claim the
+   full height .panelActive normally grabs, so it visibly grows/shrinks as
+   Personality/Specialties/Special Instructions sections are toggled open
+   and closed. Shrink is OFF (unlike a plain flex: 0 1 auto) so it never
+   loses a space fight against the collapsed dossier peek growing to fill
+   leftover room — without this, flexbox proportionally shrinks both
+   siblings whenever their combined natural size exceeds the stack's
+   height, so .agentCardScroll's overflow-y:auto could start scrolling
+   content well before the panel actually reached its 70% cap. max-height:
+   70% (from .panelActive) is still enforced as a hard clamp regardless of
+   flex-shrink, so scrolling only ever kicks in once content genuinely
+   exceeds that 70% ceiling. The dossier panel (.form) is left on
+   .panelActive's plain flex: 1 1 auto — it holds a genuinely long,
+   independently-scrollable list and should keep filling the available
+   height. */
+.focusStack .agentCard.panelActive {
+  flex: 0 0 auto;
 }
 
 .panelCollapsed {
@@ -1635,6 +1640,19 @@
    underneath the user's thumb. */
 .panelCollapsed > * {
   pointer-events: none;
+}
+
+/* Now that the active setup panel only claims its own content height
+   (.focusStack .agentCard.panelActive above) instead of the full
+   .panelActive height, it leaves the rest of the page blank unless
+   something else takes it. The collapsed dossier peek takes it: it still
+   shrink-wraps like any other .panelCollapsed by default, but when it's the
+   dossier specifically, it grows to fill whatever height the agent panel
+   isn't using rather than leaving empty space beneath it. Higher
+   specificity than .panelCollapsed's flex: 0 0 auto wins outright, no
+   ordering dependency. */
+.focusStack .form.panelCollapsed {
+  flex: 1 1 auto;
 }
 
 /* A collapsed setup panel is a read-only summary card — name, location,

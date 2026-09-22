@@ -1,49 +1,61 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { generateCharacter, type Character } from '../characterData'
+import { getTemplate } from '../agentTypes'
+import type { AgentTemplateId } from '../types'
 import styles from '../styles/CharacterGenerator.module.css'
 
-function cardText(c: Character): string {
-  return [
-    `${c.firstName} ${c.surname}  ("${c.callsign}")`,
-    `${c.role} — ${c.bureau}`,
-    `Traits: ${c.traits.join(', ')}`,
-    `"${c.tagline}"`,
-    `ID ${c.idNumber}  •  Issued ${c.issued}  •  ${c.clearance}`,
-  ].join('\n')
-}
+// Overlay modal, opened from Setup's header — generates a free, instant
+// "field agent" dossier card client-side (no bootstrap/LLM call). Doubles
+// as a quick way to eyeball the dossier/stamp visual language and as a
+// shareable, no-cost marketing gimmick. Same overlay/dialog shape as
+// SettingsModal (backdrop click + Escape to dismiss, focus-on-open) rather
+// than a full standalone screen, so opening it doesn't navigate away from
+// whatever the user was doing in Setup.
+export default function CharacterGenerator({ isOpen, agentType, onClose, onEmploy }: { isOpen: boolean; agentType: AgentTemplateId; onClose: () => void; onEmploy: (character: Character) => void }) {
+  const [character, setCharacter] = useState<Character>(() => generateCharacter(agentType))
+  const closeBtnRef = useRef<HTMLButtonElement>(null)
 
-// Standalone screen, reachable from Setup's header — generates a free,
-// instant "field agent" dossier card client-side (no bootstrap/LLM call).
-// Doubles as a quick way to eyeball the dossier/stamp visual language and
-// as a shareable, no-cost marketing gimmick on its own link.
-export default function CharacterGenerator({ onBack }: { onBack: () => void }) {
-  const [character, setCharacter] = useState<Character>(generateCharacter)
-  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!isOpen) return
+    // Regenerate against Setup's current type on every open, so a type
+    // switched since the last time this was opened isn't left showing a
+    // stale, mismatched personality pool.
+    setCharacter(generateCharacter(agentType))
+    closeBtnRef.current?.focus()
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, onClose])
 
   function handleGenerate() {
-    setCopied(false)
-    setCharacter(generateCharacter())
+    setCharacter(generateCharacter(agentType))
   }
 
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(cardText(character))
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // Clipboard access can be denied (permissions, non-secure context) —
-      // there's nothing actionable to do beyond not showing "Copied".
-    }
+  function handleEmploy() {
+    onEmploy(character)
+    onClose()
   }
+
+  if (!isOpen) return null
 
   return (
-    <div className={styles.root}>
+    <div className={styles.overlay} onClick={onClose}>
+      <div
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="character-gen-title"
+        onClick={e => e.stopPropagation()}
+      >
+      <span className={styles.dossierTab} aria-hidden="true">Agent File</span>
       <div className={styles.header}>
-        <button type="button" className={styles.backBtn} onClick={onBack}>
-          &larr; Back
+        <h1 id="character-gen-title" className={styles.pageTitle}>Agent Generator</h1>
+        <button type="button" ref={closeBtnRef} className={styles.closeBtn} onClick={onClose} aria-label="Close">
+          &times;
         </button>
-        <h1 className={styles.pageTitle}>Character Generator</h1>
-        <span className={styles.headerSpacer} aria-hidden="true" />
       </div>
 
       <div className={styles.stage}>
@@ -56,7 +68,7 @@ export default function CharacterGenerator({ onBack }: { onBack: () => void }) {
           <div className={styles.divider} />
 
           <p className={styles.roleLine}>{character.role}</p>
-          <p className={styles.bureauLine}>{character.bureau}</p>
+          <p className={styles.bureauLine}>{character.bureau} · {getTemplate(character.agentType).label}</p>
 
           <div className={styles.traitRow}>
             {character.traits.map(t => (
@@ -79,10 +91,11 @@ export default function CharacterGenerator({ onBack }: { onBack: () => void }) {
           <button type="button" className={styles.generateBtn} onClick={handleGenerate}>
             Generate New Agent
           </button>
-          <button type="button" className={styles.copyBtn} onClick={handleCopy}>
-            {copied ? 'Copied!' : 'Copy as Text'}
+          <button type="button" className={styles.employBtn} onClick={handleEmploy}>
+            Employ Agent
           </button>
         </div>
+      </div>
       </div>
     </div>
   )

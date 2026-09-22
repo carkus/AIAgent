@@ -2,11 +2,10 @@ import { useState } from 'react'
 import Setup from './components/Setup'
 import Chat from './components/Chat'
 import SplashScreen from './components/SplashScreen'
-import CharacterGenerator from './components/CharacterGenerator'
 import type { AgentConfig, SavedChat } from './types'
 import { SURNAMES } from './surnames'
 
-type Phase = 'splash' | 'setup' | 'bootstrapping' | 'chat' | 'characters'
+type Phase = 'splash' | 'setup' | 'bootstrapping' | 'chat'
 
 function randomSurname(): string {
   return SURNAMES[Math.floor(Math.random() * SURNAMES.length)]
@@ -97,10 +96,7 @@ export default function App() {
           onDone={handleBootstrapDone}
           onError={handleBootstrapError}
           onResumeChat={handleResumeChat}
-          onOpenCharacterGenerator={() => setPhase('characters')}
         />
-      ) : phase === 'characters' ? (
-        <CharacterGenerator onBack={() => setPhase('setup')} />
       ) : agentConfig ? (
         <Chat
           key={chatKey}

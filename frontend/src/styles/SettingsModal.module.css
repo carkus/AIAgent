@@ -40,22 +40,29 @@
   flex-shrink: 0;
 }
 
+/* Slanted trapezoid instead of a plain rounded-rect chip, so this reads as
+   an actual manila-folder tab rather than a floating label. clip-path
+   clips the border along with the fill, so the border is faked back in via
+   stacked 1px drop-shadows (which follow the clipped silhouette) instead
+   of a real border. */
 .dossierTab {
   position: absolute;
   top: -1.05rem;
   left: 0.75rem;
   z-index: 1;
   background: #ede4cd;
-  border: 1px solid #cfbf94;
-  border-bottom: none;
-  border-radius: 5px 5px 0 0;
+  clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%);
   color: #6b5a32;
   font-family: 'Share Tech Mono', monospace;
   font-size: var(--font-size-xs);
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.25rem 0.6rem 0.35rem;
+  padding: 0.3rem 0.95rem 0.35rem;
+  filter:
+    drop-shadow(0 -1px 0 #cfbf94)
+    drop-shadow(-1px 0 0 #cfbf94)
+    drop-shadow(1px 0 0 #cfbf94);
 }
 
 .title {

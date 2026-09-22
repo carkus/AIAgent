@@ -7,6 +7,8 @@
 // for the surname half of the name, paired with a vintage first-name pool
 // and a noir callsign for extra flavor.
 import { SURNAMES } from './surnames'
+import { AGENT_TEMPLATES, PERSONALITY_TRAITS } from './agentTypes'
+import type { AgentTemplateId } from './types'
 
 const FIRST_NAMES = [
   'Eleanor', 'Marcus', 'Vivian', 'Desmond', 'Odette', 'Roland', 'Thea', 'Gideon',
@@ -39,12 +41,6 @@ const BUREAUS = [
   'Office of Unlisted Affairs', 'Third Registry',
 ]
 
-const TRAITS = [
-  'METICULOUS', 'RESOURCEFUL', 'UNFLAPPABLE', 'TACITURN', 'RUTHLESS', 'CHARMING',
-  'PARANOID', 'METHODICAL', 'RECKLESS', 'LOYAL', 'EVASIVE', 'OBSERVANT',
-  'PERSUASIVE', 'STOIC', 'CUNNING', 'DILIGENT',
-]
-
 const TAGLINES = [
   'Never files a report the same way twice.',
   'Trusts nobody, remembers everybody.',
@@ -73,8 +69,14 @@ export interface Character {
   firstName: string
   surname: string
   callsign: string
+  // Real agent type + personality trait ids (from agentTypes.ts, the same
+  // pools Setup.tsx's own Type/Personality controls use) — not just cosmetic
+  // dossier flavor, so "Employ Agent" can actually set Setup's Agent Type
+  // and Personality selections to match instead of only the display name.
+  agentType: AgentTemplateId
   role: string
   bureau: string
+  traitIds: string[]
   traits: string[]
   tagline: string
   clearance: string
@@ -111,14 +113,23 @@ function randomIssueDate(): string {
   return `${day} ${month} ${year}`
 }
 
-export function generateCharacter(): Character {
+// `forcedType` ties the card to whatever agent type is actually selected in
+// Setup right now, so the traits shown are the real, currently-relevant
+// personality pool rather than a random type's — falls back to a random
+// pick only when no type is supplied (there isn't one outside Setup's context).
+export function generateCharacter(forcedType?: AgentTemplateId): Character {
+  const agentType = forcedType ?? pick(AGENT_TEMPLATES).id
+  const traitPool = PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research
+  const chosenTraits = pickMany(traitPool, Math.min(3, traitPool.length))
   return {
     firstName: pick(FIRST_NAMES),
     surname: pick(SURNAMES),
     callsign: `${pick(CALLSIGN_ADJECTIVES)} ${pick(CALLSIGN_NOUNS)}`,
+    agentType,
     role: pick(ROLES),
     bureau: pick(BUREAUS),
-    traits: pickMany(TRAITS, 3),
+    traitIds: chosenTraits.map(t => t.id),
+    traits: chosenTraits.map(t => t.label.toUpperCase()),
     tagline: pick(TAGLINES),
     clearance: pick(CLEARANCES),
     idNumber: randomIdNumber(),
