@@ -9,6 +9,7 @@ import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
 import SettingsModal from './SettingsModal'
 import CharacterGenerator from './CharacterGenerator'
+import HelpTip from './HelpTip'
 
 // Mono line icons matching the app's stroke-based visual style — plain
 // geometric shapes (magnifier / briefcase / compass), not emoji, so they
@@ -128,6 +129,39 @@ function CharacterGenIcon() {
       <path d="M5.5 9c-1.2 0-2 .9-2 2v1c0 1.1.8 2 2 2" />
       <path d="M18.5 9c1.2 0 2 .9 2 2v1c0 1.1-.8 2-2 2" />
     </svg>
+  )
+}
+
+// Shared header for every collapsible subsection in the agent profile card
+// (Behavior/Personality/Specialties/Brief) — a clickable row that expands/
+// collapses the section, plus a "?" HelpTip button. The row itself can't be
+// a <button> (a HelpTip button living inside it would be an invalid
+// button-in-button), so it's a div with role="button" instead; the HelpTip's
+// own onClick stops propagation so opening the popover doesn't also
+// toggle the section.
+function SectionHeader({ label, expanded, onToggle, help, right }: {
+  label: string
+  expanded: boolean
+  onToggle: () => void
+  help: string
+  right?: React.ReactNode
+}) {
+  return (
+    <div
+      className={styles.fieldLabelToggle}
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      onClick={onToggle}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
+    >
+      <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> {label}</span>
+      <span className={styles.fieldLabelRight}>
+        {right}
+        <HelpTip text={help} label={`${label} help`} />
+        <span className={styles.fieldLabelCaret} aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+      </span>
+    </div>
   )
 }
 
@@ -719,7 +753,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // bootstrapped here; this only becomes a real running agent once
   // Commission is clicked.
   async function saveAgentDraft() {
-    if (keywords.length === 0) return
+    if (keywords.length === 0) {
+      setSaveFeedback('Add at least one specialty first')
+      setTimeout(() => setSaveFeedback(null), 2500)
+      return
+    }
     const traitPool = PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research
     const traits = traitPool.filter(t => selectedTraits.includes(t.id)).map(t => t.label)
     try {
@@ -896,6 +934,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         >
           ⚙
         </button>
+        <HelpTip
+          className={styles.panelHelpTip}
+          size="lg"
+          label="What is this screen?"
+          text="This card designs your agent before it exists. Pick an agent type, add specialties for it to focus on, and optionally tune its behavior and personality — the Brief below updates live to show what it's agreed to do. Hit Commission to bootstrap it and start chatting."
+        />
         <button
           type="button"
           className={styles.brandLogoBtn}
@@ -939,20 +983,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
 
           <div className={styles.agentCardScroll}>
             <div className={styles.specialInstructionsRow}>
-              <button
-                type="button"
-                className={styles.fieldLabelToggle}
-                onClick={() => setSpecialInstructionsOpen(o => !o)}
-                aria-expanded={specialInstructionsOpen}
-              >
-                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Behavior (Optional)</span>
-                <span className={styles.fieldLabelRight}>
-                  {!specialInstructionsOpen && activeToggles.length > 0 && (
-                    <span className={styles.fieldLabelCount}>{activeToggles.length} on</span>
-                  )}
-                  <span className={styles.fieldLabelCaret} aria-hidden="true">{specialInstructionsOpen ? '▾' : '▸'}</span>
-                </span>
-              </button>
+              <SectionHeader
+                label="Behavior (Optional)"
+                expanded={specialInstructionsOpen}
+                onToggle={() => setSpecialInstructionsOpen(o => !o)}
+                help="Behavior toggles shape how the agent communicates — concise vs. detailed, skeptical vs. trusting, whether it cites sources, acts proactively, stays formal, or delegates aggressively. Turn on as many as you like; their effects combine."
+                right={!specialInstructionsOpen && activeToggles.length > 0 && (
+                  <span className={styles.fieldLabelCount}>{activeToggles.length} on</span>
+                )}
+              />
               {specialInstructionsOpen && (
                 <div className={styles.behaviorIconRow}>
                   {BEHAVIOR_TOGGLES.map(t => {
@@ -987,20 +1026,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
 
             <div className={styles.personalityRow}>
-              <button
-                type="button"
-                className={styles.fieldLabelToggle}
-                onClick={() => setPersonalityOpen(o => !o)}
-                aria-expanded={personalityOpen}
-              >
-                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Personality (Optional)</span>
-                <span className={styles.fieldLabelRight}>
-                  {!personalityOpen && selectedTraits.length > 0 && (
-                    <span className={styles.fieldLabelCount}>{selectedTraits.length} on</span>
-                  )}
-                  <span className={styles.fieldLabelCaret} aria-hidden="true">{personalityOpen ? '▾' : '▸'}</span>
-                </span>
-              </button>
+              <SectionHeader
+                label="Personality (Optional)"
+                expanded={personalityOpen}
+                onToggle={() => setPersonalityOpen(o => !o)}
+                help="Personality traits give the agent a consistent character quirk beyond its raw behavior — e.g. Inquisitive or Meticulous for a researcher. Purely optional flavor that still shapes its generated system prompt, and the pool of traits on offer changes with the agent type below."
+                right={!personalityOpen && selectedTraits.length > 0 && (
+                  <span className={styles.fieldLabelCount}>{selectedTraits.length} on</span>
+                )}
+              />
               {personalityOpen && (
                 <div className={styles.behaviorTogglesRow}>
                   {(PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research).map(t => {
@@ -1035,20 +1069,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
 
             <div className={styles.specialtiesRow}>
-              <button
-                type="button"
-                className={styles.fieldLabelToggle}
-                onClick={() => setSpecialtiesOpen(o => !o)}
-                aria-expanded={specialtiesOpen}
-              >
-                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Specialties</span>
-                <span className={styles.fieldLabelRight}>
-                  {!specialtiesOpen && keywords.length > 0 && (
-                    <span className={styles.fieldLabelCount}>{keywords.length}</span>
-                  )}
-                  <span className={styles.fieldLabelCaret} aria-hidden="true">{specialtiesOpen ? '▾' : '▸'}</span>
-                </span>
-              </button>
+              <SectionHeader
+                label="Specialties"
+                expanded={specialtiesOpen}
+                onToggle={() => setSpecialtiesOpen(o => !o)}
+                help="Specialties are the topics, roles, or keywords this agent will actually work on. Add at least one — they drive the Brief below and what the agent searches or reports on once commissioned."
+                right={!specialtiesOpen && keywords.length > 0 && (
+                  <span className={styles.fieldLabelCount}>{keywords.length}</span>
+                )}
+              />
               {specialtiesOpen && (
                 <p className={styles.specialtiesHint}>
                   Type a keyword and press Enter, or select a Saved Specialty from the Agent Dossier below
@@ -1142,18 +1171,18 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               never typed into directly, so it reads as assembled output
               rather than another field to fill in. */}
           <div className={styles.briefSection}>
-            <button
-              type="button"
-              className={styles.fieldLabelToggle}
-              onClick={() => setBriefOpen(o => !o)}
-              aria-expanded={briefOpen}
-            >
-              <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Brief</span>
-              <span className={styles.fieldLabelCaret} aria-hidden="true">{briefOpen ? '▾' : '▸'}</span>
-            </button>
+            <SectionHeader
+              label="Brief"
+              expanded={briefOpen}
+              onToggle={() => setBriefOpen(o => !o)}
+              help="The Brief is a live preview of what this agent has agreed to do, generated from its type, specialties, behavior and personality. It's read-only — edit the fields above to change it."
+            />
             {briefOpen && (
               keywords.length === 0 ? (
-                <p className={styles.briefPlaceholderText}>Add Specialties and behaviors to build this agent’s brief.</p>
+                <p className={styles.briefPlaceholderText}>
+                  <span className={styles.briefPlaceholderIcon} aria-hidden="true">✎</span>
+                  Add Specialties and behaviors to build this agent’s brief.
+                </p>
               ) : aiBrief?.type === 'question' ? (
                 <>
                   <div className={styles.briefQuestionBox}>
@@ -1211,6 +1240,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 <p className={styles.commissionHint} role="status">{commissionHint}</p>
               )}
               <div className={styles.commissionGroup}>
+                <HelpTip
+                  text="Agent type decides which primitive tools and default behavior this agent gets — e.g. only a Job search agent can call the live job-listings tool. Switching types also swaps the personality traits on offer above. Save Agent stores this whole profile for later; Commission bootstraps it and starts the chat."
+                  label="Commission bar help"
+                  direction="up"
+                />
                 <div className={styles.agentTypeSelector}>
                   <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
                     {AGENT_TEMPLATES.map(t => (
@@ -1233,17 +1267,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   </div>
                   <span className={styles.agentTypeLabel}>{getTemplate(agentType).label}</span>
                 </div>
-                {keywords.length > 0 && (
-                  <button
-                    type="button"
-                    className={`${styles.profileSaveBtn} ${styles.profileSaveBtnCommission}`}
-                    onClick={saveAgentDraft}
-                    disabled={bootstrapping}
-                    title="Save this whole profile — name, type, location and specialties"
-                  >
-                    Save Agent
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className={`${styles.profileSaveBtn} ${styles.profileSaveBtnCommission}`}
+                  onClick={saveAgentDraft}
+                  disabled={bootstrapping}
+                  title="Save this whole profile — name, type, location and specialties"
+                >
+                  Save Agent
+                </button>
                 <button
                   type="submit"
                   form="agentSetupForm"
