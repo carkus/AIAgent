@@ -224,6 +224,45 @@ function joinNatural(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
 }
 
+// What a behavior toggle's effect is actually called for each agent type —
+// "findings" for research, "listings" for job search, plain "topics"
+// otherwise — so a toggle's help text can say what it does to THIS agent's
+// own output instead of a type-agnostic generic sentence.
+const AGENT_TYPE_NOUN: Record<AgentTemplateId, string> = {
+  general: 'topic',
+  research: 'finding',
+  job_search: 'listing',
+}
+
+// Behavior toggle help text (button tooltip + the active-effects list) used
+// to be the same fixed sentence regardless of what the agent actually is —
+// e.g. "Concise" read identically for a job-search agent and a research
+// agent. This folds in the current agent type and its own specialty
+// keywords so the help text describes what the toggle means for THIS
+// agent, not behavior toggles in the abstract.
+function describeBehaviorEffect(toggle: BehaviorToggle, type: AgentTemplateId, kw: string[]): string {
+  const noun = AGENT_TYPE_NOUN[type] ?? 'topic'
+  const subject = kw.length > 0 ? joinNatural(kw.slice(0, 3)) : `each ${noun}`
+  switch (toggle.id) {
+    case 'concise':
+      return `${toggle.description} For this agent, that means terse bullet points on ${subject} instead of a long write-up per ${noun}.`
+    case 'skeptical':
+      return `${toggle.description} It will question shaky claims about ${subject} rather than repeating them as fact.`
+    case 'cite-sources':
+      return `${toggle.description} Every fact it states about ${subject} gets a source link attached inline.`
+    case 'proactive':
+      return `${toggle.description} It will flag risks or gaps in ${subject} even when you didn't ask about them directly.`
+    case 'formal':
+      return `${toggle.description} Its reports on ${subject} read in a professional register, no casual asides.`
+    case 'max-delegation':
+      return kw.length > 1
+        ? `${toggle.description} With ${kw.length} specialties (${subject}), it splits the work across a worker agent per specialty instead of researching all of them itself.`
+        : `${toggle.description} Even with just ${subject} to cover, it still splits research into parallel worker agents rather than doing it all itself.`
+    default:
+      return toggle.description
+  }
+}
+
 // Same-turn fallback while the AI-drafted brief (backend/src/brief.py) is
 // loading or has failed — must still mention active behaviors/traits, not
 // just the specialty keywords, since those change what the agent will
@@ -447,6 +486,26 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // ~70% height and collapses the other, at every viewport width (see
   // .focusStack in Setup.module.css).
   const [focusPanel, setFocusPanel] = useState<'setup' | 'dossier'>('setup')
+  // Neither panel scrolls internally by much (the setup card doesn't scroll
+  // at all; the dossier list often doesn't need to either), so a swipe/drag
+  // gesture that scrolls nothing still ends as a plain click at wherever the
+  // pointer lifted — frequently over the *other*, collapsed panel below/above,
+  // which flips focusPanel as an unintended side effect of just scrolling.
+  // Recording the pointerdown position and only honoring the click as a real
+  // tap when the pointer barely moved fixes that without needing to guess
+  // whether an actual scroll happened.
+  const panelTapStart = useRef<{ x: number; y: number } | null>(null)
+  const TAP_MOVE_THRESHOLD_PX = 10
+  function handlePanelPointerDown(e: React.PointerEvent) {
+    panelTapStart.current = { x: e.clientX, y: e.clientY }
+  }
+  function handlePanelTap(target: 'setup' | 'dossier', e: React.MouseEvent) {
+    const start = panelTapStart.current
+    if (start && (Math.abs(e.clientX - start.x) > TAP_MOVE_THRESHOLD_PX || Math.abs(e.clientY - start.y) > TAP_MOVE_THRESHOLD_PX)) {
+      return
+    }
+    setFocusPanel(target)
+  }
   const [specialtiesOpen, setSpecialtiesOpen] = useState(true)
   const [briefOpen, setBriefOpen] = useState(true)
   const [specialInstructionsOpen, setSpecialInstructionsOpen] = useState(false)
@@ -953,7 +1012,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         <div className={styles.focusStack}>
         <div
           className={`${styles.agentCard} ${focusPanel === 'setup' ? styles.panelActive : styles.panelCollapsed}`}
-          onClick={() => setFocusPanel('setup')}
+          onPointerDown={handlePanelPointerDown}
+          onClick={e => handlePanelTap('setup', e)}
         >
           <div className={styles.agentCardMain}>
             <div className={styles.agentCardInfo}>
@@ -1003,7 +1063,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         className={active ? styles.behaviorIconBtnActive : styles.behaviorIconBtn}
                         onClick={() => toggleBehavior(t.id)}
                         disabled={bootstrapping}
-                        title={t.description}
+                        title={describeBehaviorEffect(t, agentType, keywords)}
                         aria-label={t.label}
                         aria-pressed={active}
                       >
@@ -1018,7 +1078,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 <ul className={styles.behaviorEffectsList}>
                   {BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => (
                     <li key={t.id}>
-                      <span className={styles.behaviorEffectLabel}>{t.label}:</span> {t.description}
+                      <span className={styles.behaviorEffectLabel}>{t.label}:</span> {describeBehaviorEffect(t, agentType, keywords)}
                     </li>
                   ))}
                 </ul>
@@ -1292,7 +1352,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         <form
           id="agentSetupForm"
           onSubmit={handleSubmit}
-          onClick={() => setFocusPanel('dossier')}
+          onPointerDown={handlePanelPointerDown}
+          onClick={e => handlePanelTap('dossier', e)}
           className={`${styles.form} ${focusPanel === 'dossier' ? styles.panelActive : styles.panelCollapsed}`}
         >
           <div className={styles.dossierWrap}>

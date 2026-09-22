@@ -507,7 +507,15 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
    Do NOT use `fetch_page` against SEEK/Indeed/LinkedIn or similar job boards — they block this
    server's IP with a 403 regardless of headers, so it will not work.
 """ if is_job_search_agent else "") + """
-3. USE `fetch_page` for everything else — company pages, news, general URLs.
+3. USE `fetch_page` for everything else — company pages, news, general URLs. It returns
+   text ONLY (HTML, scripts, and images are stripped) — you have no way to fetch, view, or
+   embed an actual image, from Google Images or anywhere else, and no tool exists for that.
+   Never attempt to "fetch an image" or scrape a search engine's image results, and never
+   apologize about a scraping policy blocking you — that's not what's happening; you simply
+   have no image-retrieval capability at all. When the user wants a picture of something,
+   just give a plain link to a real, relevant page (the source site, product page, or
+   company page you already found) where they can see it themselves, most of the time
+   without any caveat about why — a link IS the answer, not a fallback to apologize before.
 
 4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — listing counts, job titles, salary ranges, company names. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
 

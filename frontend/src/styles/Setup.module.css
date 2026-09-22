@@ -1368,13 +1368,13 @@
 
 .savedBehaviorBadge {
   flex-shrink: 0;
-  background: #0b495e;
+  background: rgba(11, 73, 94, 0.08);
   border: 1px solid #0b495e;
   border-radius: 5px;
-  color: #ffffff;
+  color: #0b495e;
   font-family: 'Share Tech Mono', monospace;
   font-size: var(--font-size-sm);
-  font-weight: 400;
+  font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   padding: 0.15rem 0.55rem;
@@ -1403,25 +1403,26 @@
   font-style: italic;
 }
 
-/* Combined single-line row for a saved agent profile's personality, specialty,
-   and behavior pills together — was three stacked rows, one per pill type. */
+/* Combined row for a saved agent profile's personality, specialty, and
+   behavior pills together — was three stacked rows, one per pill type.
+   Wraps onto multiple lines rather than scrolling horizontally, since a
+   profile with many pills would otherwise hide most of them off-screen. */
 .savedPillRow {
   display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.25rem;
 }
 
 .savedTraitBadge {
   flex-shrink: 0;
-  background: var(--color-accent-secondary);
+  background: rgba(63, 126, 160, 0.08);
   border: 1px solid var(--color-accent-secondary);
   border-radius: 5px;
-  color: #ffffff;
+  color: var(--color-accent-secondary);
   font-family: 'Share Tech Mono', monospace;
   font-size: var(--font-size-sm);
-  font-weight: 400;
+  font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   padding: 0.15rem 0.55rem;

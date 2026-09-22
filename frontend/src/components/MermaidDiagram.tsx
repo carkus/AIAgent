@@ -145,6 +145,30 @@ function looksLikeMermaid(chart: string): boolean {
   return DIAGRAM_KEYWORD_RE.test(chart)
 }
 
+// Mermaid's rendered <svg> root always carries width="100%" and no height
+// attribute at all, relying on a definite-width ancestor to resolve that
+// percentage against. That's true for the inline chat preview (.mermaidDiagram
+// has a real CSS width), so it renders fine there — but ImageViewer's
+// full-screen overlay centers it in a flex box with no definite width of its
+// own, and percentage/auto sizing on an SVG with no other intrinsic size
+// collapses to 0x0 in that context (confirmed via a standalone repro:
+// getBoundingClientRect() on the overlay's svg came back {w:0, h:0} while the
+// identical string rendered inline at its real size). Rewriting the root
+// element to carry explicit pixel width/height read straight from its own
+// viewBox (which mermaid always sets) gives it a self-contained intrinsic
+// size in any container, so the existing max-width/max-height:100% rules in
+// both CSS contexts can scale it down from a real starting size instead of a
+// circular zero.
+function withExplicitSvgSize(svg: string): string {
+  const match = svg.match(/viewBox="[\d.\-]+ [\d.\-]+ ([\d.]+) ([\d.]+)"/)
+  if (!match) return svg
+  const [, vbWidth, vbHeight] = match
+  return svg.replace(/<svg\b([^>]*)>/, (_full, attrs: string) => {
+    const cleaned = attrs.replace(/\swidth="[^"]*"/, '').replace(/\sheight="[^"]*"/, '')
+    return `<svg${cleaned} width="${vbWidth}" height="${vbHeight}">`
+  })
+}
+
 interface Props {
   chart: string
   // Set only by the plan-preview usage (Chat.tsx) — when present, this
@@ -175,7 +199,7 @@ export default function MermaidDiagram({ chart, label, caption }: Props) {
     let cancelled = false
     const adapted = fixUnbalancedBrackets(fixReservedEndKeyword(adaptChartForWidth(chart, window.innerWidth)))
     mermaid.render(`mermaid-${id}`, adapted)
-      .then(result => { if (!cancelled) setSvg(result.svg) })
+      .then(result => { if (!cancelled) setSvg(withExplicitSvgSize(result.svg)) })
       .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : 'Diagram failed to render') })
     return () => { cancelled = true }
   }, [chart, id])

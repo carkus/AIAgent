@@ -47,7 +47,7 @@ function ToolbarIcon({ name }: { name: ToolbarIconName }) {
     viewBox: '0 0 24 24',
     fill: 'none',
     stroke: 'currentColor',
-    strokeWidth: 1.75,
+    strokeWidth: 1.4,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
   }
