@@ -9,6 +9,18 @@ import mcp_client
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 
+# Confirmed against a real turn (gemini-3.6-flash): the model narrates a plan
+# in prose, THEN embeds its actual delegate_to_worker call inside a ```json
+# fence mid-message instead of using the structured tool_calls field — e.g.
+# "Start by gathering tips...\n\nDelegate this task to a worker.\n\n```json\n
+# {\"name\": \"delegate_to_worker\", \"arguments\": {...}}\n```". _FENCE_RE
+# above only matches when the fence is the ENTIRE message, so this mixed
+# shape falls through every fallback in _extract_text_tool_calls and the raw
+# prose+JSON gets shown to the user as the final answer instead of being
+# executed. This searches for a fenced JSON object/array ANYWHERE in the
+# text, not just as the whole message.
+_EMBEDDED_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```", re.DOTALL)
+
 # A distinct fence from the ```mermaid the agent uses inside its own final
 # answer (diagram-first output, see the CRITICAL TOOL RULES below) — this one
 # is the model's own step-by-step plan for the turn, extracted from its FIRST
@@ -70,6 +82,51 @@ _DEGENERATE_REPLIES = {
 
 def _is_degenerate_reply(text: str) -> bool:
     return text.strip().strip("\"'").lower() in _DEGENERATE_REPLIES
+
+
+# Confirmed against a real turn (gemini-3.6-flash, no fence at all this
+# time): the model narrates an intent to delegate/act — "Delegate to home
+# maintenance worker: ..." / "Would you like to proceed with this plan?" —
+# and stops there with finish_reason "stop" and NO tool_calls whatsoever, no
+# JSON anywhere for _extract_text_tool_calls to even find. The existing nudge
+# retry below only fires when at least one tool call already ran THIS turn
+# (tool_calls_log truthy), so a response that describes acting instead of
+# acting, with zero tool calls, sails through untouched. Naming a real tool
+# in prose without a matching tool_calls entry is a reliable signal the model
+# meant to call it and didn't.
+#
+# The exact tool name rarely appears verbatim, though — confirmed against
+# further live repro turns, the model paraphrases it ("delegate this task to
+# a worker", "Next steps:\n1. Delegate a worker to search...") rather than
+# writing the literal identifier "delegate_to_worker". An exact-substring
+# check missed both. This now does a word-level match instead: split the
+# tool name on "_", drop short stopwords, and require every remaining
+# significant word to appear somewhere in the text — "delegate_to_worker"
+# becomes {"delegate", "worker"}, both of which those paraphrases contain.
+_NAME_STOPWORDS = {"to", "a", "the", "of", "for", "with", "and"}
+
+
+def _mentions_uncalled_tool(text: str, tool_names: set[str]) -> bool:
+    lowered = text.lower()
+    for name in tool_names:
+        words = [w for w in name.lower().split("_") if w and w not in _NAME_STOPWORDS]
+        if words and all(w in lowered for w in words):
+            return True
+    return False
+
+
+# Separately: some turns narrate a not-yet-executed plan using no tool-name
+# words at all ("I'll look up listings for each role and compare their pay.")
+# and simply stop, with the same zero-tool-calls/finish_reason "stop" shape.
+# These share a family of future-intent phrasing a completed answer wouldn't
+# use — a model presenting real findings doesn't preface them with "I'll" or
+# "Next steps:". Matched independently of tool-name overlap so a paraphrase
+# with no lexical overlap with any tool name is still caught.
+_NARRATION_INTENT_RE = re.compile(
+    r"\bi'll\b|\bi will\b|\blet'?s\b|\bnext steps?:|\bwould you like\b|"
+    r"\bplease wait\b|\bshall i\b|\bshould i proceed\b",
+    re.IGNORECASE,
+)
 
 
 def _extract_text_tool_calls(content: str | None, valid_names: set[str]):
@@ -216,15 +273,38 @@ def _extract_text_tool_calls(content: str | None, valid_names: set[str]):
         try:
             obj, end = decoder.raw_decode(text, pos)
         except json.JSONDecodeError:
-            return None
+            calls = []
+            break
         call = _as_call(obj)
         if not call:
-            return None
+            calls = []
+            break
         calls.append(call)
         pos = end
 
     if not calls:
-        return None
+        # Last resort: a fenced JSON object/array embedded anywhere inside
+        # otherwise-unparseable prose (see _EMBEDDED_FENCE_RE above). Unlike
+        # every fallback so far, this deliberately ignores surrounding text
+        # instead of requiring the whole message to decode — narration before
+        # or after a genuine embedded call is expected here, not a sign the
+        # match is spurious, since a call floating alone with no fence (a
+        # lone `{...}` in an explanation) is already handled, and rejected,
+        # by the array-only rule above.
+        embedded = []
+        for fence_match in _EMBEDDED_FENCE_RE.finditer(text):
+            try:
+                obj = json.loads(fence_match.group(1))
+            except json.JSONDecodeError:
+                continue
+            candidates = obj if isinstance(obj, list) else [obj]
+            found = [c for c in (_as_call(c) for c in candidates) if c]
+            if len(found) == len(candidates):
+                embedded.extend(found)
+        if not embedded:
+            return None
+        calls = embedded
+
     # A degenerate repeat of the exact same call collapses to one instance —
     # the model only meant to make it once. Otherwise, the distinct calls are
     # each real and are returned as-is.
@@ -431,24 +511,28 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
 
 4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — listing counts, job titles, salary ranges, company names. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
 
-5. PREFER A DIAGRAM OVER A WORDY PARAGRAPH. When findings involve a comparison, a
-   distribution, a breakdown by category, or a multi-step flow (e.g. salary ranges
-   across roles, seniority/skill mix, counts by location or company, a process with
-   stages), draw a Mermaid diagram in a ```mermaid fenced code block instead of
-   restating the numbers in prose — use `pie` or `xychart-beta` for distributions/
-   comparisons, `flowchart`/`graph` for a process or relationship, `mindmap` for a
-   grouped breakdown of topics. A diagram MUST NEVER stand alone with no
-   explanation — always follow it with one or two short sentences, in plain
-   human language, that say what it shows (e.g. "Melbourne pays the most,
-   Perth the least — a $15k spread across the three cities."), not a
-   paragraph re-explaining every number the diagram already shows. For a
-   single flat fact (one number, one listing), just say it plainly; don't
-   force a diagram where there's nothing to compare. In a `pie` or
+5. DISCUSS AND ANALYSE YOUR FINDINGS IN REAL PROSE — A DIAGRAM IS A BONUS,
+   NEVER A REPLACEMENT. Your job is to actually talk through what you found:
+   the specific names, numbers, and details; what's notable, surprising, or
+   worth a second look; how things compare and why that matters; caveats or
+   gaps in what you could find. Write this out properly, in full sentences —
+   never compress a real finding down to a diagram plus a one-line caption.
+   Only AFTER that discussion, if the findings ALSO involve a numeric
+   comparison, distribution, or breakdown by category with several distinct
+   values (e.g. salary ranges across many roles, counts by location or
+   company), you may additionally draw a Mermaid diagram in a ```mermaid
+   fenced code block as a visual aid alongside your discussion — use `pie` or
+   `xychart-beta` for distributions/comparisons, `flowchart`/`graph` for a
+   process or relationship, `mindmap` for a grouped breakdown of topics. This
+   is optional polish, not a requirement, and it is never a substitute for
+   the discussion above — if you're unsure whether a diagram would add
+   anything, skip it and just write the analysis. Don't force one for a
+   single flat fact or a short list with nothing to compare. In a `pie` or
    `xychart-beta` block, every value MUST be a bare number Mermaid can
    parse (e.g. `"Sydney" : 5200000`) — never a unit suffix or word like
    `5M`, `$120k`, or `"about 5 million"`; that fails to parse and the
    diagram silently doesn't render at all. Put the unit in the title or
-   the follow-up sentence instead (e.g. title `"Population (millions)"`
+   your discussion text instead (e.g. title `"Population (millions)"`
    with bare values `5.2`).
 
 6. BEFORE doing anything else this turn, if the task needs more than one step
@@ -469,16 +553,25 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
      Start --> A[Search X] --> B[Search Y] --> C[Compare] --> Answer
    ```
    Max ~8 nodes. Skip this entirely for a simple, single-step question that
-   needs no tools or just one tool call.
+   needs no tools or just one tool call. Every node label MUST be plain text
+   with NO `[`, `]`, or `"` characters inside it (e.g. write `Compare
+   providers reviews and prices`, never `Compare providers' reviews]` or
+   anything containing a bracket) — a stray bracket inside a label breaks
+   the node's own `[...]` boundary and the whole diagram fails to parse.
+   Keep each label to a few plain words; drop punctuation rather than risk
+   it.
 
-7. BE ASSERTIVE. State your findings and recommendations directly — "X is
-   the better choice because Y," not "X might possibly be worth considering,
-   though it depends." Lead with a conclusion, then back it with the
-   evidence, instead of hedging your way toward one. If the data is
+7. BE ASSERTIVE, NOT TERSE. State your findings and recommendations directly
+   — "X is the better choice because Y," not "X might possibly be worth
+   considering, though it depends." Lead with a conclusion, then back it
+   with the evidence, instead of hedging your way toward one. If the data is
    genuinely inconclusive, say so plainly and explain why, rather than
    burying a wishy-washy answer in qualifiers. Don't over-hedge with
    "it depends," "you may want to," or "consider" when you actually have
-   an opinion backed by what you found — give the opinion.
+   an opinion backed by what you found — give the opinion. Being assertive
+   is about confidence, not brevity — it does not mean cutting the actual
+   discussion of your findings short (see rule 5); a confident one-line
+   verdict with no analysis behind it is just as unhelpful as a hedgy one.
 """ + (f"""
 8. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [], max_delegations)}
 9. Once your workers report back, do NOT restate or re-summarize each one's
@@ -488,14 +581,19 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
    synthesizing across workers (or noting anything none of them covered),
    never a repeat of content they already reported.
 10. DRIVE THE CONVERSATION FORWARD.""" if allow_delegation else """
-8. DRIVE THE CONVERSATION FORWARD.""") + """ Close your reply with one
-   short, concrete sentence suggesting a specific next move — a follow-up
-   question worth digging into, a comparison to add, a next report to run
-   — phrased as a suggestion the user can accept or ignore, not a vague
-   "let me know if you have any questions." Base it on what you just
-   found, not a generic prompt. Skip this only for a trivial exchange: a
-   greeting, a reply that is itself a clarifying question back to the
-   user, or a case where there is genuinely nowhere further to take it.
+8. DRIVE THE CONVERSATION FORWARD.""") + """ This is a discussion with the
+   user, not a one-shot report — treat it that way. After you've laid out
+   your findings (rule 5), actually engage with what they mean: raise a
+   genuine follow-up question when something you found is ambiguous, when
+   the user's next move depends on a preference you don't know (budget,
+   priority, timeframe), or when digging one level deeper would clearly
+   help — a real question inviting their input, not a rhetorical one. Close
+   with a specific next move — a question worth answering, a comparison to
+   add, a next report to run — phrased as a suggestion the user can accept
+   or ignore, never a vague "let me know if you have any questions" and
+   never a generic prompt disconnected from what you just found. Skip this
+   only for a trivial exchange: a greeting or a case where there is
+   genuinely nowhere further to take it.
 ---"""
 
     tool_definitions = agent_config["tools"]
@@ -565,6 +663,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
     total_input_tokens = 0
     total_output_tokens = 0
     nudged = False
+    degenerate_retries = 0
     delegation_count = 0
     # Hard ceiling on LLM calls per request — without this, a model stuck in a
     # tool-calling loop (or a buggy tool) burns unlimited API quota on one request.
@@ -649,18 +748,56 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
             # No tool calls → final response
             if not effective_tool_calls:
                 final_text = raw_content or ""
+                described_not_called = (
+                    not tool_calls_log
+                    and not delegation_count
+                    and (
+                        _mentions_uncalled_tool(final_text, tool_names)
+                        or bool(_NARRATION_INTENT_RE.search(final_text))
+                    )
+                )
+                # A bare schema-key word ("description", "name", ...) leaked
+                # instead of real text is unambiguous — there's no plausible
+                # reading where that's a genuine answer — so it gets its own,
+                # more generous retry budget separate from the general nudge
+                # below. Confirmed live: a single retry sometimes isn't
+                # enough (the model repeats the same degenerate word once
+                # more before recovering), so this allows up to two retries
+                # before giving up, rather than the one-shot ceiling used for
+                # the costlier/more ambiguous cases below.
+                if (
+                    finish_reason == "stop"
+                    and degenerate_retries < 2
+                    and _is_degenerate_reply(final_text)
+                ):
+                    degenerate_retries += 1
+                    current_messages.append({
+                        "role": "user",
+                        "content": (
+                            "That reply was not a real answer — just a stray schema word, "
+                            "not actual content. Present your complete findings now in full "
+                            "detail, in plain language, not a fragment of a tool schema."
+                        ),
+                    })
+                    continue
+
                 if (
                     not nudged
                     and finish_reason == "stop"
                     and (
                         (tool_calls_log and len(final_text.strip()) < 400)
-                        or _is_degenerate_reply(final_text)
+                        or described_not_called
                     )
                 ):
                     nudged = True
                     current_messages.append({
                         "role": "user",
                         "content": (
+                            "You described taking an action (e.g. calling a tool) but did not "
+                            "actually call it — make the real, structured tool call now instead "
+                            "of describing or narrating it in text. If no tool call is actually "
+                            "needed, present your complete findings in full detail instead."
+                        ) if described_not_called else (
                             "Present your complete findings now in full detail. "
                             "Show the actual data, results, and analysis from your searches."
                         ),

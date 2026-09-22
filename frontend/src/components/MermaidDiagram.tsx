@@ -29,7 +29,7 @@ function ensureInitialized() {
       lineColor: GRAPH_ACCENT,
       secondaryColor: '#eaf3f7',
       tertiaryColor: '#f0efe9',
-      fontSize: '9.9px',
+      fontSize: '14px',
       fontFamily,
       pie1: GRAPH_ACCENT,
       pie2: '#3f7ea0',
@@ -103,6 +103,48 @@ function fixReservedEndKeyword(chart: string): string {
     .join('\n')
 }
 
+// Confirmed against real repro output: the model occasionally drops a stray
+// extra `]` inside a node's own label text (e.g. `B[Compare providers']]`),
+// almost always right after an apostrophe — the closing bracket of the
+// node's `[...]` shape gets duplicated. Mermaid's flowchart grammar doesn't
+// tolerate the extra bracket and fails the whole diagram over one node. Only
+// `[` / `]` pairs are targeted (not `(`/`{`, which have their own legitimate
+// node shapes) and only within a single line, since a real node's label
+// never spans multiple lines. If a line has more `]` than `[`, the runs of
+// closing brackets are collapsed down to however many openers exist —
+// `A[Label]]` -> `A[Label]`, `A[Label']]]` -> `A[Label']`. Lines that are
+// already balanced (the overwhelming majority) are returned untouched.
+function fixUnbalancedBrackets(chart: string): string {
+  return chart
+    .split('\n')
+    .map(line => {
+      const opens = (line.match(/\[/g) || []).length
+      const closes = (line.match(/\]/g) || []).length
+      if (closes <= opens) return line
+      let excess = closes - opens
+      return line.replace(/\]+/g, run => {
+        if (excess <= 0) return run
+        const drop = Math.min(excess, run.length - 1)
+        excess -= drop
+        return run.slice(drop)
+      })
+    })
+    .join('\n')
+}
+
+// A response occasionally puts plain English (not Mermaid syntax at all)
+// into what should have been a ```mermaid-plan/```mermaid fence — confirmed
+// in live repro. Rendering that as a diagram always fails and, for the
+// labeled Plan-preview usage, surfaces as a broken-looking error box instead
+// of just not showing a diagram at all. Cheap heuristic: every real Mermaid
+// diagram type opens with one of a small fixed set of keywords on its own
+// first non-blank line.
+const DIAGRAM_KEYWORD_RE = /^\s*(flowchart|graph|pie|xychart-beta|mindmap|sequenceDiagram|classDiagram|stateDiagram|gantt|journey|erDiagram|timeline|quadrantChart)\b/im
+
+function looksLikeMermaid(chart: string): boolean {
+  return DIAGRAM_KEYWORD_RE.test(chart)
+}
+
 interface Props {
   chart: string
   // Set only by the plan-preview usage (Chat.tsx) — when present, this
@@ -125,13 +167,26 @@ export default function MermaidDiagram({ chart, label, caption }: Props) {
   const [viewerOpen, setViewerOpen] = useState(false)
 
   useEffect(() => {
+    if (!looksLikeMermaid(chart)) {
+      setSvg(null)
+      setError('not-mermaid')
+      return
+    }
     let cancelled = false
-    const adapted = fixReservedEndKeyword(adaptChartForWidth(chart, window.innerWidth))
+    const adapted = fixUnbalancedBrackets(fixReservedEndKeyword(adaptChartForWidth(chart, window.innerWidth)))
     mermaid.render(`mermaid-${id}`, adapted)
       .then(result => { if (!cancelled) setSvg(result.svg) })
       .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : 'Diagram failed to render') })
     return () => { cancelled = true }
   }, [chart, id])
+
+  // Text that never looked like Mermaid in the first place (the model put
+  // plain prose in what should have been a diagram fence) — for the labeled
+  // Plan-preview usage, show nothing rather than a broken-looking error box;
+  // the plain inline-fence usage still falls through to the raw-source
+  // fallback below, since there the surrounding chat message already reads
+  // fine as plain text either way.
+  if (error === 'not-mermaid' && label) return null
 
   if (!svg && !error) {
     // A labeled box (the plan preview) shows nothing at all while the

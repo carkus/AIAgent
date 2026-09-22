@@ -153,8 +153,8 @@
 
 .headerActions button {
   flex: 0 0 auto;
-  height: 2.1rem;
-  width: 3.6rem;
+  height: 2.4rem;
+  width: 2.4rem;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -162,7 +162,7 @@
   line-height: 1;
   background: #e9f3f2;
   border: 1px solid #a8cdd6;
-  border-radius: 7px;
+  border-radius: 50%;
   color: #053750;
   cursor: pointer;
   box-shadow: 0 1px 1px rgba(28, 40, 51, 0.05);
@@ -180,8 +180,8 @@
 }
 
 .headerActions button svg {
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 1.35rem;
+  height: 1.35rem;
 }
 
 .spinnerIcon {
@@ -193,41 +193,8 @@
   to { transform: rotate(360deg); }
 }
 
-/* Sits inline right after the agent's name/title (headerTitle), not in the
-   Save/Roster/Export toolbar row — this is a per-agent identity action
-   ("get rid of this one"), not a document-management action. */
-.newAgentBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  vertical-align: middle;
-  width: 1.7rem;
-  height: 1.7rem;
-  margin: 0 0.4rem 0.2rem 0;
-  padding: 0;
-  background: #053750;
-  border: 1px solid #053750;
-  border-radius: 50%;
-  color: #ffffff;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, transform 0.12s;
-}
-
-.newAgentBtn svg {
-  width: 1rem;
-  height: 1rem;
-}
-
-.newAgentBtn:hover {
-  background: #135a72;
-  border-color: #135a72;
-  transform: translateY(-1px);
-}
-
-.newAgentBtn:active {
-  background: #083342;
-  border-color: #083342;
-  transform: translateY(0);
+.resetBtn:hover:not(:disabled) {
+  background: #d3e8e6;
 }
 
 .exportBtn:hover:not(:disabled) {
@@ -669,16 +636,11 @@
   border-radius: 6px;
   margin: 0 0 0.75rem;
   padding: 0.4rem 0.5rem 0.1rem;
-  /* Same float containment as .markdown — the diagram box inside is
-     floated square, so this needs to size to include it. */
   display: flow-root;
 }
 
-/* Wraps diagrams pulled out of the assistant's reply text (extractMermaidDiagrams
-   in Chat.tsx) — same float-containment need as .planDiagram/.markdown, since
-   .mermaidDiagram itself floats left. Without this, a floated diagram sitting
-   as a bare sibling before .markdown (rather than a child of it) can spill
-   past the bubble's bottom edge instead of the bubble growing to contain it. */
+/* Wraps diagrams pulled out of the assistant's reply text
+   (extractMermaidDiagrams in Chat.tsx). */
 .extractedDiagrams {
   display: flow-root;
   margin-bottom: 0.75rem;
@@ -704,23 +666,23 @@
 }
 
 /* Every rendered diagram — the compact plan preview and inline reply
-   diagrams alike — gets the same fixed-size square preview box, floated so
-   the takeaway paragraph that follows it (CLAUDE.md's "diagrams over prose"
-   rule) sits in a text column beside it instead of stacking full-width
-   below it; a diagram too detailed to read at this size is opened full-size
-   in ImageViewer on tap instead of being given more inline space. */
+   diagrams alike — gets a full-width box sized to actually be readable
+   inline; a squeezed-down fixed-size square used to force a wide flowchart's
+   labels down to an illegible size, which is why this stacks full-width
+   above the takeaway paragraph instead of floating beside a text column.
+   A diagram too detailed to read even at this size is opened full-size in
+   ImageViewer on tap. */
 .mermaidDiagram {
   background: #f5f6f4;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  float: left;
-  margin: 0.6rem 1rem 0.6rem 0;
-  width: 50%;
-  max-width: 440px;
-  aspect-ratio: 1 / 1;
+  margin: 0.6rem 0;
+  width: 100%;
+  max-width: 640px;
+  max-height: 520px;
   cursor: zoom-in;
   overflow: hidden;
-  padding: 0.5rem;
+  padding: 0.75rem;
   text-align: center;
   transition: opacity 0.15s;
 }
@@ -731,14 +693,13 @@
 
 .mermaidDiagram svg {
   width: 100%;
-  height: 100%;
+  height: auto;
   max-width: 100%;
-  max-height: 100%;
+  max-height: 480px;
 }
 
-/* The one-or-two-sentence "takeaway" the model writes right after a diagram
-   flows in the column beside the floated square box above instead of
-   running edge-to-edge underneath it. */
+/* The one-or-two-sentence "takeaway" the model writes right after a diagram,
+   now stacked below the full-width box above rather than beside it. */
 .mermaidDiagram + p {
   margin-top: 0.6rem;
 }

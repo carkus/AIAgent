@@ -13,7 +13,9 @@ import type { AgentTemplateId } from './types'
 // chips mean in that context. `search_jobs` (live Adzuna listings) and
 // `fetch_page` (general web fetch) are the two built-in primitives every
 // agent gets — see backend/src/agent_stream.py — so "Job search" leans on
-// the former, "Research" the latter, and "General" leaves it up to bootstrap.
+// the former, "Research" the latter, and "General" is explicitly a scout/
+// pointer role (leads to better sources, not a deep dive) that's told never
+// to touch job search even via fetch_page.
 export interface AgentTemplate {
   id: AgentTemplateId
   label: string
@@ -29,9 +31,11 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     buildPurpose: (keywords, loc) =>
       `General-purpose assistant covering the following topics: ${keywords.join(', ')}` +
       `${loc ? ` (relevant to ${loc})` : ''}. ` +
-      `Give general, well-rounded information about each topic — what it is, ` +
-      `why it matters, and the key facts a newcomer would want to know — ` +
-      `rather than a deep or narrowly-angled investigation.`,
+      `Scout around each topic and surface leads to better information — ` +
+      `what it is, why it matters, and where to look next for the real depth — ` +
+      `rather than a deep or narrowly-angled investigation itself. This agent is not a ` +
+      `job search tool: never search for job listings, salaries, or job boards, even if a ` +
+      `topic sounds job-related — just point toward better sources on it.`,
   },
   {
     id: 'research',

@@ -503,15 +503,6 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
 
           <div className={styles.headerIdentityText}>
             <span className={styles.headerTitle}>Agent {agentName}</span>
-            <button
-              type="button"
-              className={styles.newAgentBtn}
-              onClick={onReset}
-              aria-label="New agent"
-              title="New agent — recommission a fresh agent, wiping this conversation"
-            >
-              <ToolbarIcon name="newAgent" />
-            </button>
             {agentConfig.persona?.traits && agentConfig.persona.traits.length > 0 && (
               <span className={styles.personaTraits} title={agentConfig.persona.rationale}>
                 {agentConfig.persona.traits.join(' · ')}
@@ -555,6 +546,15 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             title="Export PDF"
           >
             <ToolbarIcon name={exporting ? 'exporting' : 'export'} />
+          </button>
+          <button
+            type="button"
+            className={styles.resetBtn}
+            onClick={onReset}
+            aria-label="New agent"
+            title="New agent — recommission a fresh agent, wiping this conversation"
+          >
+            <ToolbarIcon name="newAgent" />
           </button>
         </div>
         {agentConfig.keywords && agentConfig.keywords.length > 0 && (
