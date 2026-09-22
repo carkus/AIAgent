@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm'
 import { fetchFile } from '../api'
 import type { ToolCall } from '../types'
 import styles from '../styles/ToolActivity.module.css'
+import CopyButton from './CopyButton'
 
 interface Props {
   toolCalls: ToolCall[]
@@ -489,7 +490,10 @@ function SavedFileViewer({ filename }: { filename: string }) {
           <div className={styles.fileModalInner} onClick={e => e.stopPropagation()}>
             <div className={styles.fileModalHeader}>
               <span className={styles.fileModalName}>{filename}</span>
-              <button type="button" className={styles.fileModalClose} onClick={() => setContent(null)}>×</button>
+              <div className={styles.fileModalActions}>
+                <CopyButton text={content ?? ''} />
+                <button type="button" className={styles.fileModalClose} onClick={() => setContent(null)}>×</button>
+              </div>
             </div>
             <pre className={styles.fileModalContent}>{content}</pre>
           </div>
@@ -643,7 +647,10 @@ function RawResult({ result }: { result: string }) {
       return (
         <div className={styles.errorPanel}>
           <span className={styles.errorIcon} aria-hidden="true">⚠</span>
-          <pre className={styles.errorText}>{data}</pre>
+          <div className={styles.codeCopyWrap}>
+            <pre className={styles.errorText}>{data}</pre>
+            <CopyButton text={data} className={styles.codeCopyBtn} />
+          </div>
         </div>
       )
     }
@@ -653,7 +660,12 @@ function RawResult({ result }: { result: string }) {
       const ok = code >= 200 && code < 300
       return <span className={ok ? styles.httpOk : styles.httpErr}>{code}{ok ? ' OK' : ''}</span>
     }
-    return <pre className={styles.plainResult}>{data}</pre>
+    return (
+      <div className={styles.codeCopyWrap}>
+        <pre className={styles.plainResult}>{data}</pre>
+        <CopyButton text={data} className={styles.codeCopyBtn} />
+      </div>
+    )
   }
 
   if (typeof data !== 'object' || data === null || Array.isArray(data)) return null
@@ -818,7 +830,13 @@ function RawResult({ result }: { result: string }) {
   }
 
   // ── Last resort: formatted JSON ───────────────────────────────────────────
-  return <pre className={styles.plainResult}>{JSON.stringify(data, null, 2)}</pre>
+  const json = JSON.stringify(data, null, 2)
+  return (
+    <div className={styles.codeCopyWrap}>
+      <pre className={styles.plainResult}>{json}</pre>
+      <CopyButton text={json} className={styles.codeCopyBtn} />
+    </div>
+  )
 }
 
 // ─── Live: single tool call row ───────────────────────────────────────────────

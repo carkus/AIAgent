@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { isValidElement, useEffect, useRef, useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { publishAgent, runAgent } from '../api'
@@ -37,9 +37,26 @@ function extractMermaidDiagrams(content: string): { text: string; diagrams: stri
   return { text, diagrams }
 }
 
+// Walks a rendered markdown <li>'s React children down to plain text, for
+// the "Extend upon this idea" button's follow-up prompt — it needs the
+// bullet's own words, not its JSX (bold/links/inline code all render as
+// nested elements, not strings). Nested <ul>/<ol> are skipped so a bullet
+// with its own sub-list doesn't drag the whole sub-list's text into what's
+// meant to be just this one idea.
+function listItemPlainText(node: ReactNode): string {
+  if (node == null || typeof node === 'boolean') return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(listItemPlainText).join('')
+  if (isValidElement(node)) {
+    if (node.type === 'ul' || node.type === 'ol') return ''
+    return listItemPlainText((node.props as { children?: ReactNode }).children)
+  }
+  return ''
+}
+
 // Mono line icons for the header toolbar — same stroke-based style as
 // Setup.tsx's AgentTypeIcon (currentColor, no fill), styled after plain
-// Office-suite toolbar glyphs (floppy-disk save, clipboard roster, document
+// Office-suite toolbar glyphs (floppy-disk save, badge-check roster, document
 // export, spinner) instead of full-colour emoji, so the toolbar reads as one
 // coherent teal-on-cream unit rather than a row of mismatched platform emoji.
 function ToolbarIcon({ name }: { name: ToolbarIconName }) {
@@ -70,11 +87,8 @@ function ToolbarIcon({ name }: { name: ToolbarIconName }) {
     case 'roster':
       return (
         <svg {...common}>
-          <rect x="5" y="3.5" width="14" height="17" rx="1.5" />
-          <path d="M9 3v-.25A1.75 1.75 0 0 1 10.75 1h2.5A1.75 1.75 0 0 1 15 2.75V3" />
-          <line x1="8.5" y1="10.5" x2="15.5" y2="10.5" />
-          <line x1="8.5" y1="14" x2="15.5" y2="14" />
-          <line x1="8.5" y1="17.5" x2="12.5" y2="17.5" />
+          <path d="M12 3.25l6.25 2.5v4.75c0 4.6-2.9 7.85-6.25 9.5-3.35-1.65-6.25-4.9-6.25-9.5V5.75L12 3.25Z" />
+          <path d="M8.75 12.25 11 14.5l4.25-4.75" />
         </svg>
       )
     case 'export':
@@ -132,6 +146,13 @@ interface LiveToolCall {
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  // What the user bubble actually shows, when it needs to differ from the
+  // literal text sent to the backend as this turn's user message — e.g. the
+  // auto-fired initial search still sends a standardized instruction (the
+  // backend needs something concrete to act on), but the bubble shows the
+  // agent's own original setup purpose instead of that boilerplate.
+  // Undefined on every ordinary typed message, where content IS the display.
+  displayContent?: string
   // Base64 data URL of a diagram image attached to this turn (composer's
   // paperclip button). Undefined on every message that isn't an upload.
   image?: string
@@ -191,6 +212,10 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // walk react-markdown's actual output (link hrefs, list/heading structure)
   // instead of re-parsing the raw markdown string itself.
   const markdownRefs = useRef<Map<number, HTMLDivElement>>(new Map())
+  // Sentinel scrolled into view on every feed update (new message, streamed
+  // tool_start/tool_result, finished reply) so the transcript follows along
+  // live instead of leaving a fast-moving run sitting below the fold.
+  const bottomRef = useRef<HTMLDivElement>(null)
   // Stable identity for this conversation so re-saving it (after more
   // messages) updates the same localStorage entry instead of duplicating it.
   const chatIdRef = useRef(chatId ?? crypto.randomUUID())
@@ -218,7 +243,16 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     if (!kws?.length) return
     autoSentRef.current = true
     const loc = agentConfig.location ? ` in ${agentConfig.location}` : ''
-    sendMessage(`Run your standard search across your full specialty pool${loc}.`)
+    // The backend still needs a concrete instruction to act on, but the
+    // bubble shows the user's own original setup purpose instead of that
+    // boilerplate — it reads as "here's what I asked for" rather than a
+    // canned system phrase.
+    sendMessage(
+      `Run your standard search across your full specialty pool${loc}.`,
+      messages,
+      undefined,
+      agentConfig.purpose,
+    )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -227,8 +261,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       id: chatIdRef.current,
       agentName,
       agentConfig,
-      messages: messages.map(({ role, content, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits }) => ({
-        role, content, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits,
+      messages: messages.map(({ role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits }) => ({
+        role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits,
       })),
       savedAt: Date.now(),
     }
@@ -286,7 +320,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       const pdfMessages: PdfMessage[] = messages
         .map((m, i) => ({
           role: m.role,
-          content: m.content,
+          content: m.displayContent ?? m.content,
           contentEl: m.role === 'assistant' ? markdownRefs.current.get(i) ?? null : null,
           toolCallCount: m.toolCalls?.length,
           toolCalls: m.toolCalls,
@@ -336,6 +370,10 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     const t = setInterval(() => setElapsed(s => s + 1), 1000)
     return () => clearInterval(t)
   }, [thinking])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, thinking])
 
   function updateLastMessage(updater: (prev: ChatMessage) => ChatMessage) {
     setMessages(msgs => {
@@ -393,14 +431,14 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     setAttachedImage(null)
   }
 
-  async function sendMessage(text: string, currentMessages: ChatMessage[] = messages, image?: string) {
+  async function sendMessage(text: string, currentMessages: ChatMessage[] = messages, image?: string, displayText?: string) {
     if ((!text.trim() && !image) || thinking) return
     setError(null)
 
     const controller = new AbortController()
     abortRef.current = controller
 
-    const userMsg: ChatMessage = { role: 'user', content: text, image }
+    const userMsg: ChatMessage = { role: 'user', content: text, displayContent: displayText, image }
     const withUser = [...currentMessages, userMsg]
     setMessages([...withUser, { role: 'assistant', content: '', liveToolCalls: [] }])
     setThinking(true)
@@ -673,6 +711,25 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                                   </div>
                                 )
                               },
+                              li({ children, ...props }) {
+                                const idea = listItemPlainText(children).trim()
+                                return (
+                                  <li {...props}>
+                                    {children}
+                                    {idea && (
+                                      <button
+                                        type="button"
+                                        className={styles.extendIdeaButton}
+                                        title="Ask the agent to extend upon this idea"
+                                        disabled={thinking}
+                                        onClick={() => sendMessage(`Extend upon this idea: ${idea}`)}
+                                      >
+                                        Extend ↗
+                                      </button>
+                                    )}
+                                  </li>
+                                )
+                              },
                             }}
                           >
                             {text}
@@ -681,7 +738,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                       </>
                     )
                   })()
-                : <p className={styles.bubbleText}>{msg.content}</p>
+                : <p className={styles.bubbleText}>{msg.displayContent ?? msg.content}</p>
             )}
             {msg.toolCalls && <ToolActivity toolCalls={msg.toolCalls} live={false} location={agentConfig.location} />}
             {msg.durationSeconds !== undefined && (
@@ -714,6 +771,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           </div>
         ))}
         {error && <p className={styles.error}>{error}</p>}
+        <div ref={bottomRef} />
       </div>
 
       {(attachedImage || attachingImage) && (

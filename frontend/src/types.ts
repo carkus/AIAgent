@@ -133,6 +133,10 @@ export type BootstrapStreamEvent =
 export interface SavedChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  // What the bubble shows in place of `content`, when they differ (e.g. the
+  // auto-fired initial search's real instruction vs. the agent's original
+  // setup purpose). Undefined on every ordinary typed message.
+  displayContent?: string;
   // Same base64 data URL as Message.image — undefined on every saved chat
   // predating the diagram-upload feature, or on any turn with no attachment.
   image?: string;

@@ -128,6 +128,24 @@ _NARRATION_INTENT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Confirmed live complaint: the agent sometimes declines outright — no tool
+# call, no narrated intent to make one, just "I can't help with that" — for
+# requests its actual tools (fetch_page, search_jobs, delegate_to_worker)
+# could have made progress on. Neither _mentions_uncalled_tool nor
+# _NARRATION_INTENT_RE catches this, since a flat refusal names no tool and
+# describes no future action at all. Matched only when zero tool calls have
+# happened yet THIS request (tool_calls_log/delegation_count both empty) —
+# a decline after genuinely trying and coming up empty is legitimate and
+# must not be nudged into a loop.
+_REFUSAL_RE = re.compile(
+    r"\bi can'?t\b|\bi cannot\b|\bi'?m (?:not able|unable)\b|"
+    r"\bi don'?t have (?:the )?(?:ability|capability|access)\b|"
+    r"\bi do not have (?:the )?(?:ability|capability|access)\b|"
+    r"\bunfortunately,? i (?:can'?t|cannot|am unable)\b|"
+    r"\bi'?m sorry,? but\b|\bas an ai\b",
+    re.IGNORECASE,
+)
+
 
 def _extract_text_tool_calls(content: str | None, valid_names: set[str]):
     """
@@ -281,6 +299,29 @@ def _extract_text_tool_calls(content: str | None, valid_names: set[str]):
             break
         calls.append(call)
         pos = end
+
+    if not calls:
+        # Confirmed against a real turn (gemini-3.6-flash): narration and its
+        # tool call landing on the SAME line, with no fence and no separator
+        # at all — "I'll search job market trends in Melbourne.
+        # {\"name\": \"search_jobs\", \"arguments\": {...}}". None of the
+        # per-line fallbacks above catch this because the JSON doesn't start
+        # its own line — it's appended directly after the narration sentence,
+        # so `line.startswith("{")` (case 4 above) never sees it. Find the
+        # first '{' anywhere in the text and try to parse exactly one call
+        # from there, requiring nothing but whitespace to remain afterward —
+        # deliberately stricter than the embedded-fence fallback below (no
+        # trailing prose allowed), since without a fence there's no other
+        # signal separating "the call" from unrelated content that follows it.
+        brace = text.find("{")
+        if brace != -1:
+            try:
+                obj, end = decoder.raw_decode(text, brace)
+                call = _as_call(obj)
+                if call and not text[end:].strip():
+                    calls = [call]
+            except json.JSONDecodeError:
+                pass
 
     if not calls:
         # Last resort: a fenced JSON object/array embedded anywhere inside
@@ -500,6 +541,11 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
 ---
 CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
 
+NEVER decline a request outright before actually attempting it with the real tools listed below
+(fetch_page, search_jobs, delegate_to_worker, and this agent's own configured tools). "I can't help
+with that" with zero tool calls made is almost always wrong — try first, and only say you can't if
+an actual attempt genuinely came up empty.
+
 1. DO NOT call `web_search` or any generic search tool. There is no search engine connected. Every call returns 0 results and wastes a turn.
 """ + ("""
 2. For job search, salary research, or job-market questions, USE `search_jobs` — it calls a real
@@ -670,7 +716,14 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
     started_at = time.time()
     total_input_tokens = 0
     total_output_tokens = 0
-    nudged = False
+    # Confirmed live: one nudge attempt is sometimes not enough — a model that
+    # narrates-instead-of-calling once will sometimes repeat that exact
+    # pattern after being corrected once, and a single-shot budget meant the
+    # second occurrence fell straight through to being shown (and persisted
+    # into history) as if it were a real, completed answer. Same bounded
+    # retry shape as degenerate_retries below, not unlimited — a model that's
+    # still stuck after two corrections is treated as genuinely done.
+    nudge_retries = 0
     degenerate_retries = 0
     delegation_count = 0
     # Hard ceiling on LLM calls per request — without this, a model stuck in a
@@ -764,6 +817,12 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                         or bool(_NARRATION_INTENT_RE.search(final_text))
                     )
                 )
+                outright_decline = (
+                    not tool_calls_log
+                    and not delegation_count
+                    and not described_not_called
+                    and bool(_REFUSAL_RE.search(final_text))
+                )
                 # A bare schema-key word ("description", "name", ...) leaked
                 # instead of real text is unambiguous — there's no plausible
                 # reading where that's a genuine answer — so it gets its own,
@@ -790,17 +849,24 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                     continue
 
                 if (
-                    not nudged
+                    nudge_retries < 2
                     and finish_reason == "stop"
                     and (
                         (tool_calls_log and len(final_text.strip()) < 400)
                         or described_not_called
+                        or outright_decline
                     )
                 ):
-                    nudged = True
+                    nudge_retries += 1
                     current_messages.append({
                         "role": "user",
                         "content": (
+                            "You declined without actually trying — you DO have real tools "
+                            "available (fetch_page, search_jobs, delegate_to_worker, and this "
+                            "agent's own configured tools). Attempt the task with them now "
+                            "before concluding you can't help. Only say you genuinely can't if, "
+                            "after actually attempting it, you truly have no way to make progress."
+                        ) if outright_decline else (
                             "You described taking an action (e.g. calling a tool) but did not "
                             "actually call it — make the real, structured tool call now instead "
                             "of describing or narrating it in text. If no tool call is actually "

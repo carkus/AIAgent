@@ -1,0 +1,32 @@
+/* Shared clipboard-copy control — see CopyButton.tsx. Kept in its own tiny
+   module (rather than living in Chat.module.css or ToolActivity.module.css)
+   since the button is reused from both. */
+.copyButton {
+  background: transparent;
+  border: 1px solid #cfe3ea;
+  border-radius: 4px;
+  color: #3f7ea0;
+  cursor: pointer;
+  flex-shrink: 0;
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 0.15rem 0.45rem;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.copyButton:hover {
+  background: #cfe3ea;
+  color: #053750;
+}
+
+.copied {
+  border-color: #6b8f71;
+  color: #4a7c3f;
+}
+
+.copied:hover {
+  background: #e6efe1;
+  color: #4a7c3f;
+}

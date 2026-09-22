@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import mermaid from 'mermaid'
 import styles from '../styles/Chat.module.css'
 import ImageViewer from './ImageViewer'
+import CopyButton from './CopyButton'
 
 const GRAPH_ACCENT = '#05384b'
 
@@ -21,6 +22,13 @@ function ensureInitialized() {
     startOnLoad: false,
     theme: 'base',
     look: 'classic',
+    // Without this, a parse/render failure makes mermaid build its own
+    // big, unstyled "Syntax error in text" error-diagram SVG and inject it
+    // straight into <body> (confirmed in mermaid's own source — it renders
+    // that diagram before rethrowing, since no container element is passed
+    // to render() below). This suppresses that and just throws, which our
+    // own catch below already turns into the quieter raw-source fallback.
+    suppressErrorRendering: true,
     themeVariables: {
       background: '#f5f6f4',
       primaryColor: '#e6f2f1',
@@ -225,7 +233,10 @@ export default function MermaidDiagram({ chart, label, caption }: Props) {
   const body = error ? (
     <div>
       <p className={styles.mermaidError}>Diagram failed to render — showing raw source.</p>
-      <pre>{chart}</pre>
+      <div className={styles.codeCopyWrap}>
+        <pre>{chart}</pre>
+        <CopyButton text={chart} className={styles.codeCopyBtn} />
+      </div>
     </div>
   ) : (
     <>

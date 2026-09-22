@@ -641,10 +641,10 @@
    from a set". */
 .behaviorToggle,
 .behaviorToggleActive {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: rgba(5, 55, 80, 0.06);
+  border: 1px solid rgba(5, 55, 80, 0.25);
   border-radius: 5px;
-  color: var(--color-muted);
+  color: rgba(5, 55, 80, 0.6);
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
   font-size: var(--font-size-sm);
@@ -668,7 +668,7 @@
 }
 
 .behaviorToggleActive {
-  background: rgba(11, 73, 94, 0.1);
+  background: rgba(5, 55, 80, 0.18);
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
@@ -681,10 +681,10 @@
 .behaviorIconBtn,
 .behaviorIconBtnActive {
   position: relative;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: rgba(5, 55, 80, 0.06);
+  border: 1px solid rgba(5, 55, 80, 0.25);
   border-radius: 5px;
-  color: var(--color-muted);
+  color: rgba(5, 55, 80, 0.6);
   cursor: pointer;
   display: inline-flex;
   flex-direction: row;
@@ -727,7 +727,7 @@
 }
 
 .behaviorIconBtnActive {
-  background: rgba(11, 73, 94, 0.1);
+  background: rgba(5, 55, 80, 0.18);
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
