@@ -47,12 +47,7 @@ Execution environment for tool implementations:
 - Always assign the final result to a variable named `result`
 - Tool inputs are available as: `inputs` (dict), `input_data` (alias for `inputs`), or directly by name (e.g. if the tool has a `keyword` param, you can write `keyword` directly)
 
-Two primitive tools are pre-built and always available to the agent — do NOT include either in the tools array you generate:
-
-- `fetch_page` — takes a `url` (string), returns `{{status_code, url, content, char_count, truncated, listing_count}}` where `content` is clean text with all HTML, scripts, and SVG stripped. Use for company pages, news, or any general URL.
-- `search_jobs` — real job search via the Adzuna API (not scraping). Takes `what` (required, job title/keywords), `where` (optional location), `country` (optional, default "au"), `results_per_page` (optional, default 20), `page` (optional, default 1), `distance_km` (optional radius around `where`). Returns `{{status_code, total_count, returned, mean_salary, listings: [{{title, company, location, salary_min, salary_max, redirect_url, description, created, contract_type, category}}]}}`.
-
-Instruct the agent to call these directly rather than reinventing them.
+{primitives_block}
 IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write `search_jobs(...)` or `fetch_page(...)` inside an `implementation` string; if a tool needs that capability, don't generate it as a Python implementation at all — instruct the agent (via the system_prompt) to call the primitive tool itself instead.
 
 Vetted MCP tools (real, independently-maintained servers — prefer these over writing your own implementation when one already covers the need):
@@ -67,8 +62,7 @@ Rules:
 - Check the vetted MCP tools list above first for each capability the agent needs — only write a generated Python `implementation` for something no primitive and no vetted MCP tool already covers
 - Tool implementations must be self-contained Python snippets
 - Do NOT generate a fetch_url, fetch_page, scrape, or HTTP-request tool — use the built-in `fetch_page` primitive instead
-- Do NOT generate any tool that fetches or scrapes job listings, salary data, or job boards (SEEK, Indeed, LinkedIn, etc.) via `fetch_page` or raw HTTP requests — those sites block this server's IP with a 403 regardless of headers. For ANY job search, job listing, or salary-research purpose, the system_prompt MUST instruct the agent to call the built-in `search_jobs` primitive instead.
-- Do NOT generate a web_search, search_web, google_search, or any internet-search tool — there is no search engine available; agents must use `fetch_page` with direct URLs (or `search_jobs` for job data)
+{jobsearch_rule}- Do NOT generate a web_search, search_web, google_search, or any internet-search tool — there is no search engine available; agents must use `fetch_page` with direct URLs{jobsearch_pronoun_suffix}
 - Always include a `save_output` tool that writes a final result using os.path.join(TEMP_DIR, filename); the tool must set result = {{"status": "saved", "filename": filename, "path": os.path.join(TEMP_DIR, filename)}}
 - The system_prompt you generate MUST instruct the agent that after all tool calls are done it must present the actual findings (listings, data, analysis) in its reply — not list tool names, not say "search complete"
 - Search/fetch tools MUST filter results for relevance: only include items where the search keyword appears in the title or description/snippet (case-insensitive). Discard unrelated results returned by the API.
@@ -262,10 +256,57 @@ def _build_prompt(
     is surfaced as a status event by the streaming variant."""
     fewshot_entries = bootstrap_memory.retrieve_similar(purpose, provider, is_worker, agent_type=agent_type)
     mcp_catalog = mcp_client.catalog_summary()
+    # search_jobs is only ever wired up at runtime for a job_search agent
+    # (agent_stream.run_agent_stream gates it by AgentConfig.template) — an
+    # unset agent_type (e.g. a delegated worker whose parent isn't job_search)
+    # is treated as "not job search" so bootstrap doesn't tell a general/
+    # research agent to lean on a tool it will never actually have.
+    if agent_type == "job_search":
+        primitives_block = (
+            "Two primitive tools are pre-built and always available to the agent — "
+            "do NOT include either in the tools array you generate:\n\n"
+            "- `fetch_page` — takes a `url` (string), returns "
+            "{status_code, url, content, char_count, truncated, listing_count} where "
+            "`content` is clean text with all HTML, scripts, and SVG stripped. Use for "
+            "company pages, news, or any general URL.\n"
+            "- `search_jobs` — real job search via the Adzuna API (not scraping). Takes "
+            "`what` (required, job title/keywords), `where` (optional location), "
+            "`country` (optional, default \"au\"), `results_per_page` (optional, default 20), "
+            "`page` (optional, default 1), `distance_km` (optional radius around `where`). "
+            "Returns {status_code, total_count, returned, mean_salary, listings: "
+            "[{title, company, location, salary_min, salary_max, redirect_url, description, "
+            "created, contract_type, category}]}.\n\n"
+            "Instruct the agent to call these directly rather than reinventing them."
+        )
+        jobsearch_rule = (
+            "- Do NOT generate any tool that fetches or scrapes job listings, salary data, "
+            "or job boards (SEEK, Indeed, LinkedIn, etc.) via `fetch_page` or raw HTTP "
+            "requests — those sites block this server's IP with a 403 regardless of headers. "
+            "For ANY job search, job listing, or salary-research purpose, the system_prompt "
+            "MUST instruct the agent to call the built-in `search_jobs` primitive instead.\n"
+        )
+        jobsearch_pronoun_suffix = " (or `search_jobs` for job data)"
+    else:
+        primitives_block = (
+            "One primitive tool is pre-built and always available to the agent — "
+            "do NOT include it in the tools array you generate:\n\n"
+            "- `fetch_page` — takes a `url` (string), returns "
+            "{status_code, url, content, char_count, truncated, listing_count} where "
+            "`content` is clean text with all HTML, scripts, and SVG stripped. Use for "
+            "company pages, news, or any general URL.\n\n"
+            "Instruct the agent to call it directly rather than reinventing it. This agent "
+            "has no job-search tool — do not instruct it to search job listings or salary "
+            "data; that capability is reserved for job-search agents only."
+        )
+        jobsearch_rule = ""
+        jobsearch_pronoun_suffix = ""
     prompt = _BOOTSTRAP_PROMPT.format(
         purpose=purpose,
         fewshot=_format_fewshot(fewshot_entries),
         mcp_catalog=_format_mcp_catalog(mcp_catalog),
+        primitives_block=primitives_block,
+        jobsearch_rule=jobsearch_rule,
+        jobsearch_pronoun_suffix=jobsearch_pronoun_suffix,
     )
     return prompt, len(fewshot_entries)
 

@@ -408,6 +408,12 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
     # saved chats/drafts predate these fields).
     max_delegations = agent_config.get("max_delegations") or MAX_DELEGATIONS_PER_REQUEST
     search_defaults = agent_config.get("search_defaults") or {}
+    # search_jobs is only meaningful for a job-search agent — a general/research
+    # agent given the same tool would sometimes reach for it on any keyword that
+    # sounded job-adjacent. Gated by template rather than by prompt wording alone
+    # so it's actually absent from the tool list the model sees, not just
+    # discouraged.
+    is_job_search_agent = agent_config.get("template") == "job_search"
 
     system_prompt = agent_config["system_prompt"] + """
 
@@ -415,12 +421,12 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
 CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
 
 1. DO NOT call `web_search` or any generic search tool. There is no search engine connected. Every call returns 0 results and wastes a turn.
-
+""" + ("""
 2. For job search, salary research, or job-market questions, USE `search_jobs` — it calls a real
    job search API and returns structured listings (title, company, location, salary, apply URL).
    Do NOT use `fetch_page` against SEEK/Indeed/LinkedIn or similar job boards — they block this
    server's IP with a 403 regardless of headers, so it will not work.
-
+""" if is_job_search_agent else "") + """
 3. USE `fetch_page` for everything else — company pages, news, general URLs.
 
 4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — listing counts, job titles, salary ranges, company names. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
@@ -494,7 +500,10 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
 
     tool_definitions = agent_config["tools"]
 
-    tools = _PRIMITIVE_TOOLS + ([_DELEGATE_TOOL] if allow_delegation else []) + [
+    primitive_tools = _PRIMITIVE_TOOLS if is_job_search_agent else [
+        t for t in _PRIMITIVE_TOOLS if t["function"]["name"] != "search_jobs"
+    ]
+    tools = primitive_tools + ([_DELEGATE_TOOL] if allow_delegation else []) + [
         {
             "type": "function",
             "function": {
@@ -763,6 +772,7 @@ CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
                             provider=provider,
                             model=model,
                             search_defaults=search_defaults,
+                            agent_type=agent_config.get("template"),
                         )
                         pending_workers[idx] = (future, tc, tool_name, tool_inputs, source)
                     continue

@@ -29,8 +29,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     buildPurpose: (keywords, loc) =>
       `General-purpose assistant covering the following topics: ${keywords.join(', ')}` +
       `${loc ? ` (relevant to ${loc})` : ''}. ` +
-      `Decide what information or tools each topic needs and present clear, ` +
-      `well-organised findings.`,
+      `Give general, well-rounded information about each topic — what it is, ` +
+      `why it matters, and the key facts a newcomer would want to know — ` +
+      `rather than a deep or narrowly-angled investigation.`,
   },
   {
     id: 'research',
@@ -39,7 +40,9 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     buildPurpose: (keywords, loc) =>
       `Research agent for the following keywords: ${keywords.join(', ')}` +
       `${loc ? ` in ${loc}` : ''}. ` +
-      `Search for relevant information, analyse patterns and trends, ` +
+      `Focus specifically on recent changes and developments in the industry, ` +
+      `research or work being done at universities, and new or emerging technology, ` +
+      `for each keyword. Analyse patterns and trends within that scope, ` +
       `and present clear findings for each keyword.`,
   },
   {

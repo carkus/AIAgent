@@ -795,7 +795,7 @@
   margin: 0;
   line-height: 1.5;
   font-style: normal;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
 }
 
 /* Saved file viewer */

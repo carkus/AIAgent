@@ -22,7 +22,7 @@ from bootstrap import generate_agent_config
 
 
 def run_worker(task: str, context: str, provider: str | None, model: str | None,
-                search_defaults: dict | None = None) -> dict:
+                search_defaults: dict | None = None, agent_type: str | None = None) -> dict:
     """
     Bootstrap and run one worker agent to completion for `task`.
 
@@ -53,7 +53,7 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None,
         # from the same grounding (few-shot retrieval + the MCP tool catalog)
         # with zero extra code path.
         worker_config, fewshot_count = generate_agent_config(
-            purpose=task, provider=provider, model=model, is_worker=True
+            purpose=task, provider=provider, model=model, is_worker=True, agent_type=agent_type
         )
     except Exception as e:
         return {
@@ -67,6 +67,13 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None,
         }
 
     persona = worker_config.get("persona") or {}
+    # generate_agent_config's returned config never carries the frontend-only
+    # `template` field (bootstrap.py's raw model output has no notion of it) —
+    # tag it here from the parent's own type so agent_stream.run_agent_stream's
+    # search_jobs gating sees the same agent type the parent was, instead of
+    # every worker silently losing search_jobs regardless of what spawned it.
+    if agent_type:
+        worker_config["template"] = agent_type
     # A worker's own bootstrap has no notion of the Settings-screen search
     # defaults (country/results_per_page/radius_km) — it's a fresh AgentConfig
     # generated from just the subtask string — so carry the parent's values

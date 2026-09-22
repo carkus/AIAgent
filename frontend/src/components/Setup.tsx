@@ -938,6 +938,54 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
 
           <div className={styles.agentCardScroll}>
+            <div className={styles.specialInstructionsRow}>
+              <button
+                type="button"
+                className={styles.fieldLabelToggle}
+                onClick={() => setSpecialInstructionsOpen(o => !o)}
+                aria-expanded={specialInstructionsOpen}
+              >
+                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Behavior (Optional)</span>
+                <span className={styles.fieldLabelRight}>
+                  {!specialInstructionsOpen && activeToggles.length > 0 && (
+                    <span className={styles.fieldLabelCount}>{activeToggles.length} on</span>
+                  )}
+                  <span className={styles.fieldLabelCaret} aria-hidden="true">{specialInstructionsOpen ? '▾' : '▸'}</span>
+                </span>
+              </button>
+              {specialInstructionsOpen && (
+                <div className={styles.behaviorIconRow}>
+                  {BEHAVIOR_TOGGLES.map(t => {
+                    const active = activeToggles.includes(t.id)
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={active ? styles.behaviorIconBtnActive : styles.behaviorIconBtn}
+                        onClick={() => toggleBehavior(t.id)}
+                        disabled={bootstrapping}
+                        title={t.description}
+                        aria-label={t.label}
+                        aria-pressed={active}
+                      >
+                        <span className={styles.behaviorIconGlyph} aria-hidden="true"><BehaviorIcon id={t.id} /></span>
+                        <span className={styles.behaviorIconLabel}>{t.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {specialInstructionsOpen && activeToggles.length > 0 && (
+                <ul className={styles.behaviorEffectsList}>
+                  {BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => (
+                    <li key={t.id}>
+                      <span className={styles.behaviorEffectLabel}>{t.label}:</span> {t.description}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             <div className={styles.personalityRow}>
               <button
                 type="button"
@@ -1087,67 +1135,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               )}
             </div>
 
-            <div className={styles.specialInstructionsRow}>
-              <button
-                type="button"
-                className={styles.fieldLabelToggle}
-                onClick={() => setSpecialInstructionsOpen(o => !o)}
-                aria-expanded={specialInstructionsOpen}
-              >
-                <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> Behavior (Optional)</span>
-                <span className={styles.fieldLabelRight}>
-                  {!specialInstructionsOpen && activeToggles.length > 0 && (
-                    <span className={styles.fieldLabelCount}>{activeToggles.length} on</span>
-                  )}
-                  <span className={styles.fieldLabelCaret} aria-hidden="true">{specialInstructionsOpen ? '▾' : '▸'}</span>
-                </span>
-              </button>
-              {specialInstructionsOpen && (
-                <div className={styles.behaviorIconRow}>
-                  {BEHAVIOR_TOGGLES.map(t => {
-                    const active = activeToggles.includes(t.id)
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        className={active ? styles.behaviorIconBtnActive : styles.behaviorIconBtn}
-                        onClick={() => toggleBehavior(t.id)}
-                        disabled={bootstrapping}
-                        title={t.description}
-                        aria-label={t.label}
-                        aria-pressed={active}
-                      >
-                        <span className={styles.behaviorIconGlyph} aria-hidden="true"><BehaviorIcon id={t.id} /></span>
-                        <span className={styles.behaviorIconLabel}>{t.label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-              {specialInstructionsOpen && activeToggles.length > 0 && (
-                <ul className={styles.behaviorEffectsList}>
-                  {BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => (
-                    <li key={t.id}>
-                      <span className={styles.behaviorEffectLabel}>{t.label}:</span> {t.description}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {keywords.length > 0 && (
-                <div className={styles.specialtiesActionsRow}>
-                  <button
-                    type="button"
-                    className={styles.profileSaveBtn}
-                    onClick={saveAgentDraft}
-                    disabled={bootstrapping}
-                    title="Save this whole profile — name, type, location and specialties"
-                  >
-                    Save Agent
-                  </button>
-                </div>
-              )}
-            </div>
-
           </div>
 
           {/* Brief lives in its own subsection, outside the editable-fields
@@ -1246,6 +1233,17 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   </div>
                   <span className={styles.agentTypeLabel}>{getTemplate(agentType).label}</span>
                 </div>
+                {keywords.length > 0 && (
+                  <button
+                    type="button"
+                    className={`${styles.profileSaveBtn} ${styles.profileSaveBtnCommission}`}
+                    onClick={saveAgentDraft}
+                    disabled={bootstrapping}
+                    title="Save this whole profile — name, type, location and specialties"
+                  >
+                    Save Agent
+                  </button>
+                )}
                 <button
                   type="submit"
                   form="agentSetupForm"
@@ -1378,23 +1376,19 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         >
                           <div className={styles.savedChatInfo}>
                             <span className={styles.savedChatName}>Agent {d.agentName}</span>
-                            {d.traits.length > 0 && (
-                              <span className={styles.savedChatTraits}>{d.traits.join(' · ')}</span>
-                            )}
-                            <div className={styles.savedChips}>
+                            <div className={styles.savedPillRow}>
+                              {(d.behaviorToggles ?? []).map(id => (
+                                <span key={id} className={styles.savedBehaviorBadge}>
+                                  {BEHAVIOR_TOGGLES.find(t => t.id === id)?.label ?? id}
+                                </span>
+                              ))}
+                              {d.traits.map(label => (
+                                <span key={label} className={styles.savedTraitBadge}>{label}</span>
+                              ))}
                               {d.keywords.map(kw => (
                                 <span key={kw} className={styles.savedChip}>{kw}</span>
                               ))}
                             </div>
-                            {d.behaviorToggles && d.behaviorToggles.length > 0 && (
-                              <div className={styles.savedBehaviorBadges}>
-                                {d.behaviorToggles.map(id => (
-                                  <span key={id} className={styles.savedBehaviorBadge}>
-                                    {BEHAVIOR_TOGGLES.find(t => t.id === id)?.label ?? id}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
                             <span className={styles.savedChatMeta}>
                               {d.location || 'No location set'} · {getTemplate(d.agentType ?? 'research').label} · {formatSavedAt(d.savedAt)}
                             </span>
