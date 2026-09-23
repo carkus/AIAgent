@@ -1,62 +1,132 @@
-/* Flush, full-width submenu strip directly under the header toolbar — same
-   shape as Chat.module.css's .rosterPanel (no border-radius/margin, a
-   border-bottom instead of a full border, 1.25rem side padding matching the
-   header's own), not a floating rounded card with a gap above it. */
+/* Analog-print dossier treatment: parchment paper, aged-tan border, ink-grey
+   text, and a single muted oxblood accent for "flagged" — deliberately no
+   bright teal/green/amber, closer to a typewritten report or rubber ink
+   stamp than a UI toolbar. Matches CharacterGenerator.module.css's
+   .card/.stamp palette (#f2efe4 paper, #cfbf94 border) rather than the
+   white .savedSection list rows this used to mirror. */
 .bar {
-  border: none;
-  border-bottom: 1px solid var(--color-border);
-  background: #f7f5f0;
+  margin: 0 1.5rem 0.5rem;
+  border: 1px solid #cfbf94;
+  border-radius: 6px;
+  background: #f2efe4;
   overflow: hidden;
   flex-shrink: 0;
   transition: border-color 0.2s, background 0.2s;
 }
 
-/* Amber the moment any check in the bar has failed, collapsed or not. */
+/* Deliberately subtle — flagged state is already signalled by the count
+   pill and row tags below, so the whole panel doesn't need to shout. */
 .barFlagged {
-  border-color: #fde68a;
-  background: #fef3c7;
+  border-color: #b9a578;
 }
 
 .summaryRow {
   display: flex;
-  width: 100%;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0.5rem 1.25rem;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.35rem 0.4rem 0.35rem 0.65rem;
+}
+
+.summaryToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 1 auto;
+  min-width: 0;
   background: none;
   border: none;
   cursor: pointer;
   font: inherit;
   color: var(--color-text);
   text-align: left;
+  padding: 0;
 }
 
-.summaryText {
-  font-size: 0.85rem;
+.summaryTitle {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text);
+  flex-shrink: 0;
+}
+
+.summaryCount {
+  background: #e2dfd0;
+  border-radius: 999px;
+  color: var(--color-text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-sm);
   font-weight: 600;
+  padding: 0.1rem 0.55rem;
+  flex-shrink: 0;
 }
 
-.chevron {
+.summaryCountFlagged {
+  background: #7a3b3b;
+  border-radius: 999px;
+  color: #f2efe4;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  padding: 0.1rem 0.55rem;
+  flex-shrink: 0;
+}
+
+.summaryActions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.clearBtn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
   color: var(--color-muted);
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.4rem;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.clearBtn:hover {
+  color: #7a3b3b;
+  border-color: #cfbf94;
+}
+
+.chevronBtn {
+  background: none;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
   font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.2rem 0.15rem;
   flex-shrink: 0;
 }
 
 .list {
   max-height: 220px;
   overflow-y: auto;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid #cfbf94;
   padding: 4px 0;
 }
 
 .row {
   display: flex;
   gap: 8px;
-  padding: 6px 1.25rem;
+  padding: 6px 0.65rem;
   font-size: 0.8rem;
   line-height: 1.4;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid rgba(59, 51, 42, 0.12);
 }
 
 .row:last-child {
@@ -64,13 +134,35 @@
 }
 
 .rowIconPass {
-  color: #166534;
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
+  margin-top: 0.15rem;
+  background: transparent;
+  border: 1px solid var(--color-muted);
+  border-radius: 4px;
+  color: var(--color-muted);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.05rem 0.35rem;
 }
 
 .rowIconFail {
-  color: #92400e;
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
+  margin-top: 0.15rem;
+  background: transparent;
+  border: 1px solid #7a3b3b;
+  border-radius: 4px;
+  color: #7a3b3b;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.05rem 0.35rem;
 }
 
 .rowBody {
@@ -79,13 +171,57 @@
 }
 
 .rowTarget {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text);
 }
 
 .rowCheck {
-  color: var(--color-accent-secondary);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-style: italic;
+  color: var(--color-muted);
 }
 
 .rowReason {
   color: var(--color-muted);
+}
+
+.retryBtn {
+  display: inline-block;
+  margin-left: 0.5rem;
+  background: none;
+  border: 1px solid var(--color-muted);
+  border-radius: 4px;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.05rem 0.4rem;
+  vertical-align: middle;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.retryBtn:hover {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: #f2efe4;
+}
+
+/* Match Chat.module.css's .inputRow mobile breakpoint — otherwise this bar
+   keeps its wider 1.5rem side margin while the composer row directly below
+   it shrinks to 0.6rem, making the "message the agent" row visibly widen
+   past this one as soon as the viewport crosses under 520px. */
+@media (max-width: 520px) {
+  .bar {
+    margin: 0 0.6rem 0.5rem;
+  }
 }

@@ -1028,7 +1028,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 onClick={ev => { ev.stopPropagation(); setSettingsOpen(true) }}
                 title={describeModelFallback(provider)}
               >
-                🧠 {describeModel(provider, ollamaModel)}
+                <span className={styles.modelLinerIcon} aria-hidden="true">🧠</span>
+                <span>{describeModel(provider, ollamaModel)}</span>
               </button>
             </div>
             <div className={styles.characterGenGroup}>
@@ -1144,7 +1145,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 onToggle={() => setSpecialtiesOpen(o => !o)}
                 help="Specialties are the topics, roles, or keywords this agent will actually work on. Add at least one — they drive the Brief below and what the agent searches or reports on once commissioned."
                 right={!specialtiesOpen && keywords.length > 0 && (
-                  <span className={styles.fieldLabelCount}>{keywords.length}</span>
+                  <span className={styles.fieldLabelCount}>{keywords.length}/{savedKeywordPool.length}</span>
                 )}
               />
               {specialtiesOpen && (
@@ -1700,6 +1701,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   results={evalResults}
                   collapsed={evalBarCollapsed}
                   onToggleCollapse={() => setEvalBarCollapsed(c => !c)}
+                  onClear={() => setEvalResults([])}
                 />
               </>
             ) : error ? (

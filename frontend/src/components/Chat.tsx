@@ -16,7 +16,7 @@ import { describeModel, describeModelFallback } from '../modelLabel'
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/splash_logo.png'
 
-type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent' | 'attach' | 'imagePlaceholder' | 'expand' | 'collapse'
+type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent' | 'attach' | 'imagePlaceholder' | 'send'
 
 // Lenient on purpose (trailing whitespace after the fence marker, CRLF,
 // casing, trailing blank lines before the closing fence) — the earlier,
@@ -132,21 +132,14 @@ function ToolbarIcon({ name }: { name: ToolbarIconName }) {
           <path d="M4 16.5 9 12l3 2.5 4-3.5 4 4" />
         </svg>
       )
-    // Toggles the composer between a single-line input and a resizable
-    // multi-line textarea — a paragraph glyph (three lines) reads as "let me
-    // write more" better than a generic resize/fullscreen arrow would.
-    case 'expand':
+    // Send button's icon-only glyph, now that it's a circular button rather
+    // than a labeled "Send" rectangle — an upward paper-plane arrow reads as
+    // "submit" without needing text.
+    case 'send':
       return (
         <svg {...common}>
-          <line x1="5" y1="7" x2="19" y2="7" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-          <line x1="5" y1="17" x2="19" y2="17" />
-        </svg>
-      )
-    case 'collapse':
-      return (
-        <svg {...common}>
-          <line x1="5" y1="12" x2="19" y2="12" />
+          <line x1="12" y1="19" x2="12" y2="5" />
+          <path d="M6 11 12 5l6 6" />
         </svg>
       )
   }
@@ -206,8 +199,6 @@ interface Props {
 export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, initialMessages, chatId }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages ?? [])
   const [input, setInput] = useState('')
-  const [composerExpanded, setComposerExpanded] = useState(false)
-  const composerFormRef = useRef<HTMLFormElement>(null)
   const [thinking, setThinking] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [now, setNow] = useState(() => new Date())
@@ -579,6 +570,23 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     await sendMessage(text, messages, image)
   }
 
+  // "Try again" on a flagged self-check: drops the just-generated reply and
+  // resends the last user turn, same shape as a manual regenerate. Every
+  // eval target surfaced in Chat's bar (chat_response/tool_call/worker_delegation)
+  // stems from the most recent turn, so retrying always means redoing that
+  // turn — there's no per-check granularity to recover independently.
+  function handleRetryEval(_item: EvalResultItem) {
+    if (thinking) return
+    const last = messages[messages.length - 1]
+    if (!last || last.role !== 'assistant') return
+    const withoutReply = messages.slice(0, -1)
+    const lastUser = withoutReply[withoutReply.length - 1]
+    if (!lastUser || lastUser.role !== 'user') return
+    const withoutTurn = withoutReply.slice(0, -1)
+    setMessages(withoutTurn)
+    void sendMessage(lastUser.content, withoutTurn, lastUser.image, lastUser.displayContent)
+  }
+
   return (
     <div className={styles.root}>
       <header className={styles.header}>
@@ -654,20 +662,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             </button>
           </div>
         </div>
-        {agentConfig.keywords && agentConfig.keywords.length > 0 && (
-          <div className={styles.headerKeywords}>
-            {[...agentConfig.keywords].sort((a, b) => a.localeCompare(b)).map(kw => (
-              <span key={kw} className={styles.headerChip}>{kw}</span>
-            ))}
-          </div>
-        )}
       </header>
-
-      <FeedbackStatusBar
-        results={evalResults}
-        collapsed={evalBarCollapsed}
-        onToggleCollapse={() => setEvalBarCollapsed(c => !c)}
-      />
 
       {rosterOpen && (
         <div className={styles.rosterPanel}>
@@ -868,7 +863,14 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           )}
         </div>
       )}
-      <form ref={composerFormRef} className={styles.inputRow} onSubmit={handleSend}>
+      <FeedbackStatusBar
+        results={evalResults}
+        collapsed={evalBarCollapsed}
+        onToggleCollapse={() => setEvalBarCollapsed(c => !c)}
+        onClear={() => setEvalResults([])}
+        onRetry={handleRetryEval}
+      />
+      <form className={styles.inputRow} onSubmit={handleSend}>
         <input
           ref={fileInputRef}
           type="file"
@@ -886,41 +888,13 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         >
           <ToolbarIcon name="attach" />
         </button>
-        <button
-          type="button"
-          className={styles.attachBtn}
-          onClick={() => setComposerExpanded(v => !v)}
+        <input
+          className={styles.input}
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          placeholder="Message the agent..."
           disabled={thinking}
-          title={composerExpanded ? 'Collapse to a single line' : 'Expand to a multi-line prompt'}
-          aria-label={composerExpanded ? 'Collapse input to a single line' : 'Expand input to multiple lines'}
-        >
-          <ToolbarIcon name={composerExpanded ? 'collapse' : 'expand'} />
-        </button>
-        {composerExpanded ? (
-          <textarea
-            className={`${styles.input} ${styles.inputExpanded}`}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            placeholder="Message the agent... (Shift+Enter for a new line)"
-            disabled={thinking}
-            rows={3}
-            autoFocus
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                composerFormRef.current?.requestSubmit()
-              }
-            }}
-          />
-        ) : (
-          <input
-            className={styles.input}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            placeholder="Message the agent..."
-            disabled={thinking}
-          />
-        )}
+        />
         {thinking ? (
           <>
             <button type="button" className={styles.stopBtn} onClick={stopAgent}>
@@ -936,8 +910,15 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             </button>
           </>
         ) : (
-          <button type="submit" className={styles.sendBtn} disabled={!input.trim() && !attachedImage}>
-            Send
+          <button
+            type="submit"
+            className={styles.sendBtn}
+            disabled={!input.trim() && !attachedImage}
+            title="Send"
+            aria-label="Send message"
+          >
+            <ToolbarIcon name="send" />
+            <span className={styles.sendLabel}>Send</span>
           </button>
         )}
         <span className={styles.composerDivider} aria-hidden="true" />

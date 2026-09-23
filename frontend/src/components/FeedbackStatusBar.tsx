@@ -5,6 +5,8 @@ interface FeedbackStatusBarProps {
   results: EvalResultItem[]
   collapsed: boolean
   onToggleCollapse: () => void
+  onClear?: () => void
+  onRetry?: (item: EvalResultItem) => void
 }
 
 function targetLabel(item: EvalResultItem): string {
@@ -27,7 +29,7 @@ function targetLabel(item: EvalResultItem): string {
 // worker delegation), that a test was run, what it was, and what it found.
 // Presentational only — Chat.tsx and Setup.tsx each own their own
 // results/collapsed state and pass it down.
-export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse }: FeedbackStatusBarProps) {
+export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse, onClear, onRetry }: FeedbackStatusBarProps) {
   if (results.length === 0) return null
 
   const flagged = results.filter((r) => !r.passed).length
@@ -37,24 +39,46 @@ export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse
 
   return (
     <div className={`${styles.bar} ${hasFlagged ? styles.barFlagged : ''}`}>
-      <button
-        type="button"
-        className={styles.summaryRow}
-        onClick={onToggleCollapse}
-        aria-expanded={!collapsed}
-      >
-        <span className={styles.summaryText}>
-          {results.length} check{results.length === 1 ? '' : 's'}
-          {hasFlagged ? ` · ${flagged} flagged` : ' · all passed'}
-        </span>
-        <span className={styles.chevron}>{collapsed ? '▸' : '▾'}</span>
-      </button>
+      <div className={styles.summaryRow}>
+        <button
+          type="button"
+          className={styles.summaryToggle}
+          onClick={onToggleCollapse}
+          aria-expanded={!collapsed}
+        >
+          <span className={styles.summaryTitle}>Self-checks</span>
+          <span className={hasFlagged ? styles.summaryCountFlagged : styles.summaryCount}>
+            {results.length}{hasFlagged ? ` · ${flagged} flagged` : ''}
+          </span>
+        </button>
+        <div className={styles.summaryActions}>
+          {onClear && (
+            <button
+              type="button"
+              className={styles.clearBtn}
+              onClick={() => onClear()}
+              aria-label="Clear checks"
+            >
+              Clear
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles.chevronBtn}
+            onClick={onToggleCollapse}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? 'Expand checks' : 'Collapse checks'}
+          >
+            {collapsed ? '▸' : '▾'}
+          </button>
+        </div>
+      </div>
       {!collapsed && (
         <div className={styles.list}>
           {ordered.map((item, i) => (
             <div key={i} className={styles.row}>
               <span className={item.passed ? styles.rowIconPass : styles.rowIconFail}>
-                {item.passed ? '✓' : '⚠'}
+                {item.passed ? 'OK' : 'FLAG'}
               </span>
               <span className={styles.rowBody}>
                 <span className={styles.rowTarget}>{targetLabel(item)}</span>
@@ -62,6 +86,15 @@ export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse
                 <span className={styles.rowCheck}>{item.check.replace(/_/g, ' ')}</span>
                 {': '}
                 <span className={styles.rowReason}>{item.reason}</span>
+                {!item.passed && onRetry && (
+                  <button
+                    type="button"
+                    className={styles.retryBtn}
+                    onClick={() => onRetry(item)}
+                  >
+                    Try again
+                  </button>
+                )}
               </span>
             </div>
           ))}
