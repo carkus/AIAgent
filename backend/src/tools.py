@@ -181,6 +181,64 @@ def search_jobs(what: str, where: str = "", country: str = "au",
         return {"status": "error", "error": str(exc), "listings": []}
 
 
+def search_image(query: str) -> dict:
+    """
+    Built-in primitive: find one real, freely-licensed illustrative image for
+    a topic via Wikipedia/Wikimedia's public REST API (no key required, same
+    "free keyless lookup" shape as jobfit/ChattyPrayers.Api's Open-Meteo
+    weather provider). Returns a single best-match thumbnail, not a gallery —
+    this exists to illustrate a research finding, not to replace it.
+
+    Two calls: opensearch to resolve `query` to a real article title, then
+    the page/summary endpoint for that title's thumbnail. Returns
+    {"error": ...} (never raises) when nothing matches or has no image, so
+    the agent can say plainly that no image was found instead of fabricating
+    one.
+    """
+    import requests
+
+    headers = {"User-Agent": "AgentOne/1.0 (research assistant; contact via project repo)"}
+    try:
+        search = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "opensearch",
+                "search": query,
+                "limit": 1,
+                "namespace": 0,
+                "format": "json",
+            },
+            headers=headers,
+            timeout=10,
+        )
+        titles = search.json()[1] if search.ok else []
+        if not titles:
+            return {"error": f"No matching topic found for '{query}'."}
+        title = titles[0]
+
+        summary = requests.get(
+            f"https://en.wikipedia.org/api/rest_v1/page/summary/{requests.utils.quote(title)}",
+            headers=headers,
+            timeout=10,
+        )
+        if not summary.ok:
+            return {"error": f"No image available for '{title}'."}
+        data = summary.json()
+        thumbnail = data.get("thumbnail") or {}
+        image_url = thumbnail.get("source")
+        if not image_url:
+            return {"error": f"'{title}' has no illustrative image available."}
+
+        return {
+            "title": title,
+            "image_url": image_url,
+            "page_url": (data.get("content_urls") or {}).get("desktop", {}).get("page"),
+            "attribution": "Wikipedia",
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 class _AttrDict(dict):
     """dict that also supports attribute access (inputs.topic as well as
     inputs['topic']). Generated tool implementations inconsistently use both

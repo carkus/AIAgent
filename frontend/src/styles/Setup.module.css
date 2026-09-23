@@ -96,9 +96,14 @@
 }
 
 .chip {
+  /* Accent-tinted fill + accent border (not the neutral surface/border
+     pair) so an added specialty reads as definitively selected, matching
+     .behaviorToggleActive/.savedKeywordChipAdded's "active" language
+     elsewhere on this screen instead of looking like a plain, unselected
+     outline. */
   align-items: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: rgba(5, 55, 80, 0.1);
+  border: 1px solid var(--color-accent);
   border-radius: 5px;
   color: var(--color-accent);
   display: inline-flex;
@@ -808,7 +813,15 @@
   font-size: var(--font-size-xs);
   font-weight: 600;
   padding: 0.05rem 0.45rem;
-  flex-shrink: 0;
+  /* Shows the actual selected labels now, not just a count, so this can be
+     a much longer string (e.g. every behavior toggle at once) — truncates
+     with an ellipsis instead of pushing the caret/help button off the row. */
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .settingsIconBtn {
@@ -1224,14 +1237,12 @@
 
 .savedKeywordChip {
   /* The whole chip is the tap target — tapping it adds the specialty to
-     the current agent; there's no separate "+"/"Add" control any more,
-     since a dedicated button next to the label was a smaller,
-     easy-to-miss target than the chip itself. Once added, the chip fades
-     (.savedKeywordChipAdded) and stops being a tap target — removing a
-     specialty from the current agent happens via its chip in the search
-     box above, not by tapping it here again. The delete "×" button inside
-     stops propagation so deleting from the saved pool doesn't also fire
-     the add click. */
+     the current agent, or removes it again if already added
+     (.savedKeywordChipAdded stays a live toggle, not a disabled end
+     state). There's no separate "+"/"Add" control, since a dedicated
+     button next to the label was a smaller, easy-to-miss target than the
+     chip itself. The delete "×" button inside stops propagation so
+     deleting from the saved pool doesn't also fire the toggle click. */
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -1253,14 +1264,32 @@
 }
 
 .savedKeywordChipAdded {
+  /* Same light-accent-tint + accent-border "active" language as
+     .behaviorToggleActive below, at full opacity — the previous 0.55
+     opacity fade washed the accent tint/border out toward grey, which
+     read as an uncertain/disabled state rather than a definitively
+     selected one. Still a live toggle (cursor: pointer, not default) —
+     tapping it again removes the specialty. */
   background: #eaf3f7;
   border-color: var(--color-accent-secondary);
-  opacity: 0.55;
-  cursor: default;
+  opacity: 1;
+  cursor: pointer;
 }
 
 .savedKeywordChipAdded:hover {
-  border-color: var(--color-accent-secondary);
+  border-color: var(--color-text);
+}
+
+.savedKeywordChipDisabled {
+  /* An unselected chip once the MAX_SPECIALTIES cap is hit — same
+     not-yet-added look, just inert, matching .behaviorToggle:disabled's
+     opacity/cursor treatment elsewhere on this screen. */
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.savedKeywordChipDisabled:hover {
+  border-color: var(--color-border);
 }
 
 .savedKeywordLabel {
@@ -1273,21 +1302,23 @@
 }
 
 .savedKeywordDelete {
-  /* Plain-text danger glyph, not a graphic pill. Sits inside the
+  /* Same rest/hover coloring as .chipX (the "×" on a current specialty
+     chip in the main creation panel above) instead of a standalone danger
+     red, so both delete glyphs read as the same control. Sits inside the
      clickable chip, so its own click handler stops propagation. */
   background: none;
   border: none;
-  color: #b91c1c;
+  color: #6b9895;
   cursor: pointer;
   flex-shrink: 0;
   font-size: var(--font-size-lg);
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1;
-  padding: 0;
+  padding: 0 0.1rem;
 }
 
 .savedKeywordDelete:hover {
-  color: #8f1414;
+  color: var(--color-accent);
 }
 
 .savedKeywordAddNew {
@@ -1690,12 +1721,32 @@
    only clips/scrolls it once its real content genuinely can't fit in
    whatever the collapsed sibling (auto-sized to its own small peek content)
    leaves behind — no artificial percentage cap needed, and no scrollbar for
-   the common case where content comfortably fits. The dossier panel (.form)
-   is left on .panelActive's plain flex: 1 1 auto — it holds a genuinely
-   long, independently-scrollable list and should keep filling the
-   available height. */
+   the common case where content comfortably fits. */
 .focusStack .agentCard.panelActive {
   flex: 0 0 auto;
+}
+
+/* The dossier panel, once active, claims a fixed 70% of .card's height,
+   pinned to the bottom — a flex-basis percentage (tried first) never
+   resolved reliably here because .focusStack's own height is itself a
+   flex-grown value, not a definite one, and percentage flex-basis needs a
+   definite flex-container size to resolve against. Taking it out of flow
+   with position: absolute sidesteps that: .card (the nearest positioned
+   ancestor — see .card's position: relative near the top of this file) has
+   a real height: 100%, so height: 70% against IT resolves every time. It's
+   deliberately allowed to sit on top of the collapsed setup peek above
+   rather than the two sharing space via flex distribution — the peek's
+   content is already inert (.panelCollapsed > *'s pointer-events: none),
+   so an overlap costs nothing but a bit of visual overlap, not a click
+   target. */
+.focusStack .form.panelActive {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 70%;
+  z-index: 1;
+  flex: none;
 }
 
 .panelCollapsed {

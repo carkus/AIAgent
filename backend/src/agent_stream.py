@@ -5,7 +5,7 @@ import re
 import time
 from types import SimpleNamespace
 from llm_client import create_chat_completion
-from tools import execute_tool, fetch_page, search_jobs
+from tools import execute_tool, fetch_page, search_jobs, search_image
 import eval_checks
 import eval_log
 import mcp_client
@@ -165,7 +165,10 @@ _REFUSAL_RE = re.compile(
 # present in the conversation history (the user's own words, or an earlier
 # turn's already-verified reply) — a link backed by neither is demoted to
 # plain text instead of being shown as a real, clickable one.
-_MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((https?://[^\s)]+)\)")
+# Optional leading "!" also matches markdown IMAGE syntax (![alt](url)) —
+# deliberate, not an oversight: rule 3b's ban on fabricated image URLs is
+# enforced by this exact same verified-URL mechanism, not a separate check.
+_MD_LINK_RE = re.compile(r"(!)?\[([^\]]*)\]\((https?://[^\s)]+)\)")
 _URL_IN_TEXT_RE = re.compile(r"https?://[^\s\"'\\]+")
 
 
@@ -196,7 +199,7 @@ def _strip_unverified_links(text: str, tool_calls_log: list[dict], history: list
 
     def _replace(match: re.Match) -> str:
         nonlocal demoted
-        label, url = match.group(1), match.group(2)
+        label, url = match.group(2), match.group(3)
         if _url_is_verified(url, verified):
             return match.group(0)
         demoted += 1
@@ -455,6 +458,27 @@ _PRIMITIVE_TOOLS = [
                 "required": ["url"],
             },
         },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_image",
+            "description": (
+                "Find one real, freely-licensed illustrative image for a topic via "
+                "Wikipedia/Wikimedia (no scraping, a real lookup API). Returns a single "
+                "best-match thumbnail URL, never a gallery. Use sparingly, only when an "
+                "image would genuinely help illustrate a finding — your written analysis "
+                "is always the primary output, an image is supplementary polish on top of "
+                "it, never a substitute for discussing the finding in prose."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The topic/subject to find an illustrative image for, e.g. 'Great Barrier Reef'"}
+                },
+                "required": ["query"],
+            },
+        },
     }
 ]
 
@@ -599,7 +623,7 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
     # its "mandatory output" was job titles/salaries/companies — priming it
     # to frame unrelated answers as job-search results. Gated the same way
     # rule 2 below already was.
-    _tool_list_desc = "fetch_page, search_jobs, delegate_to_worker" if is_job_search_agent else "fetch_page, delegate_to_worker"
+    _tool_list_desc = "fetch_page, search_jobs, search_image, delegate_to_worker" if is_job_search_agent else "fetch_page, search_image, delegate_to_worker"
     _findings_desc = "listing counts, job titles, salary ranges, company names" if is_job_search_agent else "key facts, figures, names, and comparisons"
 
     system_prompt = agent_config["system_prompt"] + f"""
@@ -620,14 +644,7 @@ an actual attempt genuinely came up empty.
    server's IP with a 403 regardless of headers, so it will not work.
 """ if is_job_search_agent else "") + f"""
 3. USE `fetch_page` for everything else — company pages, news, general URLs. It returns
-   text ONLY (HTML, scripts, and images are stripped) — you have no way to fetch, view, or
-   embed an actual image, from Google Images or anywhere else, and no tool exists for that.
-   Never attempt to "fetch an image" or scrape a search engine's image results, and never
-   apologize about a scraping policy blocking you — that's not what's happening; you simply
-   have no image-retrieval capability at all. When the user wants a picture of something,
-   just give a plain link to a real, relevant page (the source site, product page, or
-   company page you already found) where they can see it themselves, most of the time
-   without any caveat about why — a link IS the answer, not a fallback to apologize before.
+   text ONLY (HTML and scripts stripped) — it cannot fetch or embed an image itself.
    NEVER invent a URL from memory or a guess at what one "would probably be"
    (e.g. guessing a company's careers page follows some common URL pattern).
    Only write a `[text](url)` link whose url is one a tool actually returned
@@ -637,6 +654,21 @@ an actual attempt genuinely came up empty.
    rather than fabricate one. A markdown link whose URL wasn't backed by an
    actual tool result is removed from your reply before the user sees it,
    so a fabricated one only wastes the user's trust for nothing.
+
+3b. YOUR WRITTEN ANALYSIS IS ALWAYS THE PRIMARY OUTPUT — an image is, at
+   most, supplementary illustration on top of it, never a replacement for
+   discussing a finding in your own words. When (and only when) a real
+   picture would genuinely help — a place, a species, a landmark, a
+   product, something visual the user is asking about — call `search_image`
+   with the topic. If it returns an `image_url`, embed it in your reply as
+   a plain markdown image: `![description](image_url)`. If it returns an
+   error (no match / no image available), say so briefly in plain text and
+   move on — do not retry it repeatedly, and do not apologize at length.
+   NEVER write a `![...](...)` image whose url wasn't the literal
+   `image_url` a `search_image` call actually returned this turn — the
+   same fabrication rule as links above applies to images. Don't call
+   `search_image` reflexively on every message; use it only when a visual
+   would add real value to what you're already reporting.
 
 4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — {_findings_desc}. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
 
@@ -1051,7 +1083,7 @@ an actual attempt genuinely came up empty.
 
                 tool_def = tool_def_map.get(tool_name)
                 source = "mcp" if tool_def and tool_def.get("source") == "mcp" else (
-                    "primitive" if tool_name in ("fetch_page", "search_jobs", "delegate_to_worker") else "generated"
+                    "primitive" if tool_name in ("fetch_page", "search_jobs", "search_image", "delegate_to_worker") else "generated"
                 )
                 yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs, "source": source, "call_index": idx}
 
@@ -1105,6 +1137,8 @@ an actual attempt genuinely came up empty.
                         page=tool_inputs.get("page") or 1,
                         distance_km=tool_inputs.get("distance_km") or search_defaults.get("radius_km"),
                     )
+                elif tool_name == "search_image":
+                    result = search_image(tool_inputs.get("query", ""))
                 elif tool_name in _SEARCH_TOOL_NAMES:
                     result = {
                         "error": (

@@ -446,7 +446,24 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
         <>
           {response && (
             <div className={styles.workerResponse}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{response}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  img({ src, alt, ...props }) {
+                    return (
+                      <img
+                        src={src}
+                        alt={alt}
+                        loading="lazy"
+                        className={styles.researchImage}
+                        {...props}
+                      />
+                    )
+                  },
+                }}
+              >
+                {response}
+              </ReactMarkdown>
             </div>
           )}
           {toolsUsed.length > 0 && (

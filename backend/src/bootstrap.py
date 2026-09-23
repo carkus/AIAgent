@@ -50,7 +50,7 @@ Execution environment for tool implementations:
 - Tool inputs are available as: `inputs` (dict), `input_data` (alias for `inputs`), or directly by name (e.g. if the tool has a `keyword` param, you can write `keyword` directly)
 
 {primitives_block}
-IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write `search_jobs(...)` or `fetch_page(...)` inside an `implementation` string; if a tool needs that capability, don't generate it as a Python implementation at all — instruct the agent (via the system_prompt) to call the primitive tool itself instead.
+IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write `search_jobs(...)`, `fetch_page(...)`, or `search_image(...)` inside an `implementation` string; if a tool needs that capability, don't generate it as a Python implementation at all — instruct the agent (via the system_prompt) to call the primitive tool itself instead.
 
 Vetted MCP tools (real, independently-maintained servers — prefer these over writing your own implementation when one already covers the need):
 {mcp_catalog}
@@ -64,6 +64,7 @@ Rules:
 - Check the vetted MCP tools list above first for each capability the agent needs — only write a generated Python `implementation` for something no primitive and no vetted MCP tool already covers
 - Tool implementations must be self-contained Python snippets
 - Do NOT generate a fetch_url, fetch_page, scrape, or HTTP-request tool — use the built-in `fetch_page` primitive instead
+- Do NOT generate an image-search or fetch-image tool — use the built-in `search_image` primitive instead
 {jobsearch_rule}- Do NOT generate a web_search, search_web, google_search, or any internet-search tool — there is no search engine available; agents must use `fetch_page` with direct URLs{jobsearch_pronoun_suffix}
 - Always include a `save_output` tool that writes a final result using os.path.join(TEMP_DIR, filename); the tool must set result = {{"status": "saved", "filename": filename, "path": os.path.join(TEMP_DIR, filename)}}
 - The system_prompt you generate MUST instruct the agent that after all tool calls are done it must present the actual findings (listings, data, analysis) in its reply — not list tool names, not say "search complete"
@@ -263,10 +264,20 @@ def _build_prompt(
     # unset agent_type (e.g. a delegated worker whose parent isn't job_search)
     # is treated as "not job search" so bootstrap doesn't tell a general/
     # research agent to lean on a tool it will never actually have.
+    _image_primitive = (
+        "- `search_image` — finds one real, freely-licensed illustrative image for a "
+        "topic via Wikipedia (no key required, not scraping). Takes `query` (string, "
+        "the topic). Returns {image_url, title, page_url, attribution} on success, or "
+        "{error} if nothing matched or the topic has no image. An agent's own written "
+        "analysis is always the primary output; this is supplementary illustration "
+        "only — instruct the agent to call it sparingly (only when a picture would "
+        "genuinely help) and to embed the real `image_url` it gets back as a markdown "
+        "image, never to fabricate one.\n"
+    )
     if agent_type == "job_search":
         primitives_block = (
-            "Two primitive tools are pre-built and always available to the agent — "
-            "do NOT include either in the tools array you generate:\n\n"
+            "Three primitive tools are pre-built and always available to the agent — "
+            "do NOT include any of them in the tools array you generate:\n\n"
             "- `fetch_page` — takes a `url` (string), returns "
             "{status_code, url, content, char_count, truncated, listing_count} where "
             "`content` is clean text with all HTML, scripts, and SVG stripped. Use for "
@@ -277,7 +288,8 @@ def _build_prompt(
             "`page` (optional, default 1), `distance_km` (optional radius around `where`). "
             "Returns {status_code, total_count, returned, mean_salary, listings: "
             "[{title, company, location, salary_min, salary_max, redirect_url, description, "
-            "created, contract_type, category}]}.\n\n"
+            "created, contract_type, category}]}.\n"
+            f"{_image_primitive}\n"
             "Instruct the agent to call these directly rather than reinventing them."
         )
         jobsearch_rule = (
@@ -290,15 +302,16 @@ def _build_prompt(
         jobsearch_pronoun_suffix = " (or `search_jobs` for job data)"
     else:
         primitives_block = (
-            "One primitive tool is pre-built and always available to the agent — "
-            "do NOT include it in the tools array you generate:\n\n"
+            "Two primitive tools are pre-built and always available to the agent — "
+            "do NOT include either in the tools array you generate:\n\n"
             "- `fetch_page` — takes a `url` (string), returns "
             "{status_code, url, content, char_count, truncated, listing_count} where "
             "`content` is clean text with all HTML, scripts, and SVG stripped. Use for "
-            "company pages, news, or any general URL.\n\n"
-            "Instruct the agent to call it directly rather than reinventing it. This agent "
-            "has no job-search tool — do not instruct it to search job listings or salary "
-            "data; that capability is reserved for job-search agents only."
+            "company pages, news, or any general URL.\n"
+            f"{_image_primitive}\n"
+            "Instruct the agent to call these directly rather than reinventing them. This "
+            "agent has no job-search tool — do not instruct it to search job listings or "
+            "salary data; that capability is reserved for job-search agents only."
         )
         jobsearch_rule = ""
         jobsearch_pronoun_suffix = ""

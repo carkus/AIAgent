@@ -776,6 +776,17 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                                   </div>
                                 )
                               },
+                              img({ src, alt, ...props }) {
+                                return (
+                                  <img
+                                    src={src}
+                                    alt={alt}
+                                    loading="lazy"
+                                    className={styles.researchImage}
+                                    {...props}
+                                  />
+                                )
+                              },
                               li({ children, ...props }) {
                                 const idea = listItemPlainText(children).trim()
                                 return (

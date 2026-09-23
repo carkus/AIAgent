@@ -224,11 +224,11 @@ function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], loc: st
   const extrasClause = extras.length > 0 ? ` It will do this with ${joinNatural(extras)} behavior active.` : ''
   switch (agentType) {
     case 'research':
-      return `${name} reads these specialties as a mandate to research and analyze ${topics}${beat}. If commissioned, it will search, cross-reference sources, and report back with findings and key data points.${extrasClause}`
+      return `${name} will research and analyze ${topics}${beat}. If commissioned, it will search, cross-reference sources, and report back with findings and key data points.${extrasClause}`
     case 'job_search':
-      return `${name} reads these specialties as a mandate to find roles in ${topics}${beat}. If commissioned, it will search listings, screen them against your criteria, and report back the strongest matches.${extrasClause}`
+      return `${name} will find roles in ${topics}${beat}. If commissioned, it will search listings, screen them against your criteria, and report back the strongest matches.${extrasClause}`
     default:
-      return `${name} reads these specialties as a mandate to track ${topics}${beat}. If commissioned, it will monitor developments and report back on what's most relevant.${extrasClause}`
+      return `${name} will track ${topics}${beat}. If commissioned, it will monitor developments and report back on what's most relevant.${extrasClause}`
   }
 }
 
@@ -237,6 +237,12 @@ function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], loc: st
 // delegated per specialty, capped per turn, so more specialties than this are
 // silently dropped/starved rather than all covered.
 const DEFAULT_MAX_DELEGATIONS = 6
+
+// Hard UI-side cap, independent of DEFAULT_MAX_DELEGATIONS above (that one's
+// a soft delegation-capacity warning; this one actually blocks adding a 6th
+// specialty at all) — keeps the specialty set small enough that the Brief
+// and bootstrap prompt stay focused rather than diluted across many topics.
+const MAX_SPECIALTIES = 5
 
 // Deterministic warning check, used only when the AI-drafted brief (which
 // does its own, richer warning assessment — see backend/src/brief.py)
@@ -639,7 +645,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   }, [])
 
   function addKeyword() {
-    if (bootstrapping) return
+    if (bootstrapping || keywords.length >= MAX_SPECIALTIES) return
     const kw = draft.trim()
     if (!kw || keywords.map(k => k.toLowerCase()).includes(kw.toLowerCase())) return
     const next = [...keywords, kw]
@@ -670,7 +676,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
 
   function addSavedKeyword(kw: string) {
     if (bootstrapping) return
-    setKeywords(prev => prev.some(k => k.toLowerCase() === kw.toLowerCase()) ? prev : [...prev, kw])
+    setKeywords(prev => {
+      if (prev.length >= MAX_SPECIALTIES || prev.some(k => k.toLowerCase() === kw.toLowerCase())) return prev
+      return [...prev, kw]
+    })
   }
 
   // Saved searches persist as whole keyword groups (no partial-update API),
@@ -799,9 +808,16 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setKeywords([...d.keywords])
     setDraft('')
     if (d.location) setLocation(d.location)
-    setActiveToggles([...(d.behaviorToggles ?? [])])
+    const toggles = [...(d.behaviorToggles ?? [])]
+    setActiveToggles(toggles)
     const pool = PERSONALITY_TRAITS[type] ?? PERSONALITY_TRAITS.research
-    setSelectedTraits(pool.filter(t => (d.traits ?? []).includes(t.label)).map(t => t.id))
+    const traitIds = pool.filter(t => (d.traits ?? []).includes(t.label)).map(t => t.id)
+    setSelectedTraits(traitIds)
+    // A reloaded agent with behaviors/traits already set should show them
+    // open, not tucked behind a collapsed "(Optional)" section header the
+    // user would need to know to expand.
+    if (toggles.length > 0) setSpecialInstructionsOpen(true)
+    if (traitIds.length > 0) setPersonalityOpen(true)
     onAgentNameChange(d.agentName)
     setFocusPanel('setup')
     inputRef.current?.focus()
@@ -828,8 +844,14 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setKeywords([...(cfg.keywords ?? [])])
     setDraft('')
     if (cfg.location) setLocation(cfg.location)
-    setActiveToggles([...(cfg.active_toggles ?? [])])
-    setSelectedTraits([...(cfg.active_traits ?? [])])
+    const toggles = [...(cfg.active_toggles ?? [])]
+    const traits = [...(cfg.active_traits ?? [])]
+    setActiveToggles(toggles)
+    setSelectedTraits(traits)
+    // Same "don't hide populated sections behind a collapsed header" rule
+    // as loadDraft() above.
+    if (toggles.length > 0) setSpecialInstructionsOpen(true)
+    if (traits.length > 0) setPersonalityOpen(true)
     onAgentNameChange(chat.agentName)
     setFocusPanel('setup')
     inputRef.current?.focus()
@@ -1023,49 +1045,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
 
           <div className={styles.agentCardScroll}>
-            <div className={styles.specialInstructionsRow}>
-              <SectionHeader
-                label="Behavior (Optional)"
-                expanded={specialInstructionsOpen}
-                onToggle={() => setSpecialInstructionsOpen(o => !o)}
-                help="Behavior toggles shape how the agent communicates — concise vs. detailed, skeptical vs. trusting, whether it cites sources, acts proactively, stays formal, or delegates aggressively. Turn on as many as you like; their effects combine."
-                right={!specialInstructionsOpen && activeToggles.length > 0 && (
-                  <span className={styles.fieldLabelCount}>{activeToggles.length} on</span>
-                )}
-              />
-              {specialInstructionsOpen && (
-                <div className={styles.behaviorIconRow}>
-                  {BEHAVIOR_TOGGLES.map(t => {
-                    const active = activeToggles.includes(t.id)
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        className={active ? styles.behaviorIconBtnActive : styles.behaviorIconBtn}
-                        onClick={() => toggleBehavior(t.id)}
-                        disabled={bootstrapping}
-                        title={describeBehaviorEffect(t, agentType, keywords)}
-                        aria-label={t.label}
-                        aria-pressed={active}
-                      >
-                        <span className={styles.behaviorIconGlyph} aria-hidden="true"><BehaviorIcon id={t.id} /></span>
-                        <span className={styles.behaviorIconLabel}>{t.label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-              {specialInstructionsOpen && activeToggles.length > 0 && (
-                <ul className={styles.behaviorEffectsList}>
-                  {BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => (
-                    <li key={t.id}>
-                      <span className={styles.behaviorEffectLabel}>{t.label}:</span> {describeBehaviorEffect(t, agentType, keywords)}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
             <div className={styles.personalityRow}>
               {(() => {
                 // selectedTraits can carry ids from a previously-selected
@@ -1082,10 +1061,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       label="Personality (Optional)"
                       expanded={personalityOpen}
                       onToggle={() => setPersonalityOpen(o => !o)}
-                      help="Personality traits give the agent a consistent character quirk beyond its raw behavior — e.g. Inquisitive or Meticulous for a researcher. Purely optional flavor that still shapes its generated system prompt, and the pool of traits on offer changes with the agent type below."
-                      right={!personalityOpen && activeTraits.length > 0 && (
-                        <span className={styles.fieldLabelCount}>{activeTraits.length} on</span>
-                      )}
+                      help="Personality traits give the agent a consistent character quirk beyond its raw behavior — e.g. Inquisitive or Meticulous for a researcher. Purely optional flavor that still shapes its generated system prompt, and the pool of traits on offer changes with the agent type below. Active traits are summarized in the Brief below."
                     />
                     {personalityOpen && (
                       <div className={styles.behaviorTogglesRow}>
@@ -1121,6 +1097,46 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               })()}
             </div>
 
+            <div className={styles.specialInstructionsRow}>
+              <SectionHeader
+                label="Behavior (Optional)"
+                expanded={specialInstructionsOpen}
+                onToggle={() => setSpecialInstructionsOpen(o => !o)}
+                help="Behavior toggles shape how the agent communicates — concise vs. detailed, skeptical vs. trusting, whether it cites sources, acts proactively, stays formal, or delegates aggressively. Turn on as many as you like; their effects combine. Active toggles are summarized in the Brief below."
+              />
+              {specialInstructionsOpen && (
+                <div className={styles.behaviorIconRow}>
+                  {BEHAVIOR_TOGGLES.map(t => {
+                    const active = activeToggles.includes(t.id)
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={active ? styles.behaviorIconBtnActive : styles.behaviorIconBtn}
+                        onClick={() => toggleBehavior(t.id)}
+                        disabled={bootstrapping}
+                        title={describeBehaviorEffect(t, agentType, keywords)}
+                        aria-label={t.label}
+                        aria-pressed={active}
+                      >
+                        <span className={styles.behaviorIconGlyph} aria-hidden="true"><BehaviorIcon id={t.id} /></span>
+                        <span className={styles.behaviorIconLabel}>{t.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {specialInstructionsOpen && activeToggles.length > 0 && (
+                <ul className={styles.behaviorEffectsList}>
+                  {BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => (
+                    <li key={t.id}>
+                      <span className={styles.behaviorEffectLabel}>{t.label}:</span> {describeBehaviorEffect(t, agentType, keywords)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             <div className={styles.specialtiesRow}>
               <SectionHeader
                 label="Specialties"
@@ -1133,7 +1149,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               />
               {specialtiesOpen && (
                 <p className={styles.specialtiesHint}>
-                  Type a keyword and press Enter, or select a Saved Specialty from the Agent Dossier below
+                  {keywords.length >= MAX_SPECIALTIES
+                    ? `Limit of ${MAX_SPECIALTIES} specialties reached — remove one to add another.`
+                    : 'Type a keyword and press Enter, or select a Saved Specialty from the Agent Dossier below'}
                 </p>
               )}
               {specialtiesOpen && (
@@ -1159,8 +1177,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     onChange={e => setDraft(e.target.value.slice(0, 50))}
                     onKeyDown={handleKeyDown}
                     onBlur={() => { if (draft.trim()) addKeyword() }}
-                    placeholder={keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : '+ Add Speciality'}
-                    disabled={bootstrapping}
+                    placeholder={keywords.length >= MAX_SPECIALTIES ? `Limit of ${MAX_SPECIALTIES} reached` : (keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : '+ Add Speciality')}
+                    disabled={bootstrapping || keywords.length >= MAX_SPECIALTIES}
                     maxLength={50}
                   />
                   {keywords.length > 0 && (
@@ -1376,19 +1394,20 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   <div className={styles.savedKeywordPool}>
                     {savedKeywordPool.map(kw => {
                       const alreadyAdded = keywords.some(k => k.toLowerCase() === kw.toLowerCase())
-                      const toggle = () => { if (bootstrapping || alreadyAdded) return; addSavedKeyword(kw) }
+                      const atCap = !alreadyAdded && keywords.length >= MAX_SPECIALTIES
+                      const toggle = () => { if (bootstrapping || atCap) return; if (alreadyAdded) { removeKeyword(kw) } else { addSavedKeyword(kw) } }
                       return (
                         <div
                           key={kw}
-                          className={`${styles.savedKeywordChip} ${alreadyAdded ? styles.savedKeywordChipAdded : ''}`}
+                          className={`${styles.savedKeywordChip} ${alreadyAdded ? styles.savedKeywordChipAdded : ''} ${atCap ? styles.savedKeywordChipDisabled : ''}`}
                           role="button"
-                          tabIndex={bootstrapping || alreadyAdded ? -1 : 0}
+                          tabIndex={bootstrapping || atCap ? -1 : 0}
                           onClick={toggle}
                           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } }}
                           aria-pressed={alreadyAdded}
-                          aria-disabled={alreadyAdded}
-                          aria-label={alreadyAdded ? `${kw} is already in current specialties` : `Add saved specialty ${kw} to current specialties`}
-                          title={alreadyAdded ? 'Already in current specialties' : 'Tap to add to current specialties'}
+                          aria-disabled={atCap}
+                          aria-label={alreadyAdded ? `${kw} is in current specialties — tap to remove` : atCap ? `Cannot add ${kw} — limit of ${MAX_SPECIALTIES} specialties reached` : `Add saved specialty ${kw} to current specialties`}
+                          title={alreadyAdded ? 'Tap to remove from current specialties' : atCap ? `Limit of ${MAX_SPECIALTIES} specialties reached` : 'Tap to add to current specialties'}
                         >
                           <span className={styles.savedKeywordLabel}>{kw}</span>
                           <button

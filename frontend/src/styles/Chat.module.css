@@ -230,18 +230,18 @@
    one) so these actually win over the shared base/hover/active rules above
    instead of being silently shadowed by them. */
 .headerActions .resetBtn {
-  background: #1f6f73;
+  background: #3f7ea0;
   color: #ffffff;
 }
 
 .headerActions .resetBtn:hover:not(:disabled) {
-  background: #185a5d;
+  background: #326a89;
   color: #ffffff;
   transform: translateY(-1px);
 }
 
 .headerActions .resetBtn:active:not(:disabled) {
-  background: #134648;
+  background: #285571;
   color: #ffffff;
   transform: translateY(0);
 }
@@ -890,6 +890,19 @@
   margin: 0.6rem 0 0.9rem;
   max-width: 100%;
   overflow-x: auto;
+}
+
+/* Web-sourced research images (search_image tool, embedded as markdown
+   images): grayscale + rounded corners so they read as reference material
+   alongside the agent's own written analysis, not as decorative color
+   content competing with it. */
+.researchImage {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  filter: grayscale(1);
+  margin: 0.6rem 0 0.9rem;
 }
 
 .markdown table {

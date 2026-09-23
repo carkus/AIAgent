@@ -132,13 +132,13 @@ export interface PersonalityTrait {
 
 // Every `instruction` above is written as "Adopt a(n) <trait> personality: <effect>.",
 // with <effect> phrased as a bare verb clause (e.g. "keep pulling on…", "double-check
-// details…") so it reads correctly after "a tendency to". Reworded in plain,
-// user-facing terms instead of showing the raw bootstrap-facing imperative text.
-// Used by Setup's personality summary line only, never sent to bootstrap itself.
+// details…"). Reworded in plain, user-facing terms instead of showing the raw
+// bootstrap-facing imperative text. Used by Setup's personality summary line
+// only, never sent to bootstrap itself.
 export function describeTraitEffect(trait: PersonalityTrait): string {
   const colonIdx = trait.instruction.indexOf(':')
   const effect = (colonIdx >= 0 ? trait.instruction.slice(colonIdx + 1) : trait.instruction).trim()
-  return `The agent has demonstrated a tendency to ${effect}`
+  return `The agent ${effect}`
 }
 
 // Personality traits the user picks per agent, scoped by agent type so the
