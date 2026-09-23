@@ -1,0 +1,180 @@
+/* Same manila-folder "dossier" chrome as SettingsModal.module.css — kept as
+   its own copy since CSS Modules scope classes per file, but the palette/
+   shape must match; this is the app's one other modal, reused rather than
+   inventing a second dialog style for a flagged self-check. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(22, 50, 74, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 40px;
+}
+
+.modal {
+  position: relative;
+  background: #ede4cd;
+  border: 1px solid #cfbf94;
+  border-radius: 3px 10px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 440px;
+  max-height: min(560px, 100%);
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 #f5eeda,
+    0 8px 0 -3px #e2d6b3,
+    0 8px 1px -3px #cfbf94,
+    0 20px 48px rgba(28, 40, 51, 0.28);
+}
+
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.35rem 1.1rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.dossierTab {
+  position: absolute;
+  top: -1.05rem;
+  left: 0.75rem;
+  z-index: 1;
+  background: #ede4cd;
+  clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%);
+  color: #6b5a32;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.95rem 0.35rem;
+  filter:
+    drop-shadow(0 -1px 0 #cfbf94)
+    drop-shadow(-1px 0 0 #cfbf94)
+    drop-shadow(1px 0 0 #cfbf94);
+}
+
+.title {
+  color: #6b5a32;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-lg);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: #8a7a52;
+  cursor: pointer;
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+}
+
+.closeBtn:hover {
+  background: rgba(107, 90, 50, 0.1);
+  color: var(--color-text);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem 1.1rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sectionLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-accent-secondary);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.sectionLabel::before {
+  content: '◆';
+  color: var(--color-accent);
+  font-size: var(--font-size-xs);
+}
+
+.value {
+  color: var(--color-text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-sm);
+}
+
+.reason {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+  border-top: 1px solid #cfbf94;
+  flex-shrink: 0;
+}
+
+.dismissBtn {
+  background: transparent;
+  border: 1px solid #cfbf94;
+  border-radius: 8px;
+  color: #6b5a32;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-base);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.6rem 1.4rem;
+  transition: background 0.15s;
+}
+
+.dismissBtn:hover {
+  background: rgba(107, 90, 50, 0.08);
+}
+
+.retryBtn {
+  background: var(--color-accent-secondary);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-base);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.6rem 1.6rem;
+  transition: opacity 0.15s;
+}
+
+.retryBtn:hover {
+  opacity: 0.9;
+}

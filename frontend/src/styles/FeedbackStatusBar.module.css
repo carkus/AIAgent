@@ -1,9 +1,9 @@
 /* Analog-print dossier treatment: parchment paper, aged-tan border, ink-grey
-   text, and a single muted oxblood accent for "flagged" — deliberately no
-   bright teal/green/amber, closer to a typewritten report or rubber ink
-   stamp than a UI toolbar. Matches CharacterGenerator.module.css's
-   .card/.stamp palette (#f2efe4 paper, #cfbf94 border) rather than the
-   white .savedSection list rows this used to mirror. */
+   text, and the app's existing steel-blue accent (var(--color-accent-secondary))
+   for "flagged" — no invented colours, reusing what .attachBtn/.recommissionBtn
+   etc. already use. Matches CharacterGenerator.module.css's .card/.stamp
+   palette (#f2efe4 paper, #cfbf94 border) rather than the white .savedSection
+   list rows this used to mirror. */
 .bar {
   margin: 0 1.5rem 0.5rem;
   border: 1px solid #cfbf94;
@@ -65,7 +65,7 @@
 }
 
 .summaryCountFlagged {
-  background: #7a3b3b;
+  background: var(--color-accent-secondary);
   border-radius: 999px;
   color: #f2efe4;
   font-family: 'Share Tech Mono', monospace;
@@ -98,7 +98,7 @@
 }
 
 .clearBtn:hover {
-  color: #7a3b3b;
+  color: var(--color-accent-secondary);
   border-color: #cfbf94;
 }
 
@@ -155,9 +155,9 @@
   flex-shrink: 0;
   margin-top: 0.15rem;
   background: transparent;
-  border: 1px solid #7a3b3b;
+  border: 1px solid var(--color-accent-secondary);
   border-radius: 4px;
-  color: #7a3b3b;
+  color: var(--color-accent-secondary);
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.65rem;
   font-weight: 600;

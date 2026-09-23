@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import type { EvalResultItem } from '../types'
+import FeedbackReportModal from './FeedbackReportModal'
 import styles from '../styles/FeedbackStatusBar.module.css'
 
 interface FeedbackStatusBarProps {
@@ -30,6 +32,8 @@ function targetLabel(item: EvalResultItem): string {
 // Presentational only — Chat.tsx and Setup.tsx each own their own
 // results/collapsed state and pass it down.
 export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse, onClear, onRetry }: FeedbackStatusBarProps) {
+  const [reportItem, setReportItem] = useState<EvalResultItem | null>(null)
+
   if (results.length === 0) return null
 
   const flagged = results.filter((r) => !r.passed).length
@@ -86,19 +90,26 @@ export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse
                 <span className={styles.rowCheck}>{item.check.replace(/_/g, ' ')}</span>
                 {': '}
                 <span className={styles.rowReason}>{item.reason}</span>
-                {!item.passed && onRetry && (
+                {!item.passed && (
                   <button
                     type="button"
                     className={styles.retryBtn}
-                    onClick={() => onRetry(item)}
+                    onClick={() => setReportItem(item)}
                   >
-                    Try again
+                    Report
                   </button>
                 )}
               </span>
             </div>
           ))}
         </div>
+      )}
+      {reportItem && (
+        <FeedbackReportModal
+          item={reportItem}
+          onClose={() => setReportItem(null)}
+          onRetry={onRetry ? () => { onRetry(reportItem); setReportItem(null) } : undefined}
+        />
       )}
     </div>
   )
