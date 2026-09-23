@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { fetchFile } from '../api'
 import type { ToolCall } from '../types'
+import { normalizeInlineOrderedLists } from '../markdownFormat'
 import styles from '../styles/ToolActivity.module.css'
 import CopyButton from './CopyButton'
 
@@ -462,7 +463,7 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
                   },
                 }}
               >
-                {response}
+                {normalizeInlineOrderedLists(response)}
               </ReactMarkdown>
             </div>
           )}

@@ -423,11 +423,21 @@
   flex-shrink: 0;
 }
 
-/* No overflow/flex-shrink of its own on purpose — .agentCard (the outer
-   card) is the single scroll container via its own overflow-y: auto, so a
-   scrollbar only appears once the WHOLE card's content exceeds
-   .panelActive's max-height cap, not whenever this inner region alone runs
-   out of the sliver of space left over after its fixed-size siblings. */
+/* The actual scroll container: everything between the pinned name/model
+   row (.agentCardMain) and the pinned type/Save/Commission row
+   (.profileCommissionRow) below. Those two rows sit outside this wrapper
+   as direct .agentCard children so they never scroll away — only the
+   editable fields + Brief in between do, once they exceed the space
+   .agentCard's min/max-height leaves for this flex-grown middle. */
+.agentCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .agentCardScroll {
   display: flex;
   flex-direction: column;
@@ -501,7 +511,6 @@
   flex-direction: column;
   gap: 0.35rem;
   flex-shrink: 0;
-  margin: 0.85rem 0 0;
   padding-top: 0.85rem;
   border-top: 1px solid var(--color-border);
 }
@@ -1722,9 +1731,11 @@
   transition: flex-basis 0.35s ease, opacity 0.35s ease;
 }
 
-/* The setup card never scrolls internally — it just grows to whatever
-   height its content needs. Only the dossier (.form) keeps the scrolling
-   behavior above, since its list is genuinely unbounded. */
+/* The setup card itself never scrolls — .agentCardBody (the middle section
+   between the pinned name/model row and the pinned type/Save/Commission
+   row) is the real scroll container, set explicitly on .panelActive below.
+   Only the dossier (.form) keeps the whole-panel scrolling behavior above,
+   since its list is genuinely unbounded. */
 .focusStack .agentCard {
   overflow-y: visible;
 }
@@ -1734,24 +1745,22 @@
   opacity: 1;
 }
 
-/* The setup panel hugs its own content instead of stretching to claim the
-   full height .panelActive normally grabs, so it visibly grows/shrinks as
-   Personality/Specialties/Special Instructions sections are toggled open
-   and closed. Shrink is left enabled (flex-shrink: 1, not 0) so the browser
-   only clips/scrolls it once its real content genuinely can't fit in
-   whatever the collapsed sibling (auto-sized to its own small peek content)
-   leaves behind. Capped at 70vh so a lot of open sections at once can't push
-   it past roughly the same proportion the dossier claims below — vh, not %,
+/* The setup panel takes half the viewport height by default regardless of
+   how little content is open, growing with it (Personality/Specialties/
+   Special Instructions sections toggled open) up to a 70vh cap — vh, not %,
    because % here hits the same indefinite-container problem noted below
    (.focusStack's own height comes from flexing, not a specified value, so a
    percentage main-size property on one of its flex items doesn't reliably
-   resolve); overflow-y: auto (overriding the unconditional overflow-y:
-   visible above) gives whatever doesn't fit under the cap its own
-   scrollbar instead of clipping. */
+   resolve). Past that cap, .agentCardMain (name/model row) and
+   .profileCommissionRow (type/Save/Commission row) — direct children of
+   .agentCard, outside .agentCardBody — stay fixed in place; overflow-y is
+   hidden here (not auto) so only .agentCardBody's own overflow-y: auto
+   scrolls, never the whole card including those two pinned rows. */
 .focusStack .agentCard.panelActive {
   flex: 0 0 auto;
+  min-height: 50vh;
   max-height: 70vh;
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 /* The dossier panel, once active, claims a fixed 70% of .card's height,

@@ -13,10 +13,11 @@ import ImageViewer from './ImageViewer'
 import FeedbackStatusBar from './FeedbackStatusBar'
 import type { AgentConfig, EvalResultItem, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import { describeModel, describeModelFallback } from '../modelLabel'
+import { normalizeInlineOrderedLists } from '../markdownFormat'
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/splash_logo.png'
 
-type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent' | 'attach' | 'imagePlaceholder' | 'send'
+type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent' | 'attach' | 'imagePlaceholder' | 'send' | 'location' | 'clock'
 
 // Lenient on purpose (trailing whitespace after the fence marker, CRLF,
 // casing, trailing blank lines before the closing fence) — the earlier,
@@ -140,6 +141,23 @@ function ToolbarIcon({ name }: { name: ToolbarIconName }) {
         <svg {...common}>
           <line x1="12" y1="19" x2="12" y2="5" />
           <path d="M6 11 12 5l6 6" />
+        </svg>
+      )
+    // Header meta badges (location/date-time) — same monochrome stroke set
+    // as the toolbar glyphs above, replacing full-colour platform emoji so
+    // the pills read as one teal-on-cream unit rather than mismatched emoji.
+    case 'location':
+      return (
+        <svg {...common}>
+          <path d="M12 21s-7-6.1-7-11.5a7 7 0 1 1 14 0C19 14.9 12 21 12 21Z" />
+          <circle cx="12" cy="9.5" r="2.25" />
+        </svg>
+      )
+    case 'clock':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7.5V12l3.25 2" />
         </svg>
       )
   }
@@ -609,10 +627,12 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
               </span>
             )}
             {agentConfig.location && (
-              <span className={styles.locationBadge}>📍 {agentConfig.location}</span>
+              <span className={styles.locationBadge}>
+                <ToolbarIcon name="location" /> {agentConfig.location}
+              </span>
             )}
             <span className={styles.dateTimeBadge}>
-              🕐 {now.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+              <ToolbarIcon name="clock" /> {now.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
             </span>
           </div>
         </div>
@@ -696,7 +716,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       <div className={styles.container}>
         <div className={styles.mainContent}>
           <div className={styles.toolsBadges}>
-        {agentConfig.tools.map(t => (
+        {agentConfig.tools.filter(t => t.name !== 'save_output').map(t => (
           <span key={t.name} className={styles.badge}>{t.name}</span>
         ))}
       </div>
@@ -803,7 +823,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                               },
                             }}
                           >
-                            {text}
+                            {normalizeInlineOrderedLists(text)}
                           </ReactMarkdown>
                         </div>
                       </>

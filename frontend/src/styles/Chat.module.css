@@ -22,7 +22,7 @@
 
 .headerIdentity {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   min-width: 0;
 }
 
@@ -51,14 +51,9 @@
   border-radius: 8px;
 }
 
-/* A flex column, stretched (by .headerIdentity's align-items: stretch) to
-   the full height of the logo next to it. headerTitle below is given
-   flex: 1 so it claims whatever height the location/persona/datetime lines
-   underneath don't need, then bottom-aligns its own text within that
-   claimed space — landing the name near the true vertical middle of the
-   toolbar row regardless of how many meta lines render beneath it, rather
-   than the whole four-line stack being centered as one block (which left
-   the name sitting well above center whenever any meta line was present). */
+/* .headerIdentity's align-items: center vertically centers this whole
+   title+meta block as one unit against the logo image next to it — plain
+   block centering, not a per-line height calculation. */
 .headerIdentityText {
   display: flex;
   flex-direction: column;
@@ -66,9 +61,7 @@
 }
 
 .headerTitle {
-  flex: 1;
-  display: flex;
-  align-items: flex-end;
+  display: block;
   max-width: 100%;
   overflow-wrap: break-word;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
@@ -83,22 +76,49 @@
   margin-right: 0.75rem;
 }
 
+/* Same pill treatment as .modelBadge down in the toolbar (teal accent, thin
+   #cfe3ea border, width: fit-content) instead of plain muted block text, so
+   these two meta lines read as part of the same badge language as the rest
+   of the app's chrome. */
 .locationBadge {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #3f7ea0;
+  background: transparent;
+  border: 1px solid #cfe3ea;
+  border-radius: 5px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  margin: 0.3rem 0 0;
+  width: fit-content;
   max-width: 100%;
   overflow-wrap: break-word;
-  color: #6b7785;
-  font-size: var(--font-size-sm);
-  margin: 0.15rem 0 0;
 }
 
 .dateTimeBadge {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #3f7ea0;
+  background: transparent;
+  border: 1px solid #cfe3ea;
+  border-radius: 5px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  margin: 0.3rem 0 0;
+  width: fit-content;
   max-width: 100%;
   overflow-wrap: break-word;
-  color: #6b7785;
-  font-size: var(--font-size-xs);
-  margin: 0.15rem 0 0;
+}
+
+.locationBadge svg,
+.dateTimeBadge svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
 }
 
 .personaTraits {
@@ -131,13 +151,15 @@
   font-size: var(--font-size-sm);
   font-weight: 600;
   padding: 0.1rem 0.4rem;
-  margin: 0.6rem 0 0;
   width: fit-content;
   max-width: 100%;
   overflow-wrap: break-word;
   cursor: default;
 }
 
+/* Same parchment tone as FeedbackStatusBar.module.css's .bar — no border,
+   no raised inset shadow — just a plain flat panel; the icons stay real
+   <button> elements with their own hover/active circle treatment below. */
 .headerActions {
   display: flex;
   flex-basis: 100%;
@@ -146,11 +168,9 @@
   justify-content: space-between;
   gap: 0.6rem;
   margin-top: 0.5rem;
-  background: #e9e6dc;
-  border: 1px solid #ddd9cd;
-  border-radius: 9px;
-  padding: 0.3rem;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 2px rgba(28, 40, 51, 0.08);
+  background: #f2efe4;
+  border-radius: 999px;
+  padding: 0.3rem 0.5rem;
 }
 
 .headerActionButtons {
@@ -162,8 +182,8 @@
 
 .headerActions button {
   flex: 0 0 auto;
-  height: 2.4rem;
-  width: 2.4rem;
+  height: 2.15rem;
+  width: 2.15rem;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -190,8 +210,8 @@
 }
 
 .headerActions button svg {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 .spinnerIcon {
@@ -378,14 +398,23 @@
 .messageList {
   flex: 1;
   overflow-y: auto;
-  background: #ffffff;
+  /* A left-border rule inset from the top/bottom edges rather than a plain
+     `border-left` (which would run flush edge-to-edge with no margin).
+     background-attachment's default value ("scroll") ties the image to the
+     element's own box, not to its scrolled content, so this line stays put
+     while the transcript scrolls underneath it — unlike an absolutely
+     positioned child, which would scroll away with the rest of the content. */
+  background-image: linear-gradient(var(--color-border), var(--color-border));
+  background-position: left center;
+  background-repeat: no-repeat;
+  background-size: 1px calc(100% - 3rem);
   padding: 1rem 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   width: 100%;
   max-width: 900px;
-  margin: 0 auto;
+  margin: 0 auto 20px;
   /* Single source of truth for the transcript's font too, same idea as the
      --chat-*-size vars below: every message-area element inherits this
      instead of redeclaring it, so a label/summary/heading that forgets to
@@ -974,34 +1003,33 @@
 }
 
 /* Squared-off paper toolbar, matching .headerActions at the top of the
-   screen (same warm parchment fill, thin border, square-ish radius, and
-   inset-highlight-plus-flat-shadow combo) rather than a floating rounded
-   pill — the composer should read as the bottom counterpart of the same
-   toolbar chrome, not a separate "modern chat app" widget. :focus-within
-   carries the focus ring now that .input itself is borderless (below), so
-   tabbing/typing into the field still visibly lights up the whole bar. */
+   screen — same flat parchment fill (#f2efe4), no border, same fully
+   pill-rounded radius as the buttons that sit inside both bars — so the
+   composer reads as the bottom counterpart of the same toolbar
+   chrome, not a separate "modern chat app" widget. :focus-within carries a
+   focus ring now that .input itself is borderless (below) and the row has
+   no border of its own, so tabbing/typing into the field still visibly
+   lights up the whole bar. */
 .inputRow {
   display: flex;
   align-items: center;
   gap: 0.35rem;
   margin: 0 1.5rem 1.25rem;
   padding: 0.3rem 0.4rem 0.3rem 0.75rem;
-  background: #e9e6dc;
-  border: 1px solid #ddd9cd;
-  border-radius: 9px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 2px rgba(28, 40, 51, 0.08);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  background: #f2efe4;
+  border-radius: 999px;
+  transition: box-shadow 0.15s;
   flex-shrink: 0;
 }
 
 .inputRow:focus-within {
-  border-color: #a8cdd6;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 0 3px rgba(31, 111, 115, 0.13), 0 1px 2px rgba(28, 40, 51, 0.08);
+  box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.13);
 }
 
 .input {
-  background: transparent;
+  background: #ffffff;
   border: none;
+  border-radius: 999px;
   color: #053750;
   flex: 1;
   /* Without this, a plain <input>'s default min-width: auto keeps it from
@@ -1013,7 +1041,8 @@
   font-size: var(--font-size-sm);
   letter-spacing: 0.01em;
   outline: none;
-  padding: 0.55rem 0.4rem;
+  padding: 0.55rem 0.75rem;
+  margin-right: 0.4rem;
 }
 
 .input::placeholder {
@@ -1040,8 +1069,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.1rem;
+  height: 2.1rem;
   flex-shrink: 0;
   padding: 0;
   transition: background-color 0.15s, color 0.15s;
@@ -1151,16 +1180,16 @@
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  height: 2.4rem;
-  min-width: 2.4rem;
-  padding: 0 1rem;
+  height: 2.1rem;
+  min-width: 2.1rem;
+  padding: 0 0.85rem;
   transition: background-color 0.15s, transform 0.1s;
   flex-shrink: 0;
 }
 
 .sendBtn svg {
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1rem;
+  height: 1rem;
   flex-shrink: 0;
 }
 
@@ -1191,19 +1220,19 @@
 .stopBtn {
   background: #fdecec;
   border: 1px solid #e3a3a3;
-  border-radius: 6px;
+  border-radius: 999px;
   color: #b91c1c;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 2.4rem;
+  height: 2.1rem;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: var(--font-size-sm);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0 1.25rem;
+  padding: 0 1rem;
   transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
   flex-shrink: 0;
@@ -1221,19 +1250,19 @@
 .killBtn {
   background: #b91c1c;
   border: 1px solid #b91c1c;
-  border-radius: 6px;
+  border-radius: 999px;
   color: #ffffff;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 2.4rem;
+  height: 2.1rem;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: var(--font-size-sm);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0 1.25rem;
+  padding: 0 1rem;
   transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
   flex-shrink: 0;
@@ -1274,8 +1303,8 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  height: 2.4rem;
-  padding: 0 1.15rem;
+  height: 2.1rem;
+  padding: 0 0.95rem;
   transition: background 0.15s, color 0.15s;
   white-space: nowrap;
   flex-shrink: 0;

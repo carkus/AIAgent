@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { EvalResultItem } from '../types'
 import FeedbackReportModal from './FeedbackReportModal'
 import styles from '../styles/FeedbackStatusBar.module.css'
@@ -33,16 +33,27 @@ function targetLabel(item: EvalResultItem): string {
 // results/collapsed state and pass it down.
 export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse, onClear, onRetry }: FeedbackStatusBarProps) {
   const [reportItem, setReportItem] = useState<EvalResultItem | null>(null)
+  const [maximized, setMaximized] = useState(false)
+
+  // Maximizing only makes sense with the list actually showing — if the bar
+  // gets collapsed from elsewhere (the chevron, or a future auto-collapse),
+  // drop back to the normal small strip instead of staying stuck maximized
+  // with nothing visible inside it.
+  useEffect(() => {
+    if (collapsed) setMaximized(false)
+  }, [collapsed])
 
   if (results.length === 0) return null
 
   const flagged = results.filter((r) => !r.passed).length
   const hasFlagged = flagged > 0
-  // Newest first — the most recent check is the one most relevant right now.
-  const ordered = [...results].reverse()
+  // Flagged checks first (most relevant), newest first within each group —
+  // Array.prototype.sort is stable, so reversing before the sort keeps the
+  // newest-first order intact inside both the flagged and passed groups.
+  const ordered = [...results].reverse().sort((a, b) => Number(a.passed) - Number(b.passed))
 
   return (
-    <div className={`${styles.bar} ${hasFlagged ? styles.barFlagged : ''}`}>
+    <div className={maximized ? `${styles.bar} ${styles.barMaximized}` : styles.bar}>
       <div className={styles.summaryRow}>
         <button
           type="button"
@@ -66,6 +77,18 @@ export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse
               Clear
             </button>
           )}
+          {!collapsed && (
+            <button
+              type="button"
+              className={styles.maximizeBtn}
+              onClick={() => setMaximized(m => !m)}
+              aria-pressed={maximized}
+              aria-label={maximized ? 'Restore self-checks panel' : 'Maximize self-checks panel'}
+              title={maximized ? 'Restore' : 'Maximize'}
+            >
+              {maximized ? '⤡' : '⤢'}
+            </button>
+          )}
           <button
             type="button"
             className={styles.chevronBtn}
@@ -78,7 +101,7 @@ export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse
         </div>
       </div>
       {!collapsed && (
-        <div className={styles.list}>
+        <div className={maximized ? `${styles.list} ${styles.listMaximized}` : styles.list}>
           {ordered.map((item, i) => (
             <div key={i} className={styles.row}>
               <span className={item.passed ? styles.rowIconPass : styles.rowIconFail}>

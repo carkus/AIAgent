@@ -1045,6 +1045,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
           </div>
 
+          <div className={styles.agentCardBody}>
           <div className={styles.agentCardScroll}>
             <div className={styles.personalityRow}>
               {(() => {
@@ -1305,6 +1306,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 </>
               )
             )}
+          </div>
           </div>
 
           <div className={styles.profileCommissionRow}>
