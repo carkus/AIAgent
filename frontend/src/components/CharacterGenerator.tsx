@@ -76,6 +76,13 @@ export default function CharacterGenerator({ isOpen, agentType, onClose, onEmplo
             ))}
           </div>
 
+          <p className={styles.rowLabel}>Standing Orders</p>
+          <div className={styles.traitRow}>
+            {character.behaviors.map(b => (
+              <span key={b} className={styles.behaviorTag}>{b}</span>
+            ))}
+          </div>
+
           <p className={styles.tagline}>&ldquo;{character.tagline}&rdquo;</p>
 
           <div className={styles.divider} />

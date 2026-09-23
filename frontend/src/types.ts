@@ -56,7 +56,7 @@ export interface AgentConfig {
   // which fall back to the backend's own defaults (agent_stream.py).
   max_delegations?: number | null;
   search_defaults?: SearchDefaults;
-  // Behavior toggle ids active at bootstrap time (Setup.tsx's BEHAVIOR_TOGGLES) —
+  // Behavior toggle ids active at bootstrap time (agentTypes.ts's BEHAVIOR_TOGGLES) —
   // already baked into `purpose` as compounded instructions; kept here too,
   // undefined/[] on older saved chats/drafts, purely so a resumed chat or a
   // reloaded draft can show/restore which toggles were on.
@@ -89,6 +89,23 @@ export interface Message {
   image?: string;
 }
 
+// One self-evaluation check result (backend/src/eval_checks.py), reused
+// verbatim across all four session stages — bootstrap, chat response, tool
+// call, and worker delegation — so the frontend needs only one shape and one
+// rendering component (FeedbackStatusBar) regardless of which stage produced
+// it. `target_id` is the tool call's `call_index` for a tool_call check, or
+// the worker's persona name for a worker_delegation/bootstrap check; null
+// for the top-level bootstrap and chat_response checks.
+export interface EvalResultItem {
+  check: string
+  target: 'bootstrap' | 'chat_response' | 'tool_call' | 'worker_delegation'
+  target_id: string | null
+  passed: boolean
+  reason: string
+  method: 'deterministic' | 'llm_judge'
+  severity?: 'info' | 'warning'
+}
+
 // Stream events emitted by the agent loop
 export type StreamEvent =
   // The agent's own step-by-step plan for this turn (agent_stream.py's
@@ -98,6 +115,7 @@ export type StreamEvent =
   | { type: 'plan'; diagram: string; summary: string | null }
   | { type: 'tool_start'; tool: string; inputs: Record<string, unknown>; source?: ToolCall['source']; call_index: number }
   | { type: 'tool_result'; tool: string; result: string; source?: ToolCall['source']; call_index: number }
+  | ({ type: 'eval_result' } & EvalResultItem)
   | {
       type: 'done';
       response: string;
@@ -124,6 +142,7 @@ export type BootstrapStreamEvent =
   | { type: 'status'; message: string }
   | { type: 'tool'; name: string }
   | { type: 'model'; used: ModelAttempt | null; failed: ModelAttempt[] }
+  | ({ type: 'eval_result' } & EvalResultItem)
   | { type: 'done'; config: AgentConfig }
   | { type: 'error'; message: string }
 

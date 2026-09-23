@@ -200,6 +200,34 @@
   padding: 0.2rem 0.5rem;
 }
 
+/* Small uppercase micro-caption distinguishing the behavior row from the
+   personality traitRow directly above it — otherwise two visually
+   identical tag rows in a row read as one longer list, not two axes. */
+.rowLabel {
+  margin: 0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  opacity: 0.75;
+}
+
+/* Same shape as .traitTag, tinted with the accent-secondary color so
+   behavior (how it communicates) reads as a distinct axis from
+   personality (traitTag, neutral gray) at a glance. */
+.behaviorTag {
+  background: #eaf3f7;
+  border: 1px solid var(--color-accent-secondary);
+  border-radius: 5px;
+  color: var(--color-accent-secondary);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+}
+
 .tagline {
   margin: 0;
   font-style: italic;

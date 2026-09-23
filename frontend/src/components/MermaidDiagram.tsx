@@ -31,11 +31,11 @@ function ensureInitialized() {
     suppressErrorRendering: true,
     themeVariables: {
       background: '#f5f6f4',
-      primaryColor: '#e6f2f1',
+      primaryColor: '#f2f1ec',
       primaryTextColor: '#16324a',
       primaryBorderColor: GRAPH_ACCENT,
       lineColor: GRAPH_ACCENT,
-      secondaryColor: '#eaf3f7',
+      secondaryColor: '#e6e4dc',
       tertiaryColor: '#f0efe9',
       fontSize: '14px',
       fontFamily,
@@ -140,6 +140,21 @@ function fixUnbalancedBrackets(chart: string): string {
     .join('\n')
 }
 
+// Confirmed against a real failure: an unquoted node label containing
+// parentheses (e.g. A[Delegate search across specialty pool (job search,
+// software engineering, and cover letter writing)]) breaks mermaid's
+// flowchart parser — a bare '(' inside a [...] label is ambiguous with the
+// round-edge node shape token, so the parser chokes on it. Wrapping the
+// label text in double quotes is mermaid's own documented escape hatch and
+// is a no-op for labels that don't contain parentheses. Already-quoted
+// labels (content starting/ending with '"') are left untouched — the
+// character class excludes '"', so a match can't span an existing pair.
+const BRACKET_LABEL_RE = /\[([^[\]"]*[()][^[\]"]*)\]/g
+
+function quoteParenLabels(chart: string): string {
+  return chart.replace(BRACKET_LABEL_RE, (_full, label: string) => `["${label.replace(/"/g, "'")}"]`)
+}
+
 // A response occasionally puts plain English (not Mermaid syntax at all)
 // into what should have been a ```mermaid-plan/```mermaid fence — confirmed
 // in live repro. Rendering that as a diagram always fails and, for the
@@ -205,7 +220,7 @@ export default function MermaidDiagram({ chart, label, caption }: Props) {
       return
     }
     let cancelled = false
-    const adapted = fixUnbalancedBrackets(fixReservedEndKeyword(adaptChartForWidth(chart, window.innerWidth)))
+    const adapted = fixUnbalancedBrackets(quoteParenLabels(fixReservedEndKeyword(adaptChartForWidth(chart, window.innerWidth))))
     mermaid.render(`mermaid-${id}`, adapted)
       .then(result => { if (!cancelled) setSvg(withExplicitSvgSize(result.svg)) })
       .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : 'Diagram failed to render') })

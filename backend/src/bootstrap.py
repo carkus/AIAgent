@@ -3,6 +3,8 @@ import logging
 import re
 from llm_client import create_chat_completion
 import bootstrap_memory
+import eval_checks
+import eval_log
 import mcp_client
 
 logger = logging.getLogger(__name__)
@@ -579,8 +581,10 @@ def generate_agent_config_stream(
             yield {"type": "error", "message": f"Tool-code correction retry failed: {e}"}
             return
 
+    dropped_tool_names: list[str] = []
     if tool_errors:
         broken = {name for name, _ in tool_errors}
+        dropped_tool_names = sorted(broken)
         config["tools"] = [
             t for t in config.get("tools", [])
             if not isinstance(t, dict) or t.get("name") not in broken
@@ -591,5 +595,15 @@ def generate_agent_config_stream(
     config["purpose"] = purpose
     config["provider"] = provider
     config["ollama_model"] = model
+
+    try:
+        for eval_result in eval_checks.check_bootstrap(
+            config, purpose, provider, model, dropped_tool_names=dropped_tool_names,
+        ):
+            eval_log.record(eval_result)
+            yield {"type": "eval_result", **eval_result}
+    except Exception as e:
+        logger.info("bootstrap eval checks skipped: %s", e)
+
     bootstrap_memory.record(purpose, config, provider, is_worker, agent_type=agent_type)
     yield {"type": "done", "config": config}

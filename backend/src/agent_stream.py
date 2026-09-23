@@ -1,11 +1,16 @@
 import concurrent.futures
 import json
+import logging
 import re
 import time
 from types import SimpleNamespace
 from llm_client import create_chat_completion
 from tools import execute_tool, fetch_page, search_jobs
+import eval_checks
+import eval_log
 import mcp_client
+
+logger = logging.getLogger(__name__)
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 
@@ -145,6 +150,59 @@ _REFUSAL_RE = re.compile(
     r"\bi'?m sorry,? but\b|\bas an ai\b",
     re.IGNORECASE,
 )
+
+# Confirmed live complaint: the model sometimes writes a plausible-looking
+# markdown link — [Acme Careers](https://acme.com/careers) — from training
+# data/memory rather than from any URL a tool actually returned this turn.
+# It reads exactly like a real, sourced link, so there's no way for the user
+# to tell it's fabricated until they click it. Rather than trust the system
+# prompt's own instruction not to do this (rule 3 below), every markdown
+# link in the final answer is cross-checked against URLs that genuinely came
+# back from a tool this turn (fetch_page's resolved `url`, search_jobs'
+# `redirect_url`, an MCP/generated tool's own output — scraped generically
+# out of each tool_calls_log entry's raw JSON `result` string rather than
+# parsing each tool's response shape individually) plus any URL already
+# present in the conversation history (the user's own words, or an earlier
+# turn's already-verified reply) — a link backed by neither is demoted to
+# plain text instead of being shown as a real, clickable one.
+_MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((https?://[^\s)]+)\)")
+_URL_IN_TEXT_RE = re.compile(r"https?://[^\s\"'\\]+")
+
+
+def _collect_verified_urls(tool_calls_log: list[dict], history: list) -> list[str]:
+    urls: list[str] = []
+    for entry in tool_calls_log:
+        urls.extend(_URL_IN_TEXT_RE.findall(entry.get("result") or ""))
+    for m in history:
+        content = m.get("content")
+        if isinstance(content, str):
+            urls.extend(_URL_IN_TEXT_RE.findall(content))
+    return urls
+
+
+def _url_is_verified(url: str, verified_urls: list[str]) -> bool:
+    # Strip trailing punctuation a model tacks onto a copied URL from its own
+    # prose (a closing paren/period) before comparing — that shouldn't fail
+    # an otherwise-real link. A substring match either way tolerates minor
+    # differences (tracking params, trailing slash) between the URL a tool
+    # returned and how the model reproduced it.
+    candidate = url.rstrip(".,;:)")
+    return any(candidate == real or candidate in real or real in candidate for real in verified_urls)
+
+
+def _strip_unverified_links(text: str, tool_calls_log: list[dict], history: list) -> tuple[str, int]:
+    verified = _collect_verified_urls(tool_calls_log, history)
+    demoted = 0
+
+    def _replace(match: re.Match) -> str:
+        nonlocal demoted
+        label, url = match.group(1), match.group(2)
+        if _url_is_verified(url, verified):
+            return match.group(0)
+        demoted += 1
+        return label
+
+    return _MD_LINK_RE.sub(_replace, text), demoted
 
 
 def _extract_text_tool_calls(content: str | None, valid_names: set[str]):
@@ -535,14 +593,22 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
     # so it's actually absent from the tool list the model sees, not just
     # discouraged.
     is_job_search_agent = agent_config.get("template") == "job_search"
+    # These two phrases used to be hardcoded unconditionally, so even a
+    # general/research agent (no search_jobs in its tool list at all) was
+    # told in its own system prompt that it had a job-search tool and that
+    # its "mandatory output" was job titles/salaries/companies — priming it
+    # to frame unrelated answers as job-search results. Gated the same way
+    # rule 2 below already was.
+    _tool_list_desc = "fetch_page, search_jobs, delegate_to_worker" if is_job_search_agent else "fetch_page, delegate_to_worker"
+    _findings_desc = "listing counts, job titles, salary ranges, company names" if is_job_search_agent else "key facts, figures, names, and comparisons"
 
-    system_prompt = agent_config["system_prompt"] + """
+    system_prompt = agent_config["system_prompt"] + f"""
 
 ---
 CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
 
 NEVER decline a request outright before actually attempting it with the real tools listed below
-(fetch_page, search_jobs, delegate_to_worker, and this agent's own configured tools). "I can't help
+({_tool_list_desc}, and this agent's own configured tools). "I can't help
 with that" with zero tool calls made is almost always wrong — try first, and only say you can't if
 an actual attempt genuinely came up empty.
 
@@ -552,7 +618,7 @@ an actual attempt genuinely came up empty.
    job search API and returns structured listings (title, company, location, salary, apply URL).
    Do NOT use `fetch_page` against SEEK/Indeed/LinkedIn or similar job boards — they block this
    server's IP with a 403 regardless of headers, so it will not work.
-""" if is_job_search_agent else "") + """
+""" if is_job_search_agent else "") + f"""
 3. USE `fetch_page` for everything else — company pages, news, general URLs. It returns
    text ONLY (HTML, scripts, and images are stripped) — you have no way to fetch, view, or
    embed an actual image, from Google Images or anywhere else, and no tool exists for that.
@@ -562,8 +628,17 @@ an actual attempt genuinely came up empty.
    just give a plain link to a real, relevant page (the source site, product page, or
    company page you already found) where they can see it themselves, most of the time
    without any caveat about why — a link IS the answer, not a fallback to apologize before.
+   NEVER invent a URL from memory or a guess at what one "would probably be"
+   (e.g. guessing a company's careers page follows some common URL pattern).
+   Only write a `[text](url)` link whose url is one a tool actually returned
+   to you this turn (fetch_page's resolved page URL, search_jobs' listing
+   URLs, or a URL already present in the conversation) — if you don't have
+   a real URL for something, name it in plain text with no link at all
+   rather than fabricate one. A markdown link whose URL wasn't backed by an
+   actual tool result is removed from your reply before the user sees it,
+   so a fabricated one only wastes the user's trust for nothing.
 
-4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — listing counts, job titles, salary ranges, company names. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
+4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — {_findings_desc}. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
 
 5. DISCUSS AND ANALYSE YOUR FINDINGS IN REAL PROSE — A DIAGRAM IS A BONUS,
    NEVER A REPLACEMENT. Your job is to actually talk through what you found:
@@ -861,8 +936,8 @@ an actual attempt genuinely came up empty.
                     current_messages.append({
                         "role": "user",
                         "content": (
-                            "You declined without actually trying — you DO have real tools "
-                            "available (fetch_page, search_jobs, delegate_to_worker, and this "
+                            f"You declined without actually trying — you DO have real tools "
+                            f"available ({_tool_list_desc}, and this "
                             "agent's own configured tools). Attempt the task with them now "
                             "before concluding you can't help. Only say you genuinely can't if, "
                             "after actually attempting it, you truly have no way to make progress."
@@ -877,6 +952,22 @@ an actual attempt genuinely came up empty.
                         ),
                     })
                     continue
+
+                final_text, stripped_link_count = _strip_unverified_links(final_text, tool_calls_log, messages)
+
+                try:
+                    last_user_message = next(
+                        (m.get("content") for m in reversed(messages) if m.get("role") == "user"), ""
+                    )
+                    if not isinstance(last_user_message, str):
+                        last_user_message = ""
+                    for eval_result in eval_checks.check_chat_response(
+                        last_user_message, final_text, tool_calls_log, stripped_link_count, provider, model,
+                    ):
+                        eval_log.record(eval_result)
+                        yield {"type": "eval_result", **eval_result}
+                except Exception as e:
+                    logger.info("chat_response eval checks skipped: %s", e)
 
                 yield {
                     "type": "done",
@@ -926,6 +1017,16 @@ an actual attempt genuinely came up empty.
                 })
                 return result_str
 
+            def _tool_call_eval_events(tool_name, tool_inputs, tool_def, result_str, source, call_index):
+                try:
+                    for eval_result in eval_checks.check_tool_call(
+                        tool_name, tool_inputs, tool_def, result_str, source, call_index,
+                    ):
+                        eval_log.record(eval_result)
+                        yield {"type": "eval_result", **eval_result}
+                except Exception as e:
+                    logger.info("tool_call eval checks skipped: %s", e)
+
             for idx, tc in enumerate(effective_tool_calls):
                 tool_name = tc.function.name
                 try:
@@ -965,6 +1066,7 @@ an actual attempt genuinely came up empty.
                         }
                         result_str = _finish(tc, tool_name, tool_inputs, result, source)
                         yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source, "call_index": idx}
+                        yield from _tool_call_eval_events(tool_name, tool_inputs, tool_def, result_str, source, idx)
                     else:
                         delegation_count += 1
                         # Deferred import: orchestrator imports run_agent_stream from
@@ -1022,6 +1124,7 @@ an actual attempt genuinely came up empty.
 
                 result_str = _finish(tc, tool_name, tool_inputs, result, source)
                 yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source, "call_index": idx}
+                yield from _tool_call_eval_events(tool_name, tool_inputs, tool_def, result_str, source, idx)
 
             # Stream each delegated worker's result as soon as it finishes —
             # not in submission order — since running them concurrently only
@@ -1038,6 +1141,16 @@ an actual attempt genuinely came up empty.
                         result = {"error": f"Worker crashed: {e}"}
                     result_str = _finish(tc, tool_name, tool_inputs, result, source)
                     yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source, "call_index": idx}
+                    tool_def = tool_def_map.get(tool_name)
+                    yield from _tool_call_eval_events(tool_name, tool_inputs, tool_def, result_str, source, idx)
+                    # The worker's own checks (its bootstrap + delegation-fit
+                    # judge, and eval_result events already relayed from its
+                    # own inner run_agent_stream loop — see orchestrator.py's
+                    # run_worker) were already recorded inside run_worker
+                    # itself; relay them here without recording again.
+                    if isinstance(result, dict) and result.get("eval_results"):
+                        for eval_result in result["eval_results"]:
+                            yield {"type": "eval_result", **eval_result}
                 executor.shutdown(wait=False)
 
             current_messages.extend(tool_result_messages)

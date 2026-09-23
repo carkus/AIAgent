@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, listAgentDrafts, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
 import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
 import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat } from '../chatStorage'
-import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, ModelAttempt, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
-import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect } from '../agentTypes'
+import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, EvalResultItem, LlmProvider, ModelAttempt, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
+import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, type BehaviorToggle } from '../agentTypes'
 import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback } from '../modelLabel'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
 import SettingsModal from './SettingsModal'
 import CharacterGenerator from './CharacterGenerator'
 import HelpTip from './HelpTip'
+import FeedbackStatusBar from './FeedbackStatusBar'
 
 // Mono line icons matching the app's stroke-based visual style — plain
 // geometric shapes (magnifier / briefcase / compass), not emoji, so they
@@ -164,58 +165,6 @@ function SectionHeader({ label, expanded, onToggle, help, right }: {
     </div>
   )
 }
-
-interface BehaviorToggle {
-  id: string
-  label: string
-  description: string
-  // Appended verbatim to the bootstrap purpose string when the toggle is
-  // on. Several toggles can be on at once — their instructions just
-  // concatenate, so effects compound rather than one replacing another.
-  instruction: string
-}
-
-// Starting set of six — each is an independent axis (verbosity, epistemic
-// stance, sourcing, initiative, tone, delegation strategy) so combinations
-// stay meaningful rather than overlapping/contradicting each other.
-export const BEHAVIOR_TOGGLES: BehaviorToggle[] = [
-  {
-    id: 'concise',
-    label: 'Concise',
-    description: 'Short answers — bullets over paragraphs, no preamble.',
-    instruction: 'Keep every response as short as possible. Prefer bullet points over paragraphs, skip preamble and restating the question, and never pad an answer to sound more thorough than it is.',
-  },
-  {
-    id: 'skeptical',
-    label: 'Skeptical',
-    description: 'Challenges weak or unverified claims instead of repeating them.',
-    instruction: 'Treat every claim, source, and tool result critically. Call out weak, biased, outdated, or unverified information explicitly instead of repeating it at face value.',
-  },
-  {
-    id: 'cite-sources',
-    label: 'Cite Sources',
-    description: 'Attaches the source URL behind every fact it states.',
-    instruction: 'Whenever you state a fact drawn from a tool result or fetched page, cite the source URL or reference inline next to the claim.',
-  },
-  {
-    id: 'proactive',
-    label: 'Proactive',
-    description: 'Surfaces risks, gaps, and next steps unprompted.',
-    instruction: "Don't just answer literally — proactively flag risks, gaps, or good next steps you notice along the way, even when not asked.",
-  },
-  {
-    id: 'formal',
-    label: 'Formal Tone',
-    description: 'Professional register — no slang, contractions, or asides.',
-    instruction: 'Write in a formal, professional register. Avoid slang, contractions, humor, and casual asides.',
-  },
-  {
-    id: 'max-delegation',
-    label: 'Max Delegation',
-    description: 'Splits work across worker agents even for single-topic requests.',
-    instruction: 'Prefer delegating sub-tasks to worker agents even for single-topic requests — split research into narrower parallel slices whenever there is more than one angle to cover, rather than researching everything yourself.',
-  },
-]
 
 function joinNatural(items: string[]): string {
   if (items.length === 0) return ''
@@ -476,6 +425,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [progress, setProgress] = useState<string | null>(null)
   const [toolsSoFar, setToolsSoFar] = useState<string[]>([])
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
+  // Self-evaluation status bar (root CLAUDE.md eval-framework task) — same
+  // component/shape as Chat.tsx's, scoped to just this bootstrap attempt
+  // (reset alongside progress/toolsSoFar in runBootstrap below).
+  const [evalResults, setEvalResults] = useState<EvalResultItem[]>([])
+  const [evalBarCollapsed, setEvalBarCollapsed] = useState(true)
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([])
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
   const [locationDetecting, setLocationDetecting] = useState(false)
@@ -909,9 +863,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   }
 
   function handleAgentTypeChange(type: AgentTemplateId) {
+    // Previously pruned selectedTraits down to whatever overlapped the new
+    // type's pool — but PERSONALITY_TRAITS pools are fully disjoint across
+    // types (zero shared ids), so that always emptied the selection on any
+    // type switch. Traits/toggles now persist across type changes; the
+    // personality UI itself already filters selectedTraits by the current
+    // type's pool wherever it's displayed, so a stale id from a previous
+    // type just stays inert (not shown, not counted) until that type is
+    // revisited, instead of being lost.
     setAgentType(type)
-    const pool = PERSONALITY_TRAITS[type] ?? PERSONALITY_TRAITS.research
-    setSelectedTraits(prev => prev.filter(id => pool.some(t => t.id === id)))
   }
 
   function toggleSavedSection(section: SavedSectionId) {
@@ -939,10 +899,27 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setProgress(null)
     setToolsSoFar([])
     setModelInfo(null)
+    setEvalResults([])
+    setEvalBarCollapsed(true)
     function handleProgress(event: BootstrapStreamEvent) {
       if (event.type === 'status') setProgress(event.message)
       else if (event.type === 'tool') setToolsSoFar(prev => [...prev, event.name])
       else if (event.type === 'model') setModelInfo({ used: event.used, failed: event.failed })
+      else if (event.type === 'eval_result') {
+        setEvalResults(prev => [
+          ...prev,
+          {
+            check: event.check,
+            target: event.target,
+            target_id: event.target_id,
+            passed: event.passed,
+            reason: event.reason,
+            method: event.method,
+            severity: event.severity,
+          },
+        ])
+        if (!event.passed) setEvalBarCollapsed(false)
+      }
     }
     try {
       const config = await bootstrap(
@@ -962,7 +939,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         max_delegations: maxDelegations,
         search_defaults: searchDefaults,
         active_toggles: activeToggles,
-        active_traits: selectedTraits,
+        // Only the ids that actually belong to this type's pool — selectedTraits
+        // itself can still hold ids left over from a type visited earlier in
+        // this session (no longer pruned on type change), which must not leak
+        // into a persisted/resumable AgentConfig.
+        active_traits: traitPool.filter(t => selectedTraits.includes(t.id)).map(t => t.id),
       })
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Unknown error')
@@ -1086,46 +1067,58 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
 
             <div className={styles.personalityRow}>
-              <SectionHeader
-                label="Personality (Optional)"
-                expanded={personalityOpen}
-                onToggle={() => setPersonalityOpen(o => !o)}
-                help="Personality traits give the agent a consistent character quirk beyond its raw behavior — e.g. Inquisitive or Meticulous for a researcher. Purely optional flavor that still shapes its generated system prompt, and the pool of traits on offer changes with the agent type below."
-                right={!personalityOpen && selectedTraits.length > 0 && (
-                  <span className={styles.fieldLabelCount}>{selectedTraits.length} on</span>
-                )}
-              />
-              {personalityOpen && (
-                <div className={styles.behaviorTogglesRow}>
-                  {(PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research).map(t => {
-                    const active = selectedTraits.includes(t.id)
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        className={active ? styles.behaviorToggleActive : styles.behaviorToggle}
-                        onClick={() => toggleTrait(t.id)}
-                        disabled={bootstrapping}
-                        title={t.instruction}
-                        aria-pressed={active}
-                      >
-                        {t.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-              {personalityOpen && selectedTraits.length > 0 && (
-                <ul className={styles.behaviorEffectsList}>
-                  {(PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research)
-                    .filter(t => selectedTraits.includes(t.id))
-                    .map(t => (
-                      <li key={t.id}>
-                        <span className={styles.behaviorEffectLabel}>{t.label}:</span> {describeTraitEffect(t)}
-                      </li>
-                    ))}
-                </ul>
-              )}
+              {(() => {
+                // selectedTraits can carry ids from a previously-selected
+                // agent type (no longer pruned on type change, see
+                // handleAgentTypeChange) — every display below counts/shows
+                // only the ids that actually belong to the CURRENT type's
+                // pool, so a stale cross-type id never inflates the badge or
+                // shows a phantom active trait/effect.
+                const activeTraits = (PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research)
+                  .filter(t => selectedTraits.includes(t.id))
+                return (
+                  <>
+                    <SectionHeader
+                      label="Personality (Optional)"
+                      expanded={personalityOpen}
+                      onToggle={() => setPersonalityOpen(o => !o)}
+                      help="Personality traits give the agent a consistent character quirk beyond its raw behavior — e.g. Inquisitive or Meticulous for a researcher. Purely optional flavor that still shapes its generated system prompt, and the pool of traits on offer changes with the agent type below."
+                      right={!personalityOpen && activeTraits.length > 0 && (
+                        <span className={styles.fieldLabelCount}>{activeTraits.length} on</span>
+                      )}
+                    />
+                    {personalityOpen && (
+                      <div className={styles.behaviorTogglesRow}>
+                        {(PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research).map(t => {
+                          const active = selectedTraits.includes(t.id)
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              className={active ? styles.behaviorToggleActive : styles.behaviorToggle}
+                              onClick={() => toggleTrait(t.id)}
+                              disabled={bootstrapping}
+                              title={t.instruction}
+                              aria-pressed={active}
+                            >
+                              {t.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {personalityOpen && activeTraits.length > 0 && (
+                      <ul className={styles.behaviorEffectsList}>
+                        {activeTraits.map(t => (
+                          <li key={t.id}>
+                            <span className={styles.behaviorEffectLabel}>{t.label}:</span> {describeTraitEffect(t)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )
+              })()}
             </div>
 
             <div className={styles.specialtiesRow}>
@@ -1684,6 +1677,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     ))}
                   </ul>
                 )}
+                <FeedbackStatusBar
+                  results={evalResults}
+                  collapsed={evalBarCollapsed}
+                  onToggleCollapse={() => setEvalBarCollapsed(c => !c)}
+                />
               </>
             ) : error ? (
               <div className={styles.errorPanel}>
@@ -1736,6 +1734,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           onAgentNameChange(character.surname)
           setAgentType(character.agentType)
           setSelectedTraits(character.traitIds)
+          setActiveToggles(character.behaviorIds)
         }}
       />
     </div>

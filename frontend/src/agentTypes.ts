@@ -65,11 +65,67 @@ export function getTemplate(id: AgentTemplateId | undefined): AgentTemplate {
   return AGENT_TEMPLATES.find(t => t.id === id) ?? AGENT_TEMPLATES[0]
 }
 
+export interface BehaviorToggle {
+  id: string
+  label: string
+  description: string
+  // Appended verbatim to the bootstrap purpose string when the toggle is
+  // on. Several toggles can be on at once — their instructions just
+  // concatenate, so effects compound rather than one replacing another.
+  instruction: string
+}
+
+// Starting set of six — each is an independent axis (verbosity, epistemic
+// stance, sourcing, initiative, tone, delegation strategy) so combinations
+// stay meaningful rather than overlapping/contradicting each other. Lives
+// here rather than in Setup.tsx (where it originated) for the same reason
+// PERSONALITY_TRAITS does below — characterData.ts (the Agent Generator)
+// needs to pick real behavior ids too, and importing from Setup.tsx would
+// be circular (Setup.tsx -> CharacterGenerator.tsx -> characterData.ts).
+export const BEHAVIOR_TOGGLES: BehaviorToggle[] = [
+  {
+    id: 'concise',
+    label: 'Concise',
+    description: 'Short answers — bullets over paragraphs, no preamble.',
+    instruction: 'Keep every response as short as possible. Prefer bullet points over paragraphs, skip preamble and restating the question, and never pad an answer to sound more thorough than it is.',
+  },
+  {
+    id: 'skeptical',
+    label: 'Skeptical',
+    description: 'Challenges weak or unverified claims instead of repeating them.',
+    instruction: 'Treat every claim, source, and tool result critically. Call out weak, biased, outdated, or unverified information explicitly instead of repeating it at face value.',
+  },
+  {
+    id: 'cite-sources',
+    label: 'Cite Sources',
+    description: 'Attaches the source URL behind every fact it states.',
+    instruction: 'Whenever you state a fact drawn from a tool result or fetched page, cite the source URL or reference inline next to the claim.',
+  },
+  {
+    id: 'proactive',
+    label: 'Proactive',
+    description: 'Surfaces risks, gaps, and next steps unprompted.',
+    instruction: "Don't just answer literally — proactively flag risks, gaps, or good next steps you notice along the way, even when not asked.",
+  },
+  {
+    id: 'formal',
+    label: 'Formal Tone',
+    description: 'Professional register — no slang, contractions, or asides.',
+    instruction: 'Write in a formal, professional register. Avoid slang, contractions, humor, and casual asides.',
+  },
+  {
+    id: 'max-delegation',
+    label: 'Max Delegation',
+    description: 'Splits work across worker agents even for single-topic requests.',
+    instruction: 'Prefer delegating sub-tasks to worker agents even for single-topic requests — split research into narrower parallel slices whenever there is more than one angle to cover, rather than researching everything yourself.',
+  },
+]
+
 export interface PersonalityTrait {
   id: string
   label: string
   // Appended verbatim to the bootstrap purpose string when selected — same
-  // compounding shape as BehaviorToggle.instruction in Setup.tsx, so a
+  // compounding shape as BehaviorToggle.instruction above, so a
   // chosen trait actually shapes the agent instead of being cosmetic flavor.
   instruction: string
 }

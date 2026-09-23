@@ -1,0 +1,91 @@
+/* Flush, full-width submenu strip directly under the header toolbar — same
+   shape as Chat.module.css's .rosterPanel (no border-radius/margin, a
+   border-bottom instead of a full border, 1.25rem side padding matching the
+   header's own), not a floating rounded card with a gap above it. */
+.bar {
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  background: #f7f5f0;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+/* Amber the moment any check in the bar has failed, collapsed or not. */
+.barFlagged {
+  border-color: #fde68a;
+  background: #fef3c7;
+}
+
+.summaryRow {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0.5rem 1.25rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.summaryText {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.chevron {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.list {
+  max-height: 220px;
+  overflow-y: auto;
+  border-top: 1px solid var(--color-border);
+  padding: 4px 0;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  padding: 6px 1.25rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.rowIconPass {
+  color: #166534;
+  flex-shrink: 0;
+}
+
+.rowIconFail {
+  color: #92400e;
+  flex-shrink: 0;
+}
+
+.rowBody {
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.rowTarget {
+  font-weight: 600;
+}
+
+.rowCheck {
+  color: var(--color-accent-secondary);
+}
+
+.rowReason {
+  color: var(--color-muted);
+}

@@ -162,9 +162,9 @@
   align-items: center;
   justify-content: center;
   background: #ffffff;
-  border: 1px solid #cfbf94;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(28, 40, 51, 0.1);
   color: var(--color-accent);
   font-family: 'Share Tech Mono', monospace;
   font-size: var(--font-size-base);
@@ -1043,7 +1043,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  margin-top: 1.8rem;
+  margin-top: 1.5rem;
 }
 
 .savedSectionsScroll {
@@ -1052,15 +1052,15 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 1.9rem 1.1rem 0.75rem 0.75rem;
-  background: #ede4cd;
-  border: 1px solid #cfbf94;
+  padding: 1.6rem 0.9rem 0.6rem 0.7rem;
+  background: #f2efe9;
+  border: 1px solid #ddd9cd;
   border-radius: 3px 10px 10px 10px;
   box-shadow:
-    0 1px 0 #f5eeda,
-    0 8px 0 -3px #e2d6b3,
-    0 8px 1px -3px #cfbf94,
-    0 14px 24px rgba(28, 40, 51, 0.12);
+    0 1px 0 #faf8f0,
+    0 8px 0 -3px #e2dfd5,
+    0 8px 1px -3px #ddd9cd,
+    0 10px 20px rgba(28, 40, 51, 0.08);
 }
 
 /* Scrolling happens in this inner wrapper, not on .savedSectionsScroll
@@ -1080,20 +1080,20 @@
 
 .dossierTab {
   position: absolute;
-  top: -1.5rem;
-  left: 0.75rem;
+  top: -1.4rem;
+  left: 0.7rem;
   z-index: 1;
-  background: #ede4cd;
-  border: 1px solid #cfbf94;
+  background: #f2efe9;
+  border: 1px solid #ddd9cd;
   border-bottom: none;
-  border-radius: 7.13px 7.13px 0 0;
-  color: #6b5a32;
+  border-radius: 7px 7px 0 0;
+  color: #6b7785;
   font-family: 'Share Tech Mono', monospace;
   font-size: var(--font-size-base);
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.36rem 0.855rem 0.5rem;
+  padding: 0.3rem 0.8rem 0.45rem;
 }
 
 .dossierStamp {
@@ -1101,17 +1101,17 @@
   top: calc(0.4rem + 5px);
   right: 0.4rem;
   z-index: 1;
-  background: #f2efe4;
+  background: #ffffff;
   color: var(--color-accent);
-  border: 2.25px solid var(--color-accent);
+  border: 2px solid var(--color-accent);
   border-radius: 6px;
   font-family: 'Share Tech Mono', monospace;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 0.225rem 0.6rem;
-  opacity: 0.8;
+  padding: 0.2rem 0.55rem;
+  opacity: 0.85;
   transform: rotate(-6deg);
   pointer-events: none;
 }
@@ -1119,12 +1119,12 @@
 .savedAccordion {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .savedSection {
-  background: #f8f4e7;
-  border: 1px solid #ddd0a5;
+  background: #ffffff;
+  border: 1px solid #ddd9cd;
   border-radius: 6px;
   overflow: hidden;
 }
@@ -1139,7 +1139,7 @@
   color: var(--color-text);
   cursor: pointer;
   font-family: inherit;
-  padding: 0.55rem 0.7rem;
+  padding: 0.5rem 0.65rem;
   text-align: left;
 }
 
@@ -1148,7 +1148,7 @@
 }
 
 .savedSectionCaret {
-  color: #6b5a32;
+  color: #6b7785;
   font-size: var(--font-size-xl);
   width: 1.6rem;
   flex-shrink: 0;
@@ -1176,8 +1176,8 @@
 }
 
 .savedSectionBody {
-  border-top: 1px solid #ddd0a5;
-  padding: 0.6rem 0.7rem 0.7rem;
+  border-top: 1px solid #ddd9cd;
+  padding: 0.55rem 0.65rem 0.6rem;
 }
 
 .savedEmpty {
@@ -1188,14 +1188,14 @@
 
 .loadChatFileBtn {
   background: transparent;
-  border: 1px dashed #c9bd8f;
+  border: 1px dashed #cfe3ea;
   border-radius: 6px;
   color: var(--color-accent);
   cursor: pointer;
   font-size: var(--font-size-sm);
   font-weight: 600;
-  padding: 0.4rem 0.6rem;
-  margin-bottom: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  margin-bottom: 0.4rem;
   width: 100%;
   transition: background-color 0.15s, border-color 0.15s;
 }
@@ -1649,6 +1649,18 @@
   flex: 1 1 auto;
   min-height: 0;
   gap: 0.6rem;
+  /* html/body deliberately never scroll (index.css), and the active
+     .agentCard panel deliberately never scrolls internally either — it
+     just grows to its natural content size (see the overflow-y: visible
+     override below). On a short viewport, that natural size alone can
+     exceed the space .card gives this stack, and without a scroll
+     fallback here .card's own overflow: hidden doesn't just clip the
+     overflow — the flex-grow, min-height: 0 .form.panelCollapsed sibling
+     gets crushed to 0 instead of the "fill whatever's left" size its own
+     rules below intend, hiding the dossier entirely. This is that
+     fallback: normally invisible (nothing overflows when there's room),
+     it only engages once content genuinely can't fit. */
+  overflow-y: auto;
 }
 
 .focusStack .agentCard,
@@ -1721,6 +1733,18 @@
    ordering dependency. */
 .focusStack .form.panelCollapsed {
   flex: 1 1 auto;
+  /* Without a floor here, "grows to fill whatever height the agent panel
+     isn't using" (above) can mean literally 0: .dossierWrap/.savedSectionsScroll
+     set min-height: 0 on themselves (deliberately, to allow the *expanded*
+     case to scroll instead of forcing the page to grow), so when the active
+     agentCard's own natural, never-shrinking (flex: 0 0 auto) height already
+     consumes all the room .card gives this stack, flex happily shrinks this
+     sibling all the way to nothing rather than reporting overflow — the
+     dossier peek (and everything in it) disappears with no scrollbar to
+     signal why. This guarantees the tab + a sliver of the card stay visible;
+     .focusStack's own overflow-y: auto (above) then picks up whatever real
+     overflow this floor creates. */
+  min-height: 6rem;
 }
 
 /* A collapsed setup panel is a read-only summary card — name, location,

@@ -19,6 +19,8 @@ Scope of this first pass, deliberately kept small:
   agent loop, so an unbounded main agent could otherwise fan out unboundedly.
 """
 from bootstrap import generate_agent_config
+import eval_checks
+import eval_log
 
 
 def run_worker(task: str, context: str, provider: str | None, model: str | None,
@@ -31,7 +33,7 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None,
     reading tool activity in the UI — can see who was spun up, what traits
     it was given, and what it found:
       {"worker_name", "worker_traits", "task", "response", "tools_used",
-       "tool_sources", "fewshot_count"}
+       "tool_sources", "fewshot_count", "eval_results"}
     `tool_sources` mirrors `tools_used` by index — each entry is the
     corresponding call's "mcp"/"primitive"/"generated" source tag (see
     agent_stream.py), so the UI can badge MCP-backed worker tool calls the
@@ -56,17 +58,38 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None,
             purpose=task, provider=provider, model=model, is_worker=True, agent_type=agent_type
         )
     except Exception as e:
+        failure_text = f"Could not assemble a worker for this subtask: {e}"
+        eval_results = []
+        try:
+            for eval_result in eval_checks.check_worker_delegation(
+                task, failure_text, [], provider, model, worker_name="Worker",
+            ):
+                eval_log.record(eval_result)
+                eval_results.append(eval_result)
+        except Exception:
+            pass
         return {
             "worker_name": "Worker",
             "worker_traits": [],
             "task": task,
-            "response": f"Could not assemble a worker for this subtask: {e}",
+            "response": failure_text,
             "tools_used": [],
             "tool_sources": [],
             "fewshot_count": 0,
+            "eval_results": eval_results,
         }
 
     persona = worker_config.get("persona") or {}
+    worker_name = persona.get("name", "Worker")
+    eval_results: list[dict] = []
+    try:
+        for eval_result in eval_checks.check_bootstrap(
+            worker_config, task, provider, model, target_id=worker_name,
+        ):
+            eval_log.record(eval_result)
+            eval_results.append(eval_result)
+    except Exception:
+        pass
     # generate_agent_config's returned config never carries the frontend-only
     # `template` field (bootstrap.py's raw model output has no notion of it) —
     # tag it here from the parent's own type so agent_stream.run_agent_stream's
@@ -95,15 +118,31 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None,
                 tool_calls = event["tool_calls"]
             elif event["type"] == "error":
                 final_response = f"Worker failed: {event['message']}"
+            elif event["type"] == "eval_result":
+                # Already recorded by run_agent_stream itself (the same
+                # eval_checks.check_tool_call call sites fire regardless of
+                # whether this is the main agent's own loop or a worker's) —
+                # just carry it along for the parent to relay to the UI.
+                eval_results.append({k: v for k, v in event.items() if k != "type"})
     except Exception as e:
         final_response = f"Worker crashed: {e}"
 
+    try:
+        for eval_result in eval_checks.check_worker_delegation(
+            task, final_response, tool_calls, provider, model, worker_name=worker_name,
+        ):
+            eval_log.record(eval_result)
+            eval_results.append(eval_result)
+    except Exception:
+        pass
+
     return {
-        "worker_name": persona.get("name", "Worker"),
+        "worker_name": worker_name,
         "worker_traits": persona.get("traits", []),
         "task": task,
         "response": final_response,
         "tools_used": [tc["tool"] for tc in tool_calls],
         "tool_sources": [tc.get("source", "generated") for tc in tool_calls],
         "fewshot_count": fewshot_count,
+        "eval_results": eval_results,
     }

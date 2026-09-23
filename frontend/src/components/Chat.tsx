@@ -4,19 +4,19 @@ import remarkGfm from 'remark-gfm'
 import { publishAgent, runAgent } from '../api'
 import { saveChat } from '../chatStorage'
 import { buildChatPdf, type PdfAgentContext, type PdfMessage } from '../chatPdf'
-import { BEHAVIOR_TOGGLES } from './Setup'
-import { PERSONALITY_TRAITS } from '../agentTypes'
+import { BEHAVIOR_TOGGLES, PERSONALITY_TRAITS } from '../agentTypes'
 import ToolActivity from './ToolActivity'
 import MermaidDiagram from './MermaidDiagram'
 import CodeBlock from './CodeBlock'
 import PdfPreviewModal from './PdfPreviewModal'
 import ImageViewer from './ImageViewer'
-import type { AgentConfig, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
+import FeedbackStatusBar from './FeedbackStatusBar'
+import type { AgentConfig, EvalResultItem, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import { describeModel, describeModelFallback } from '../modelLabel'
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/splash_logo.png'
 
-type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent' | 'attach' | 'imagePlaceholder'
+type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent' | 'attach' | 'imagePlaceholder' | 'expand' | 'collapse'
 
 // Lenient on purpose (trailing whitespace after the fence marker, CRLF,
 // casing, trailing blank lines before the closing fence) — the earlier,
@@ -132,6 +132,23 @@ function ToolbarIcon({ name }: { name: ToolbarIconName }) {
           <path d="M4 16.5 9 12l3 2.5 4-3.5 4 4" />
         </svg>
       )
+    // Toggles the composer between a single-line input and a resizable
+    // multi-line textarea — a paragraph glyph (three lines) reads as "let me
+    // write more" better than a generic resize/fullscreen arrow would.
+    case 'expand':
+      return (
+        <svg {...common}>
+          <line x1="5" y1="7" x2="19" y2="7" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+          <line x1="5" y1="17" x2="19" y2="17" />
+        </svg>
+      )
+    case 'collapse':
+      return (
+        <svg {...common}>
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      )
   }
 }
 
@@ -189,8 +206,11 @@ interface Props {
 export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, initialMessages, chatId }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages ?? [])
   const [input, setInput] = useState('')
+  const [composerExpanded, setComposerExpanded] = useState(false)
+  const composerFormRef = useRef<HTMLFormElement>(null)
   const [thinking, setThinking] = useState(false)
   const [elapsed, setElapsed] = useState(0)
+  const [now, setNow] = useState(() => new Date())
   const [error, setError] = useState<string | null>(null)
   // "Add to Roster" is one hiring-themed action that both keeps this
   // conversation (saveChat, local) and files the agent itself as a standing,
@@ -231,6 +251,13 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   const [attachingImage, setAttachingImage] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [viewerImage, setViewerImage] = useState<string | null>(null)
+  // Self-evaluation status bar (root CLAUDE.md eval-framework task) — accrues
+  // for the whole session, not just the latest turn, since bootstrap-time
+  // checks (relayed from a delegated worker, or the agent's own setup) have
+  // no single chat message to attach to. Capped client-side; the backend's
+  // own eval_results.json is the durable, uncapped log.
+  const [evalResults, setEvalResults] = useState<EvalResultItem[]>([])
+  const [evalBarCollapsed, setEvalBarCollapsed] = useState(true)
 
   // Auto-send an initial task when the agent has a configured specialty
   // pool. The pool itself (agentConfig.keywords) is now the keyword source
@@ -244,14 +271,15 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     autoSentRef.current = true
     const loc = agentConfig.location ? ` in ${agentConfig.location}` : ''
     // The backend still needs a concrete instruction to act on, but the
-    // bubble shows the user's own original setup purpose instead of that
-    // boilerplate — it reads as "here's what I asked for" rather than a
-    // canned system phrase.
+    // bubble shows a short greeting instead — the full agentConfig.purpose
+    // string (often a long, verbatim setup description) read like the
+    // agent narrating its own bio back at the user rather than someone
+    // opening a conversation.
     sendMessage(
       `Run your standard search across your full specialty pool${loc}.`,
       messages,
       undefined,
-      agentConfig.purpose,
+      `Hi — what's your analysis${loc}?`,
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -370,6 +398,16 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     const t = setInterval(() => setElapsed(s => s + 1), 1000)
     return () => clearInterval(t)
   }, [thinking])
+
+  // Live clock shown under the location badge — the agent's location context
+  // (weather/news/job-search results) is time-sensitive, so a stale page
+  // left open should still show the current time rather than whenever it
+  // first loaded. Minute resolution is all the badge displays, so a 30s tick
+  // is plenty rather than a full per-second re-render.
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000)
+    return () => clearInterval(t)
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -496,6 +534,22 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             updateLastMessage(msg => ({ ...msg, content: '' }))
             setThinking(false)
             break
+
+          case 'eval_result':
+            setEvalResults(prev => [
+              ...prev.slice(-49),
+              {
+                check: event.check,
+                target: event.target,
+                target_id: event.target_id,
+                passed: event.passed,
+                reason: event.reason,
+                method: event.method,
+                severity: event.severity,
+              },
+            ])
+            if (!event.passed) setEvalBarCollapsed(false)
+            break
         }
       }, controller.signal)
     } catch (err) {
@@ -549,51 +603,56 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             {agentConfig.location && (
               <span className={styles.locationBadge}>📍 {agentConfig.location}</span>
             )}
-            <span className={styles.modelBadge} title={describeModelFallback(agentConfig.provider)}>
-              🧠 {describeModel(agentConfig.provider, agentConfig.ollama_model)}
+            <span className={styles.dateTimeBadge}>
+              🕐 {now.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
             </span>
           </div>
         </div>
         <div className={styles.headerActions}>
-          <button
-            type="button"
-            className={styles.saveBtn}
-            onClick={handleSaveChat}
-            disabled={messages.length === 0}
-            aria-label={saveFeedback ?? 'Save chat'}
-            title={saveFeedback ?? 'Save this conversation locally so it can be reopened later'}
-          >
-            <ToolbarIcon name={saveFeedback ? 'saved' : 'save'} />
-          </button>
-          <button
-            type="button"
-            className={styles.rosterBtn}
-            onClick={() => setRosterOpen(o => !o)}
-            disabled={messages.length === 0}
-            aria-label="Roster"
-            title="Save this agent and deploy them as a callable tool on the roster"
-          >
-            <ToolbarIcon name="roster" />
-          </button>
-          <button
-            type="button"
-            className={styles.exportBtn}
-            onClick={handleExportPdf}
-            disabled={messages.length === 0 || exporting}
-            aria-label={exporting ? 'Exporting…' : 'Export PDF'}
-            title="Export PDF"
-          >
-            <ToolbarIcon name={exporting ? 'exporting' : 'export'} />
-          </button>
-          <button
-            type="button"
-            className={styles.resetBtn}
-            onClick={onReset}
-            aria-label="New agent"
-            title="New agent — recommission a fresh agent, wiping this conversation"
-          >
-            <ToolbarIcon name="newAgent" />
-          </button>
+          <span className={styles.modelBadge} title={describeModelFallback(agentConfig.provider)}>
+            🧠 {describeModel(agentConfig.provider, agentConfig.ollama_model)}
+          </span>
+          <div className={styles.headerActionButtons}>
+            <button
+              type="button"
+              className={styles.saveBtn}
+              onClick={handleSaveChat}
+              disabled={messages.length === 0}
+              aria-label={saveFeedback ?? 'Save chat'}
+              title={saveFeedback ?? 'Save this conversation locally so it can be reopened later'}
+            >
+              <ToolbarIcon name={saveFeedback ? 'saved' : 'save'} />
+            </button>
+            <button
+              type="button"
+              className={styles.rosterBtn}
+              onClick={() => setRosterOpen(o => !o)}
+              disabled={messages.length === 0}
+              aria-label="Roster"
+              title="Save this agent and deploy them as a callable tool on the roster"
+            >
+              <ToolbarIcon name="roster" />
+            </button>
+            <button
+              type="button"
+              className={styles.exportBtn}
+              onClick={handleExportPdf}
+              disabled={messages.length === 0 || exporting}
+              aria-label={exporting ? 'Exporting…' : 'Export PDF'}
+              title="Export PDF"
+            >
+              <ToolbarIcon name={exporting ? 'exporting' : 'export'} />
+            </button>
+            <button
+              type="button"
+              className={styles.resetBtn}
+              onClick={onReset}
+              aria-label="New agent"
+              title="New agent — recommission a fresh agent, wiping this conversation"
+            >
+              <ToolbarIcon name="newAgent" />
+            </button>
+          </div>
         </div>
         {agentConfig.keywords && agentConfig.keywords.length > 0 && (
           <div className={styles.headerKeywords}>
@@ -603,6 +662,12 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           </div>
         )}
       </header>
+
+      <FeedbackStatusBar
+        results={evalResults}
+        collapsed={evalBarCollapsed}
+        onToggleCollapse={() => setEvalBarCollapsed(c => !c)}
+      />
 
       {rosterOpen && (
         <div className={styles.rosterPanel}>
@@ -792,7 +857,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           )}
         </div>
       )}
-      <form className={styles.inputRow} onSubmit={handleSend}>
+      <form ref={composerFormRef} className={styles.inputRow} onSubmit={handleSend}>
         <input
           ref={fileInputRef}
           type="file"
@@ -810,13 +875,41 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         >
           <ToolbarIcon name="attach" />
         </button>
-        <input
-          className={styles.input}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Message the agent..."
+        <button
+          type="button"
+          className={styles.attachBtn}
+          onClick={() => setComposerExpanded(v => !v)}
           disabled={thinking}
-        />
+          title={composerExpanded ? 'Collapse to a single line' : 'Expand to a multi-line prompt'}
+          aria-label={composerExpanded ? 'Collapse input to a single line' : 'Expand input to multiple lines'}
+        >
+          <ToolbarIcon name={composerExpanded ? 'collapse' : 'expand'} />
+        </button>
+        {composerExpanded ? (
+          <textarea
+            className={`${styles.input} ${styles.inputExpanded}`}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Message the agent... (Shift+Enter for a new line)"
+            disabled={thinking}
+            rows={3}
+            autoFocus
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                composerFormRef.current?.requestSubmit()
+              }
+            }}
+          />
+        ) : (
+          <input
+            className={styles.input}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Message the agent..."
+            disabled={thinking}
+          />
+        )}
         {thinking ? (
           <>
             <button type="button" className={styles.stopBtn} onClick={stopAgent}>

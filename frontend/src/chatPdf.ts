@@ -23,7 +23,7 @@ export interface PdfAgentContext {
   location?: string
   model?: string
   persona?: { name: string; traits: string[]; rationale: string }
-  /** Already-resolved labels (Setup.tsx's BEHAVIOR_TOGGLES ids -> label), not raw ids. */
+  /** Already-resolved labels (agentTypes.ts's BEHAVIOR_TOGGLES ids -> label), not raw ids. */
   behaviorToggles?: string[]
   /** Already-resolved labels (Setup.tsx's PERSONALITY_TRAITS ids -> label), not raw ids. */
   personalityTraits?: string[]

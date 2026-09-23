@@ -7,7 +7,7 @@
 // for the surname half of the name, paired with a vintage first-name pool
 // and a noir callsign for extra flavor.
 import { SURNAMES } from './surnames'
-import { AGENT_TEMPLATES, PERSONALITY_TRAITS } from './agentTypes'
+import { AGENT_TEMPLATES, PERSONALITY_TRAITS, BEHAVIOR_TOGGLES } from './agentTypes'
 import type { AgentTemplateId } from './types'
 
 const FIRST_NAMES = [
@@ -78,6 +78,11 @@ export interface Character {
   bureau: string
   traitIds: string[]
   traits: string[]
+  // Behavior toggle ids + display labels (agentTypes.ts's BEHAVIOR_TOGGLES,
+  // one flat pool shared by every agent type, unlike traits above) — same
+  // "real id so Employ Agent can actually apply it in Setup" treatment.
+  behaviorIds: string[]
+  behaviors: string[]
   tagline: string
   clearance: string
   idNumber: string
@@ -121,6 +126,7 @@ export function generateCharacter(forcedType?: AgentTemplateId): Character {
   const agentType = forcedType ?? pick(AGENT_TEMPLATES).id
   const traitPool = PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research
   const chosenTraits = pickMany(traitPool, Math.min(3, traitPool.length))
+  const chosenBehaviors = pickMany(BEHAVIOR_TOGGLES, Math.min(2, BEHAVIOR_TOGGLES.length))
   return {
     firstName: pick(FIRST_NAMES),
     surname: pick(SURNAMES),
@@ -130,6 +136,8 @@ export function generateCharacter(forcedType?: AgentTemplateId): Character {
     bureau: pick(BUREAUS),
     traitIds: chosenTraits.map(t => t.id),
     traits: chosenTraits.map(t => t.label.toUpperCase()),
+    behaviorIds: chosenBehaviors.map(t => t.id),
+    behaviors: chosenBehaviors.map(t => t.label.toUpperCase()),
     tagline: pick(TAGLINES),
     clearance: pick(CLEARANCES),
     idNumber: randomIdNumber(),

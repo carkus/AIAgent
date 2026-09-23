@@ -255,10 +255,7 @@ const TECH_REGEXES = TECH_KEYWORDS.map(
   kw => [kw, new RegExp(`(?<![A-Za-z0-9])${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9])`, 'i')] as const
 )
 
-function extractTechStack(job: Record<string, unknown>): string[] {
-  const text = [job.title, job.description, job.snippet, job.summary, job.excerpt]
-    .filter(v => typeof v === 'string')
-    .join(' ')
+function extractTechStack(text: string): string[] {
   if (!text) return []
   const found: string[] = []
   for (const [label, re] of TECH_REGEXES) {
@@ -270,10 +267,16 @@ function extractTechStack(job: Record<string, unknown>): string[] {
 function JobCard({ job }: { job: Record<string, unknown> }) {
   const url = (job.redirect_url ?? job.url ?? job.apply_url ?? job.link) as string | undefined
   const snippet = (job.snippet ?? job.description ?? job.summary ?? job.excerpt) as string | undefined
+  const displaySnippet = snippet && snippet.length > 220 ? snippet.slice(0, 220) + '…' : snippet
   const company = (job.company ?? job.employer ?? job.company_name) as string | undefined
   const salaryLabel = formatSalaryRange(job.salary_min as number | null, job.salary_max as number | null)
   const meta = [company, job.location, formatDate(job.created as string)].filter(Boolean).join(' · ')
-  const techStack = extractTechStack(job)
+  // Scanned against the same text actually shown below (title + the
+  // truncated snippet), not the full raw description — a chip that can't be
+  // found anywhere in what the user can see reads as a hallucination, even
+  // when the underlying listing genuinely mentions it further down in text
+  // that got cut off.
+  const techStack = extractTechStack([job.title, displaySnippet].filter(v => typeof v === 'string').join(' '))
 
   return (
     <div className={styles.jobCard}>
@@ -293,9 +296,9 @@ function JobCard({ job }: { job: Record<string, unknown> }) {
           {techStack.map(t => <span key={t} className={styles.techChip}>{t}</span>)}
         </div>
       )}
-      {snippet && (
+      {displaySnippet && (
         <p className={styles.jobSnippet}>
-          {snippet.length > 220 ? snippet.slice(0, 220) + '…' : snippet}
+          {displaySnippet}
         </p>
       )}
     </div>
