@@ -1765,6 +1765,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           setAgentType(character.agentType)
           setSelectedTraits(character.traitIds)
           setActiveToggles(character.behaviorIds)
+          setKeywords(character.specialties)
         }}
       />
     </div>

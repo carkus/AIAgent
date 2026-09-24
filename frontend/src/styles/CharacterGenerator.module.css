@@ -228,6 +228,23 @@
   padding: 0.2rem 0.5rem;
 }
 
+/* Same shape as .traitTag/.behaviorTag, tinted with the primary accent so
+   specialties (what it works on) read as a third distinct axis from
+   personality (neutral gray) and behavior (accent-secondary blue). Reuses
+   the same accent-tint used for HelpTip's own hover state rather than a
+   new color. */
+.specialtyTag {
+  background: rgba(31, 111, 115, 0.12);
+  border: 1px solid var(--color-accent);
+  border-radius: 5px;
+  color: var(--color-accent);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+}
+
 .tagline {
   margin: 0;
   font-style: italic;

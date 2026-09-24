@@ -7,7 +7,7 @@
 // for the surname half of the name, paired with a vintage first-name pool
 // and a noir callsign for extra flavor.
 import { SURNAMES } from './surnames'
-import { AGENT_TEMPLATES, PERSONALITY_TRAITS, BEHAVIOR_TOGGLES } from './agentTypes'
+import { AGENT_TEMPLATES, PERSONALITY_TRAITS, BEHAVIOR_TOGGLES, SPECIALTY_SAMPLES } from './agentTypes'
 import type { AgentTemplateId } from './types'
 
 const FIRST_NAMES = [
@@ -83,6 +83,11 @@ export interface Character {
   // "real id so Employ Agent can actually apply it in Setup" treatment.
   behaviorIds: string[]
   behaviors: string[]
+  // Sampled from SPECIALTY_SAMPLES (agentTypes.ts) — same "real value so
+  // Employ Agent can actually apply it in Setup" treatment as traitIds/
+  // behaviorIds above; these land in Setup's specialty chips, not just the
+  // dossier card, and stay fully editable there afterward.
+  specialties: string[]
   tagline: string
   clearance: string
   idNumber: string
@@ -127,6 +132,8 @@ export function generateCharacter(forcedType?: AgentTemplateId): Character {
   const traitPool = PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research
   const chosenTraits = pickMany(traitPool, Math.min(3, traitPool.length))
   const chosenBehaviors = pickMany(BEHAVIOR_TOGGLES, Math.min(2, BEHAVIOR_TOGGLES.length))
+  const specialtyPool = SPECIALTY_SAMPLES[agentType] ?? SPECIALTY_SAMPLES.research
+  const chosenSpecialties = pickMany(specialtyPool, Math.min(3, specialtyPool.length))
   return {
     firstName: pick(FIRST_NAMES),
     surname: pick(SURNAMES),
@@ -138,6 +145,7 @@ export function generateCharacter(forcedType?: AgentTemplateId): Character {
     traits: chosenTraits.map(t => t.label.toUpperCase()),
     behaviorIds: chosenBehaviors.map(t => t.id),
     behaviors: chosenBehaviors.map(t => t.label.toUpperCase()),
+    specialties: chosenSpecialties,
     tagline: pick(TAGLINES),
     clearance: pick(CLEARANCES),
     idNumber: randomIdNumber(),

@@ -145,6 +145,26 @@ export function describeTraitEffect(trait: PersonalityTrait): string {
 // pool stays relevant (a job-search agent doesn't need "Curious"). Unlike
 // the old auto-picked flavor traits this replaces, nothing here is chosen
 // for the user — an agent has no personality trait unless one is selected.
+// Sample specialty keywords per agent type, used only to seed the Agent
+// Generator's random "Employ Agent" flow (characterData.ts) with real,
+// on-topic keywords instead of leaving specialties empty — not a
+// suggestion/autocomplete list for Setup's own free-text specialty input,
+// which stays entirely user-typed.
+export const SPECIALTY_SAMPLES: Record<AgentTemplateId, string[]> = {
+  general: [
+    'renewable energy', 'space exploration', 'ancient history', 'climate policy',
+    'artificial intelligence', 'urban planning', 'ocean conservation', 'quantum computing',
+  ],
+  research: [
+    'machine learning', 'gene editing', 'battery technology', 'neuroscience',
+    'materials science', 'robotics', 'renewable energy', 'quantum computing',
+  ],
+  job_search: [
+    'software engineer', 'product manager', 'data analyst', 'ux designer',
+    'devops engineer', 'marketing manager', 'financial analyst', 'nurse practitioner',
+  ],
+}
+
 export const PERSONALITY_TRAITS: Record<AgentTemplateId, PersonalityTrait[]> = {
   research: [
     { id: 'inquisitive', label: 'Inquisitive', instruction: 'Adopt an inquisitive personality: keep pulling on follow-up angles and related questions the user did not explicitly ask for, instead of stopping at the literal specialty.' },

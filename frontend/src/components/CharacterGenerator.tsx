@@ -83,6 +83,13 @@ export default function CharacterGenerator({ isOpen, agentType, onClose, onEmplo
             ))}
           </div>
 
+          <p className={styles.rowLabel}>Assigned Specialties</p>
+          <div className={styles.traitRow}>
+            {character.specialties.map(s => (
+              <span key={s} className={styles.specialtyTag}>{s}</span>
+            ))}
+          </div>
+
           <p className={styles.tagline}>&ldquo;{character.tagline}&rdquo;</p>
 
           <div className={styles.divider} />
