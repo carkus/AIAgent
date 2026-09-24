@@ -1223,6 +1223,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
 
             <div className={styles.resetToolbar}>
+              <HelpTip
+                text="Clears every change made in this form — specialties, behavior, personality — and starts a fresh, blank agent."
+                label="Clear agent help"
+              />
               <button
                 type="button"
                 className={styles.profileResetBtn}
@@ -1236,7 +1240,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 }}
                 disabled={bootstrapping}
               >
-                Reset
+                Clear Agent
               </button>
             </div>
 

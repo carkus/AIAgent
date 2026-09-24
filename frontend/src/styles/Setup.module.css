@@ -488,11 +488,22 @@
 
 /* Reset's own toolbar, a sibling below .specialtiesRow rather than sharing
    its action row with Save Specialties — a destructive whole-profile reset
-   reads as a distinct action, not just another specialty-editing button. */
+   reads as a distinct action, not just another specialty-editing button.
+   Styled as an actual bar (cream background, same corner radius as
+   .specialtiesRow just above it), but shrunk to its own content and pinned
+   to the right via align-self — same "collapse to content, right side of
+   the page" sizing as .profileCommissionRow below it — rather than a bar
+   spanning the full row width. */
 .resetToolbar {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 0.5rem;
+  align-items: center;
+  align-self: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+  padding: 0.35rem 0.5rem;
+  background: #f2efe9;
+  border: 1px solid #ddd9cd;
+  border-radius: 8px;
 }
 
 .saveFeedbackText {
