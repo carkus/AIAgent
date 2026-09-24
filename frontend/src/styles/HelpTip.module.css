@@ -73,18 +73,20 @@
   text-transform: none;
   letter-spacing: normal;
   /* Hover/focus reveal — always in the DOM so there's no mount delay, just
-     invisible and non-interactive until the pointer or keyboard focus
-     actually lands on the button. */
-  opacity: 0;
-  visibility: hidden;
+     hidden and non-interactive until the pointer or keyboard focus actually
+     lands on the button. display:none (not opacity/visibility) so the
+     hidden popover's box — absolutely positioned, but still full-sized —
+     doesn't get counted in an ancestor scroll container's scrollHeight;
+     inside Setup's scrolling agentCardBody, an invisible-but-laid-out
+     popover was inflating scrollHeight past clientHeight and forcing a
+     phantom scrollbar/gap even when the visible content didn't need one. */
+  display: none;
   pointer-events: none;
-  transition: opacity 0.12s ease;
 }
 
 .wrap:hover .popover,
 .wrap:focus-within .popover {
-  opacity: 1;
-  visibility: visible;
+  display: block;
 }
 
 .wrap.up .popover {

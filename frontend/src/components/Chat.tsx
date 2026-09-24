@@ -638,7 +638,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         </div>
         <div className={styles.headerActions}>
           <span className={styles.modelBadge} title={describeModelFallback(agentConfig.provider)}>
-            🧠 {describeModel(agentConfig.provider, agentConfig.ollama_model)}
+            {describeModel(agentConfig.provider, agentConfig.ollama_model)}
           </span>
           <div className={styles.headerActionButtons}>
             <button

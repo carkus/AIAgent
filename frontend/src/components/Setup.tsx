@@ -1217,24 +1217,27 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         Save Specialties
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className={styles.profileResetBtn}
-                      onClick={() => {
-                        setKeywords([])
-                        setDraft('')
-                        setActiveToggles([])
-                        setSelectedTraits([])
-                        onNewAgent()
-                        inputRef.current?.focus()
-                      }}
-                      disabled={bootstrapping}
-                    >
-                      Reset
-                    </button>
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className={styles.resetToolbar}>
+              <button
+                type="button"
+                className={styles.profileResetBtn}
+                onClick={() => {
+                  setKeywords([])
+                  setDraft('')
+                  setActiveToggles([])
+                  setSelectedTraits([])
+                  onNewAgent()
+                  inputRef.current?.focus()
+                }}
+                disabled={bootstrapping}
+              >
+                Reset
+              </button>
             </div>
 
           </div>
