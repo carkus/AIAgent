@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm'
 import { fetchFile } from '../api'
 import type { ToolCall } from '../types'
 import { normalizeInlineOrderedLists } from '../markdownFormat'
+import { formatDate as formatDateShared, getDateFormat } from '../dateFormat'
 import styles from '../styles/ToolActivity.module.css'
 import CopyButton from './CopyButton'
 
@@ -30,7 +31,7 @@ function formatSalaryRange(min: number | null, max: number | null): string {
 function formatDate(iso: string): string {
   if (!iso) return ''
   try {
-    return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+    return formatDateShared(iso, getDateFormat())
   } catch { return '' }
 }
 

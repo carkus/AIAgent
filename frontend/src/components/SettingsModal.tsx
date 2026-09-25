@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { LlmProvider, SearchDefaults } from '../types'
 import { listMcpTools, type McpServerInfo } from '../api'
 import { isTinyOllamaModel } from '../modelLabel'
+import { DATE_FORMAT_OPTIONS, type DateFormatId } from '../dateFormat'
 import styles from '../styles/SettingsModal.module.css'
 
 // Mirrors backend/src/agent_stream.py's MAX_DELEGATIONS_PER_REQUEST — shown
@@ -32,6 +33,8 @@ interface Props {
   onMaxDelegationsChange: (n: number | null) => void
   searchDefaults: SearchDefaults
   onSearchDefaultsChange: (d: SearchDefaults) => void
+  dateFormat: DateFormatId
+  onDateFormatChange: (f: DateFormatId) => void
   disabled: boolean
 }
 
@@ -57,6 +60,8 @@ export default function SettingsModal({
   onMaxDelegationsChange,
   searchDefaults,
   onSearchDefaultsChange,
+  dateFormat,
+  onDateFormatChange,
   disabled,
 }: Props) {
   const closeBtnRef = useRef<HTMLButtonElement>(null)
@@ -105,6 +110,8 @@ export default function SettingsModal({
         </div>
 
         <div className={styles.body}>
+          <p className={styles.letterhead}>Agent Configuration File</p>
+
           <section className={styles.section}>
             <span className={styles.sectionLabel}>Location</span>
             <div className={styles.locationRow}>
@@ -269,6 +276,24 @@ export default function SettingsModal({
               Adzuna job-search defaults (backend/src/tools.py's search_jobs) — the
               agent can still override any of these per search; these just fill in
               whatever it leaves out. Radius only applies alongside a location.
+            </p>
+          </section>
+
+          <section className={styles.section}>
+            <span className={styles.sectionLabel}>Date &amp; time</span>
+            <select
+              className={styles.providerSelect}
+              value={dateFormat}
+              onChange={e => onDateFormatChange(e.target.value as DateFormatId)}
+              disabled={disabled}
+            >
+              {DATE_FORMAT_OPTIONS.map(opt => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+            <p className={styles.providerHint}>
+              Applies to every date/time shown across the app — saved chats and
+              searches, job listing dates, and the chat header clock.
             </p>
           </section>
 

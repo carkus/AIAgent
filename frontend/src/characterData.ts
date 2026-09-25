@@ -54,13 +54,6 @@ const TAGLINES = [
   'Speaks four languages and trusts none of them.',
 ]
 
-const CLEARANCES = [
-  'LEVEL 1 — GENERAL',
-  'LEVEL 2 — CONFIDENTIAL',
-  'LEVEL 3 — RESTRICTED',
-  'LEVEL 4 — EYES ONLY',
-]
-
 const MONTHS = [
   'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
 ]
@@ -89,7 +82,6 @@ export interface Character {
   // dossier card, and stay fully editable there afterward.
   specialties: string[]
   tagline: string
-  clearance: string
   idNumber: string
   issued: string
 }
@@ -147,7 +139,6 @@ export function generateCharacter(forcedType?: AgentTemplateId): Character {
     behaviors: chosenBehaviors.map(t => t.label.toUpperCase()),
     specialties: chosenSpecialties,
     tagline: pick(TAGLINES),
-    clearance: pick(CLEARANCES),
     idNumber: randomIdNumber(),
     issued: randomIssueDate(),
   }

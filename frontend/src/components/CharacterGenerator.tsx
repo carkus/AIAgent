@@ -94,7 +94,7 @@ export default function CharacterGenerator({ isOpen, agentType, onClose, onEmplo
             ))}
           </div>
 
-          <p className={styles.rowLabel}>Standing Orders</p>
+          <p className={styles.rowLabel}>Known Behaviours</p>
           <div className={styles.traitRow}>
             {character.behaviors.map(b => (
               <span key={b} className={styles.behaviorTag}>{b}</span>
@@ -119,17 +119,16 @@ export default function CharacterGenerator({ isOpen, agentType, onClose, onEmplo
             <span>ID {character.idNumber}</span>
             <span>{character.issued}</span>
           </div>
-          <p className={styles.clearance}>{character.clearance}</p>
         </div>
+      </div>
 
-        <div className={styles.actions}>
-          <button type="button" className={styles.generateBtn} onClick={handleGenerate}>
-            Generate New Agent
-          </button>
-          <button type="button" className={styles.employBtn} onClick={handleEmploy}>
-            Employ Agent
-          </button>
-        </div>
+      <div className={styles.actions}>
+        <button type="button" className={styles.generateBtn} onClick={handleGenerate}>
+          Generate New Agent
+        </button>
+        <button type="button" className={styles.employBtn} onClick={handleEmploy}>
+          Employ Agent
+        </button>
       </div>
       </div>
     </div>

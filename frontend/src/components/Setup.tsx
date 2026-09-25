@@ -6,6 +6,7 @@ import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, EvalResultItem
 import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, type BehaviorToggle } from '../agentTypes'
 import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback } from '../modelLabel'
 import { buildAgentBrief, joinNatural } from '../agentBrief'
+import { formatDate, getDateFormat, type DateFormatId } from '../dateFormat'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
 import SettingsModal from './SettingsModal'
@@ -245,8 +246,8 @@ function lastChatLine(messages: SavedChatMessage[]): string | null {
   return last.role === 'user' ? `You: ${truncated}` : truncated
 }
 
-function formatSavedAt(ts: number): string {
-  return new Date(ts).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+function formatSavedAt(ts: number, format: DateFormatId): string {
+  return formatDate(ts, format, true)
 }
 
 interface ModelInfo {
@@ -334,6 +335,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setSearchDefaults(d)
     if (Object.keys(d).length > 0) localStorage.setItem('aiagent_search_defaults', JSON.stringify(d))
     else localStorage.removeItem('aiagent_search_defaults')
+  }
+  // Cross-app date-format preference (dateFormat.ts) — same localStorage
+  // idiom as the settings above; other screens/modules that render a date
+  // (Chat.tsx, ToolActivity.tsx, chatPdf.ts) read the same key directly via
+  // getDateFormat() instead, since they don't share this component's state.
+  const [dateFormat, setDateFormatState] = useState<DateFormatId>(() => getDateFormat())
+  function handleDateFormatChange(f: DateFormatId) {
+    setDateFormatState(f)
+    localStorage.setItem('aiagent_date_format', f)
   }
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
@@ -1495,7 +1505,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                               ))}
                             </div>
                             <span className={styles.savedChatMeta}>
-                              {d.location || 'No location set'} · {getTemplate(d.agentType ?? 'research').label} · {formatSavedAt(d.savedAt)}
+                              {d.location || 'No location set'} · {getTemplate(d.agentType ?? 'research').label} · {formatSavedAt(d.savedAt, dateFormat)}
                             </span>
                           </div>
                           <button
@@ -1583,7 +1593,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                               <span className={styles.savedChatPreview}>{lastChatLine(c.messages)}</span>
                             )}
                             <span className={styles.savedChatMeta}>
-                              {getTemplate(c.agentConfig.template).label} · {c.messages.length} message{c.messages.length === 1 ? '' : 's'} · {formatSavedAt(c.savedAt)}
+                              {getTemplate(c.agentConfig.template).label} · {c.messages.length} message{c.messages.length === 1 ? '' : 's'} · {formatSavedAt(c.savedAt, dateFormat)}
                             </span>
                           </div>
                           <button
@@ -1743,6 +1753,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         onMaxDelegationsChange={handleMaxDelegationsChange}
         searchDefaults={searchDefaults}
         onSearchDefaultsChange={handleSearchDefaultsChange}
+        dateFormat={dateFormat}
+        onDateFormatChange={handleDateFormatChange}
         disabled={bootstrapping}
       />
 

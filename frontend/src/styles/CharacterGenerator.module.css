@@ -96,8 +96,14 @@
   color: #6b5a32;
 }
 
+/* flex: 1 + min-height: 0 lets this pane alone absorb the modal's fixed
+   max-height and scroll, so a long card (e.g. once the Assignment Brief
+   pushed it past the fold) doesn't drag .actions below with it — those
+   buttons live outside .stage now, as a static footer. */
 .stage {
   display: flex;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
   align-items: center;
   gap: 1.25rem;
@@ -269,19 +275,16 @@
   color: var(--color-muted);
 }
 
-.clearance {
-  margin: 0.3rem 0 0;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: var(--font-size-xs);
-  letter-spacing: 0.08em;
-  color: var(--color-accent);
-  text-align: right;
-}
-
+/* Static footer, sibling of .stage rather than inside it, so it never
+   scrolls out of view with the card content above. */
 .actions {
   display: flex;
+  flex-shrink: 0;
   gap: 0.6rem;
   width: 100%;
+  padding: 0.9rem 1.25rem 1.25rem;
+  border-top: 1px solid #cfbf94;
+  background: var(--color-bg);
 }
 
 .generateBtn {

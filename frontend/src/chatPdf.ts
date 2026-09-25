@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf'
 import type { ToolCall } from './types'
+import { formatDate, getDateFormat } from './dateFormat'
 
 /**
  * Text-based chat PDF export. Unlike a DOM screenshot, this draws real
@@ -472,7 +473,7 @@ export function buildChatPdf(title: string, messages: PdfMessage[], context?: Pd
   layout.pdf.setTextColor(...TEXT_COLOR)
   layout.cursor.y += 15
   layout.pdf.text(title, PAGE_MARGIN, layout.cursor.y)
-  layout.meta(`Exported ${new Date().toLocaleString()}`)
+  layout.meta(`Exported ${formatDate(new Date(), getDateFormat(), true)}`)
 
   if (context) drawContextSection(layout, context)
   else layout.rule()

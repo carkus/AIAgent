@@ -14,6 +14,7 @@ import FeedbackStatusBar from './FeedbackStatusBar'
 import type { AgentConfig, EvalResultItem, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import { describeModel, describeModelFallback } from '../modelLabel'
 import { normalizeInlineOrderedLists } from '../markdownFormat'
+import { formatDate, getDateFormat } from '../dateFormat'
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/splash_logo.png'
 
@@ -664,7 +665,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
               </span>
             )}
             <span className={styles.dateTimeBadge}>
-              <ToolbarIcon name="clock" /> {now.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+              <ToolbarIcon name="clock" /> {formatDate(now, getDateFormat(), true)}
             </span>
           </div>
         </div>
