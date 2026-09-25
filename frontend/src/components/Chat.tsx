@@ -625,6 +625,18 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     void sendMessage(refinement, messages, undefined, `🚩 Reported: ${item.reason}`)
   }
 
+  // The pill under the agent's name should reflect what the user actually
+  // configured on the Setup screen (active_traits/active_toggles), not
+  // agentConfig.persona.traits — that's the bootstrap LLM's own invented
+  // flavor text, unrelated to the real personality/behaviour selections, and
+  // showing it (especially after resuming a saved chat) reads as if the
+  // agent's identity changed out from under the user.
+  const traitPool = PERSONALITY_TRAITS[agentConfig.template ?? 'research'] ?? PERSONALITY_TRAITS.research
+  const activePersonalityLabels = [
+    ...(agentConfig.active_traits ?? []).map(id => traitPool.find(t => t.id === id)?.label ?? id),
+    ...(agentConfig.active_toggles ?? []).map(id => BEHAVIOR_TOGGLES.find(t => t.id === id)?.label ?? id),
+  ]
+
   return (
     <div className={styles.root}>
       <header className={styles.header}>
@@ -641,9 +653,9 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
 
           <div className={styles.headerIdentityText}>
             <span className={styles.headerTitle}>Agent {agentName}</span>
-            {agentConfig.persona?.traits && agentConfig.persona.traits.length > 0 && (
-              <span className={styles.personaTraits} title={agentConfig.persona.rationale}>
-                {agentConfig.persona.traits.join(' · ')}
+            {activePersonalityLabels.length > 0 && (
+              <span className={styles.personaTraits}>
+                {activePersonalityLabels.join(' · ')}
               </span>
             )}
             {agentConfig.location && (

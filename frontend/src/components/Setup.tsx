@@ -5,6 +5,7 @@ import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat } from '../c
 import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, EvalResultItem, LlmProvider, ModelAttempt, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
 import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, type BehaviorToggle } from '../agentTypes'
 import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback } from '../modelLabel'
+import { buildAgentBrief, joinNatural } from '../agentBrief'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
 import SettingsModal from './SettingsModal'
@@ -116,19 +117,15 @@ function BehaviorIcon({ id }: { id: string }) {
   }
 }
 
-// Same mono line-art style as AgentTypeIcon/BehaviorIcon above — a plain
-// drama-mask outline (face + notched ears + eyes/mouth) standing in for the
-// old 🎭 emoji, so the character generator button reads as part of the
-// site's own icon language instead of a colorful one-off glyph.
-function CharacterGenIcon() {
+// Same mono line-art style as the other icons above — a plain floppy-disk
+// outline standing in for the "Save Agent" button's old text label, once the
+// button itself became icon-only.
+function SaveIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M7 10V9a5 5 0 0 1 10 0v1" />
-      <path d="M7 10a5 5 0 0 0 10 0" />
-      <path d="M9 11v1M15 11v1" />
-      <path d="M9.5 15c1.6 1 3.4 1 5 0" />
-      <path d="M5.5 9c-1.2 0-2 .9-2 2v1c0 1.1.8 2 2 2" />
-      <path d="M18.5 9c1.2 0 2 .9 2 2v1c0 1.1-.8 2-2 2" />
+      <path d="M5 3h11l3 3v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M8 3v5h8V3" />
+      <path d="M7 21v-8h10v8" />
     </svg>
   )
 }
@@ -164,13 +161,6 @@ function SectionHeader({ label, expanded, onToggle, help, right }: {
       </span>
     </div>
   )
-}
-
-function joinNatural(items: string[]): string {
-  if (items.length === 0) return ''
-  if (items.length === 1) return items[0]
-  if (items.length === 2) return `${items[0]} and ${items[1]}`
-  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
 }
 
 // What a behavior toggle's effect is actually called for each agent type —
@@ -209,26 +199,6 @@ function describeBehaviorEffect(toggle: BehaviorToggle, type: AgentTemplateId, k
         : `${toggle.description} Even with just ${subject} to cover, it still splits research into parallel worker agents rather than doing it all itself.`
     default:
       return toggle.description
-  }
-}
-
-// Same-turn fallback while the AI-drafted brief (backend/src/brief.py) is
-// loading or has failed — must still mention active behaviors/traits, not
-// just the specialty keywords, since those change what the agent will
-// actually do just as much as a specialty does (see brief.py's own note).
-function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], loc: string, agentName: string, behaviors: string[] = [], traits: string[] = []): string {
-  const topics = joinNatural(keywords)
-  const beat = loc ? ` in ${loc}` : ''
-  const name = `Agent ${agentName}`
-  const extras = [...behaviors, ...traits]
-  const extrasClause = extras.length > 0 ? ` It will do this with ${joinNatural(extras)} behavior active.` : ''
-  switch (agentType) {
-    case 'research':
-      return `${name} will research and analyze ${topics}${beat}. If commissioned, it will search, cross-reference sources, and report back with findings and key data points.${extrasClause}`
-    case 'job_search':
-      return `${name} will find roles in ${topics}${beat}. If commissioned, it will search listings, screen them against your criteria, and report back the strongest matches.${extrasClause}`
-    default:
-      return `${name} will track ${topics}${beat}. If commissioned, it will monitor developments and report back on what's most relevant.${extrasClause}`
   }
 }
 
@@ -307,9 +277,13 @@ interface Props {
   onDone: (config: AgentConfig) => void
   onError: (msg: string) => void
   onResumeChat: (chat: SavedChat) => void
+  // The config of the agent whose chat the user just came back from (App.tsx's
+  // agentConfig, passed through onBackToSetup) — undefined/null the first
+  // time Setup is shown, before anything has been bootstrapped yet.
+  activeAgentConfig?: AgentConfig | null
 }
 
-export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat }: Props) {
+export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat, activeAgentConfig }: Props) {
   const [agentType, setAgentType] = useState<AgentTemplateId>('general')
   const [keywords, setKeywords] = useState<string[]>([])
   const [draft, setDraft] = useState('')
@@ -833,13 +807,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     onResumeChat(chat)
   }
 
-  // Tapping a Saved Chats card loads that agent's details (type, specialties,
-  // location, name) back into the Setup form — same shape as loadDraft() for
-  // Saved Agent Profiles — without jumping straight into the chat itself.
-  // Actually resuming the conversation is the arrow button's job (resumeChat).
-  function loadChatDetails(chat: SavedChat) {
-    if (bootstrapping) return
-    const cfg = chat.agentConfig
+  // Shared by loadChatDetails (tapping a Saved Chats card) and the
+  // restore-on-mount effect below (returning to Setup from an active chat) —
+  // both need to repopulate every field an agent's config actually carries,
+  // not just name/keywords.
+  function applyAgentConfigToForm(cfg: AgentConfig, name: string) {
     if (cfg.template) setAgentType(cfg.template)
     setKeywords([...(cfg.keywords ?? [])])
     setDraft('')
@@ -852,10 +824,31 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     // as loadDraft() above.
     if (toggles.length > 0) setSpecialInstructionsOpen(true)
     if (traits.length > 0) setPersonalityOpen(true)
-    onAgentNameChange(chat.agentName)
+    onAgentNameChange(name)
+  }
+
+  // Tapping a Saved Chats card loads that agent's details (type, specialties,
+  // location, name) back into the Setup form — same shape as loadDraft() for
+  // Saved Agent Profiles — without jumping straight into the chat itself.
+  // Actually resuming the conversation is the arrow button's job (resumeChat).
+  function loadChatDetails(chat: SavedChat) {
+    if (bootstrapping) return
+    applyAgentConfigToForm(chat.agentConfig, chat.agentName)
     setFocusPanel('setup')
     inputRef.current?.focus()
   }
+
+  // Returning to Setup from an active/just-finished chat (App.tsx's
+  // onBackToSetup, "Back to search") should restore this form to match that
+  // agent's real config — personality traits, behaviour toggles, specialties,
+  // location, type — rather than resetting to blank defaults, since nothing
+  // about the agent itself changed, only which screen is showing. Setup fully
+  // remounts on every phase transition (App.tsx's phase-conditional render),
+  // so this only ever needs to run once, on mount.
+  useEffect(() => {
+    if (activeAgentConfig) applyAgentConfigToForm(activeAgentConfig, agentName)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function hideChat(id: string) {
     setHiddenChatIds(hideSavedChat(id))
@@ -1030,17 +1023,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               >
                 <span className={styles.modelLinerIcon} aria-hidden="true">🧠</span>
                 <span>{describeModel(provider, ollamaModel)}</span>
-              </button>
-            </div>
-            <div className={styles.characterGenGroup}>
-              <button
-                type="button"
-                className={styles.characterGenBtn}
-                onClick={ev => { ev.stopPropagation(); setCharacterGenOpen(true) }}
-                aria-label="Agent generator"
-                title="Agent generator"
-              >
-                <span className={styles.characterGenIcon} aria-hidden="true"><CharacterGenIcon /></span>
               </button>
             </div>
           </div>
@@ -1242,6 +1224,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               >
                 Clear Agent
               </button>
+              <button
+                type="button"
+                className={styles.characterGenBtn}
+                onClick={ev => { ev.stopPropagation(); setCharacterGenOpen(true) }}
+              >
+                Open Agent Files
+              </button>
             </div>
 
           </div>
@@ -1322,7 +1311,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               )}
               <div className={styles.commissionGroup}>
                 <HelpTip
-                  text="Agent type decides which primitive tools and default behavior this agent gets — e.g. only a Job search agent can call the live job-listings tool. Switching types also swaps the personality traits on offer above. Save Agent stores this whole profile for later; Commission bootstraps it and starts the chat."
+                  text="Agent type decides which primitive tools and default behavior this agent gets — e.g. only a Job search agent can call the live job-listings tool. Switching types also swaps the personality traits on offer above. The save icon stores this whole profile for later; Deploy bootstraps it and starts the chat."
                   label="Commission bar help"
                   direction="up"
                 />
@@ -1353,9 +1342,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   className={`${styles.profileSaveBtn} ${styles.profileSaveBtnCommission}`}
                   onClick={saveAgentDraft}
                   disabled={bootstrapping}
-                  title="Save this whole profile — name, type, location and specialties"
+                  title="Save Agent profile — name, type, location and specialties"
+                  aria-label="Save agent"
                 >
-                  Save Agent
+                  <span aria-hidden="true"><SaveIcon /></span>
                 </button>
                 <button
                   type="submit"
@@ -1364,7 +1354,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   disabled={bootstrapping}
                   aria-disabled={keywords.length === 0}
                 >
-                  {bootstrapping ? 'Configuring…' : 'Commission >'}
+                  {bootstrapping ? 'Configuring…' : 'Deploy >'}
                 </button>
               </div>
             </div>

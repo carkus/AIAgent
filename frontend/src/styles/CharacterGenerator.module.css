@@ -245,6 +245,14 @@
   padding: 0.2rem 0.5rem;
 }
 
+.briefText {
+  margin: 0.35rem 0 0.9rem;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
 .tagline {
   margin: 0;
   font-style: italic;

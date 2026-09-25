@@ -308,13 +308,22 @@
   transition: background-color 0.15s, color 0.15s;
 }
 
-/* Sized to match .profileCommissionBtn (same height/font-size) so the two
-   buttons in the commission row read as a matched pair, not a small
-   secondary action next to a large primary one. */
+/* Icon-only, sized to match .profileCommissionBtn's height (a square button,
+   not the old text-label width) so the two controls in the commission row
+   still read as a matched pair. */
 .profileSaveBtnCommission {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
   height: 2.6rem;
-  font-size: var(--font-size-base);
-  padding: 0 1.5rem;
+  padding: 0;
+  border-radius: 6px;
+}
+
+.profileSaveBtnCommission svg {
+  width: 1.3rem;
+  height: 1.3rem;
 }
 
 .profileSaveBtn:hover:not(:disabled) {
@@ -908,57 +917,27 @@
   z-index: 5;
 }
 
-/* Same beige padded-container treatment as .commissionGroup, so the
-   character-gen action reads as a matching "grouped control" unit rather
-   than a bare icon button floating in the header row. */
-.characterGenGroup {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  background: #f2efe4;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 0.4rem;
-  margin-right: 10px;
-}
-
+/* Same text-pill shape as .profileResetBtn ("Clear Agent"), but bordered in
+   the app's steel-blue secondary accent and filling on hover the way
+   .profileSaveBtn does, rather than reset's reddish warning tone. */
 .characterGenBtn {
-  flex-shrink: 0;
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  box-sizing: border-box;
-  color: var(--color-muted);
+  border: 1px solid var(--color-accent-secondary);
+  border-radius: 4px;
+  color: var(--color-accent-secondary);
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.1rem;
-  height: 2.1rem;
-  padding: 0;
-  transition: border-color 0.15s, background-color 0.15s, color 0.15s, transform 0.15s;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.75rem;
+  transition: background-color 0.15s, color 0.15s;
 }
 
-.characterGenBtn:hover {
-  border-color: var(--color-accent);
-  color: var(--color-text);
-  transform: translateY(-1px);
-}
-
-.characterGenIcon {
-  display: inline-flex;
-  width: 1.2rem;
-  height: 1.2rem;
-}
-
-.characterGenIcon svg {
-  width: 100%;
-  height: 100%;
-}
-
-.characterGenBtn:hover {
-  border-color: var(--color-accent);
-  background: rgba(31, 111, 115, 0.08);
+.characterGenBtn:hover:not(:disabled) {
+  background: var(--color-accent-secondary);
+  color: #fff;
 }
 
 .agentTypePills {

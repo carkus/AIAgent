@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { generateCharacter, type Character } from '../characterData'
 import { getTemplate } from '../agentTypes'
+import { buildAgentBrief } from '../agentBrief'
 import type { AgentTemplateId } from '../types'
 import styles from '../styles/CharacterGenerator.module.css'
 
@@ -30,6 +31,23 @@ export default function CharacterGenerator({ isOpen, agentType, onClose, onEmplo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, onClose])
 
+  // Same deterministic, no-LLM-call brief text Setup.tsx falls back to while
+  // its own AI-drafted brief is loading — reused here (not a template of its
+  // own) so a generated character's dossier states its actual assignment in
+  // plain language, to help decide between re-rolls before spending an
+  // "Employ Agent" click. Traits/behaviors are stored upper-cased for the
+  // tag chips above; lower-cased here so they read naturally mid-sentence.
+  // Uses the surname alone (not firstName+surname) to match how the app
+  // refers to a deployed agent everywhere else ("Agent <Surname>").
+  const brief = buildAgentBrief(
+    character.agentType,
+    character.specialties,
+    '',
+    character.surname,
+    character.behaviors.map(b => b.toLowerCase()),
+    character.traits.map(t => t.toLowerCase()),
+  )
+
   function handleGenerate() {
     setCharacter(generateCharacter(agentType))
   }
@@ -52,7 +70,7 @@ export default function CharacterGenerator({ isOpen, agentType, onClose, onEmplo
       >
       <span className={styles.dossierTab} aria-hidden="true">Agent File</span>
       <div className={styles.header}>
-        <h1 id="character-gen-title" className={styles.pageTitle}>Agent Generator</h1>
+        <h1 id="character-gen-title" className={styles.pageTitle}>The Agent Files</h1>
         <button type="button" ref={closeBtnRef} className={styles.closeBtn} onClick={onClose} aria-label="Close">
           &times;
         </button>
@@ -89,6 +107,9 @@ export default function CharacterGenerator({ isOpen, agentType, onClose, onEmplo
               <span key={s} className={styles.specialtyTag}>{s}</span>
             ))}
           </div>
+
+          <p className={styles.rowLabel}>Assignment Brief</p>
+          <p className={styles.briefText}>{brief}</p>
 
           <p className={styles.tagline}>&ldquo;{character.tagline}&rdquo;</p>
 

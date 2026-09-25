@@ -99,6 +99,7 @@ export default function App() {
           onDone={handleBootstrapDone}
           onError={handleBootstrapError}
           onResumeChat={handleResumeChat}
+          activeAgentConfig={agentConfig}
         />
       ) : agentConfig ? (
         <Chat
