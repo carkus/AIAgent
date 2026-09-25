@@ -1730,6 +1730,11 @@
   flex: 1 1 auto;
   min-height: 0;
   gap: 0.6rem;
+  /* Positioned so .form.panelActive's height: 80% (below) resolves against
+     this element's own box — which already excludes the brand logo above it
+     (a fixed-size flex sibling in .card) — instead of .card's, which would
+     include it. */
+  position: relative;
   /* html/body deliberately never scroll (index.css), and the active
      .agentCard panel deliberately never scrolls internally either — it
      just grows to its natural content size (see the overflow-y: visible
@@ -1766,43 +1771,49 @@
   opacity: 1;
 }
 
-/* The setup panel takes half the viewport height by default regardless of
-   how little content is open, growing with it (Personality/Specialties/
-   Special Instructions sections toggled open) up to a 70vh cap — vh, not %,
-   because % here hits the same indefinite-container problem noted below
-   (.focusStack's own height comes from flexing, not a specified value, so a
-   percentage main-size property on one of its flex items doesn't reliably
-   resolve). Past that cap, .agentCardMain (name/model row) and
-   .profileCommissionRow (type/Save/Commission row) — direct children of
-   .agentCard, outside .agentCardBody — stay fixed in place; overflow-y is
-   hidden here (not auto) so only .agentCardBody's own overflow-y: auto
-   scrolls, never the whole card including those two pinned rows. */
+/* The setup (agent design) panel collapses to its own content height
+   (flex-grow: 0) instead of force-filling whatever the collapsed dossier
+   peek isn't using — a short agent (few sections open, short Brief) leaves
+   the leftover height to the dossier peek below (see .focusStack
+   .form.panelCollapsed, flex-grow: 1, below) rather than stretching this
+   card's content with dead space. flex-shrink: 1 + min-height: 0 is what
+   makes "the design panel will begin scrolling" possible: once this card's
+   natural content height plus the dossier's 100px floor exceeds
+   .focusStack's own height, the flexbox algorithm freezes the dossier at
+   its min-height (100px) and gives 100% of the remaining deficit to this
+   card instead, shrinking it below its content height — .agentCardMain
+   (name/model row) and .profileCommissionRow (type/Save/Commission row),
+   direct children of .agentCard outside .agentCardBody, stay fixed in
+   place; overflow-y is hidden here (not auto) so only .agentCardBody's own
+   overflow-y: auto scrolls the middle section, never the whole card
+   including those two pinned rows. */
 .focusStack .agentCard.panelActive {
-  flex: 0 0 auto;
-  min-height: 50vh;
-  max-height: 70vh;
+  flex: 0 1 auto;
+  min-height: 0;
   overflow-y: hidden;
 }
 
-/* The dossier panel, once active, claims a fixed 70% of .card's height,
-   pinned to the bottom — a flex-basis percentage (tried first) never
-   resolved reliably here because .focusStack's own height is itself a
-   flex-grown value, not a definite one, and percentage flex-basis needs a
-   definite flex-container size to resolve against. Taking it out of flow
-   with position: absolute sidesteps that: .card (the nearest positioned
-   ancestor — see .card's position: relative near the top of this file) has
-   a real height: 100%, so height: 70% against IT resolves every time. It's
-   deliberately allowed to sit on top of the collapsed setup peek above
-   rather than the two sharing space via flex distribution — the peek's
-   content is already inert (.panelCollapsed > *'s pointer-events: none),
-   so an overlap costs nothing but a bit of visual overlap, not a click
-   target. */
+/* The dossier panel, once active, claims 80% of .focusStack's own height
+   (not .card's — .focusStack sits below the fixed-height brand logo, see
+   .card's flex-column layout near the top of this file, so sizing against
+   .focusStack rather than .card is what makes this "80% of the content
+   area, minus the logo" instead of 80% of the logo+content area). A
+   flex-basis percentage (tried first) never resolved reliably here because
+   .focusStack's own height is itself a flex-grown value, not a definite
+   one, and percentage flex-basis needs a definite flex-container size to
+   resolve against. Taking it out of flow with position: absolute sidesteps
+   that: .focusStack (given position: relative below) has a real height, so
+   height: 80% against IT resolves every time. It's deliberately allowed to
+   sit on top of the collapsed setup peek above rather than the two sharing
+   space via flex distribution — the peek's content is already inert
+   (.panelCollapsed > *'s pointer-events: none), so an overlap costs nothing
+   but a bit of visual overlap, not a click target. */
 .focusStack .form.panelActive {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 70%;
+  height: 80%;
   z-index: 1;
   flex: none;
 }
@@ -1831,29 +1842,27 @@
   pointer-events: none;
 }
 
-/* Now that the active setup panel only claims its own content height
-   (.focusStack .agentCard.panelActive above) instead of the full
-   .panelActive height, it leaves the rest of the page blank unless
-   something else takes it. The collapsed dossier peek takes it: it still
-   shrink-wraps like any other .panelCollapsed by default, but when it's the
-   dossier specifically, it grows to fill whatever height the agent panel
-   isn't using rather than leaving empty space beneath it. Higher
-   specificity than .panelCollapsed's flex: 0 0 auto wins outright, no
-   ordering dependency. */
+/* The collapsed dossier peek grows to fill whatever height the active
+   setup panel's own content doesn't need (flex-grow: 1, flex-basis: 100px)
+   — not pinned to exactly 100px: a short setup panel (Brief collapsed to a
+   line or two, few sections open) leaves real leftover space in
+   .focusStack, and the dossier peek expands into it rather than that space
+   going to waste. min-height: 100px is the floor for the opposite case: a
+   tall setup panel whose content doesn't fit .focusStack at all. Content
+   size (flex-basis: auto) can't be used here the way it is on the setup
+   panel above — the peek's true content is the entire uncropped saved-
+   searches/drafts/chats list (1000px+, since overflow: hidden only clips
+   paint, not the flex-basis:auto content size) — so flex-basis is pinned to
+   the 100px floor instead, and flex-grow/shrink do the rest: this box only
+   ever grows above 100px into space .agentCard.panelActive (flex: 0 1 auto,
+   above) isn't using, and the min-height clamp stops it shrinking below 100
+   even when that card's content alone exceeds .focusStack's height (at
+   which point the flexbox algorithm freezes this box at 100px and gives the
+   entire remaining deficit to the setup panel, which scrolls internally
+   instead). */
 .focusStack .form.panelCollapsed {
-  flex: 1 1 auto;
-  /* Without a floor here, "grows to fill whatever height the agent panel
-     isn't using" (above) can mean literally 0: .dossierWrap/.savedSectionsScroll
-     set min-height: 0 on themselves (deliberately, to allow the *expanded*
-     case to scroll instead of forcing the page to grow), so when the active
-     agentCard's own natural, never-shrinking (flex: 0 0 auto) height already
-     consumes all the room .card gives this stack, flex happily shrinks this
-     sibling all the way to nothing rather than reporting overflow — the
-     dossier peek (and everything in it) disappears with no scrollbar to
-     signal why. This guarantees the tab + a sliver of the card stay visible;
-     .focusStack's own overflow-y: auto (above) then picks up whatever real
-     overflow this floor creates. */
-  min-height: 6rem;
+  flex: 1 1 100px;
+  min-height: 100px;
 }
 
 /* A collapsed setup panel is a read-only summary card — name, location,
