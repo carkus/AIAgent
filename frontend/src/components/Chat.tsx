@@ -200,6 +200,24 @@ interface ChatMessage {
   rateLimits?: { tokens_remaining: string | null; tokens_limit: string | null; requests_remaining: string | null; tokens_reset: string | null }
 }
 
+// Same wording as FeedbackReportModal.tsx's own targetLabel — kept as a
+// separate local copy (that component has no shared-util home to import
+// from) rather than introducing a new shared module for one small function.
+function evalTargetLabel(item: EvalResultItem): string {
+  switch (item.target) {
+    case 'bootstrap':
+      return item.target_id ? `Agent setup (${item.target_id})` : 'Agent setup'
+    case 'chat_response':
+      return 'Chat response'
+    case 'tool_call':
+      return item.target_id !== null ? `Tool call #${item.target_id}` : 'Tool call'
+    case 'worker_delegation':
+      return item.target_id ? `Worker ${item.target_id}` : 'Worker'
+    default:
+      return item.target
+  }
+}
+
 interface Props {
   agentConfig: AgentConfig
   agentName: string
@@ -588,21 +606,23 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     await sendMessage(text, messages, image)
   }
 
-  // "Try again" on a flagged self-check: drops the just-generated reply and
-  // resends the last user turn, same shape as a manual regenerate. Every
-  // eval target surfaced in Chat's bar (chat_response/tool_call/worker_delegation)
-  // stems from the most recent turn, so retrying always means redoing that
-  // turn — there's no per-check granularity to recover independently.
-  function handleRetryEval(_item: EvalResultItem) {
+  // "Try again" on a flagged self-check: the flagged exchange stays exactly
+  // where it is in the visible chat (nothing is stripped out) and a new
+  // follow-up turn is sent that hands the model the specific finding — check/
+  // target/reason — plus the full conversation so far, so the next response
+  // is a refinement informed by what was actually flagged rather than a blind
+  // identical re-ask.
+  function handleRetryEval(item: EvalResultItem) {
     if (thinking) return
     const last = messages[messages.length - 1]
     if (!last || last.role !== 'assistant') return
-    const withoutReply = messages.slice(0, -1)
-    const lastUser = withoutReply[withoutReply.length - 1]
-    if (!lastUser || lastUser.role !== 'user') return
-    const withoutTurn = withoutReply.slice(0, -1)
-    setMessages(withoutTurn)
-    void sendMessage(lastUser.content, withoutTurn, lastUser.image, lastUser.displayContent)
+    const label = evalTargetLabel(item)
+    const refinement =
+      `A self-check flagged your previous response. ` +
+      `Target: ${label}. Check: ${item.check.replace(/_/g, ' ')}. ` +
+      `Finding: ${item.reason} ` +
+      `Please refine your response to address this finding, taking the rest of our conversation into account.`
+    void sendMessage(refinement, messages, undefined, `🚩 Reported: ${item.reason}`)
   }
 
   return (

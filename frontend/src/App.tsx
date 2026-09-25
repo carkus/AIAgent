@@ -33,11 +33,14 @@ export default function App() {
   }
 
   function handleBootstrapDone(config: AgentConfig) {
-    // The bootstrap call now invents its own name/personality from the
-    // purpose text (see backend/src/bootstrap.py's persona field) — prefer
-    // that over the random placeholder picked on load. Fall back to keeping
-    // the placeholder if the model omitted or mangled it.
-    if (config.persona?.name) setAgentName(config.persona.name)
+    // agentName is the identity of the saved character being designed on the
+    // Setup screen (typed, Character-Generator-picked, or the random
+    // placeholder) — Chat is an interrogation of that same character, so its
+    // header must show the exact name Setup showed, never a different one.
+    // The bootstrap call also invents its own persona.name from the purpose
+    // text (backend/src/bootstrap.py), but that's a separate, cosmetic
+    // personality flavor (see agentConfig.persona.traits in Chat.tsx) — it
+    // must not silently rename the agent out from under the user.
     setAgentConfig(config)
     setChatKey(k => k + 1)
     setPhase('chat')
