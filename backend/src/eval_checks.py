@@ -61,7 +61,7 @@ _SCHEMA_TYPE_MAP = {
 }
 
 
-def _result(check, target, target_id, passed, reason, method, severity="info", provider=None, model=None):
+def _result(check, target, target_id, passed, reason, method, severity="info", provider=None, model=None, agent_id=None):
     return {
         "check": check,
         "target": target,
@@ -72,6 +72,7 @@ def _result(check, target, target_id, passed, reason, method, severity="info", p
         "severity": severity,
         "provider": provider,
         "model": model,
+        "agent_id": agent_id,
     }
 
 
@@ -197,6 +198,7 @@ def check_bootstrap(
 def check_chat_response(
     user_message: str, final_text: str, tool_calls_log: list[dict],
     stripped_link_count: int, provider: str | None, model: str | None,
+    agent_id: str | None = None,
 ) -> list[dict]:
     results = []
     non_empty = bool(final_text and final_text.strip())
@@ -204,7 +206,7 @@ def check_chat_response(
         "non_empty_response", "chat_response", None, non_empty,
         "response is non-empty" if non_empty else "response text was empty",
         "deterministic", severity="info" if non_empty else "warning",
-        provider=provider, model=model,
+        provider=provider, model=model, agent_id=agent_id,
     ))
 
     links_ok = stripped_link_count == 0
@@ -213,7 +215,7 @@ def check_chat_response(
         "no unverified links were found in the reply" if links_ok
         else f"{stripped_link_count} unverified link(s) were demoted to plain text before showing the reply",
         "deterministic", severity="info" if links_ok else "warning",
-        provider=provider, model=model,
+        provider=provider, model=model, agent_id=agent_id,
     ))
 
     if non_empty:
@@ -229,7 +231,7 @@ def check_chat_response(
             results.append(_result(
                 "response_relevance_judge", "chat_response", None, passed, reason,
                 "llm_judge", severity="info" if passed else "warning",
-                provider=provider, model=model,
+                provider=provider, model=model, agent_id=agent_id,
             ))
     return results
 
@@ -255,6 +257,7 @@ def _schema_violations(inputs: dict, schema: dict) -> list[str]:
 def check_tool_call(
     tool_name: str, tool_inputs: dict, tool_def: dict | None, result_str: str,
     source: str, call_index: int, provider: str | None = None, model: str | None = None,
+    agent_id: str | None = None,
 ) -> list[dict]:
     results = []
     schema = (tool_def or {}).get("input_schema")
@@ -265,7 +268,7 @@ def check_tool_call(
             "tool_input_schema", "tool_call", str(call_index), passed,
             "inputs match the tool's declared schema" if passed else "; ".join(issues),
             "deterministic", severity="info" if passed else "warning",
-            provider=provider, model=model,
+            provider=provider, model=model, agent_id=agent_id,
         ))
 
     errored = isinstance(result_str, str) and result_str.startswith("Tool execution error:")
@@ -273,7 +276,7 @@ def check_tool_call(
         "tool_execution_error", "tool_call", str(call_index), not errored,
         f"{tool_name} executed without error" if not errored else f"{tool_name} raised an exception during execution",
         "deterministic", severity="info" if not errored else "warning",
-        provider=provider, model=model,
+        provider=provider, model=model, agent_id=agent_id,
     ))
     return results
 

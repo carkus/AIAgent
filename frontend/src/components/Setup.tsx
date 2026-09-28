@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, fetchModelInfo, listAgentDrafts, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
 import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
 import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat } from '../chatStorage'
-import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, ModelAttempt, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
+import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
 import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, type BehaviorToggle } from '../agentTypes'
-import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback } from '../modelLabel'
+import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
 import { buildAgentBrief, joinNatural } from '../agentBrief'
 import { formatDate, getDateFormat, type DateFormatId } from '../dateFormat'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/splash_logo.png'
 import SettingsModal from './SettingsModal'
+import AgentStableModal from './AgentStableModal'
 import CharacterGenerator from './CharacterGenerator'
 import HelpTip from './HelpTip'
 import FeedbackStatusBar from './FeedbackStatusBar'
@@ -250,24 +251,6 @@ function formatSavedAt(ts: number, format: DateFormatId): string {
   return formatDate(ts, format, true)
 }
 
-interface ModelInfo {
-  used: ModelAttempt | null
-  failed: ModelAttempt[]
-}
-
-function formatModelInfo({ used, failed }: ModelInfo): string {
-  const failedNames = failed.map(f => `${f.provider}:${f.model}`)
-  if (used) {
-    const usedName = `${used.provider}:${used.model}`
-    return failedNames.length > 0
-      ? `Model: ${usedName} (fell back from ${failedNames.join(', ')})`
-      : `Model: ${usedName}`
-  }
-  return failedNames.length > 0
-    ? `Model attempt failed: ${failedNames.join(', ')}`
-    : 'Model: unknown'
-}
-
 interface Props {
   agentName: string
   onAgentNameChange: (name: string) => void
@@ -426,6 +409,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
   const [locationDetecting, setLocationDetecting] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [stableModalOpen, setStableModalOpen] = useState(false)
   const [characterGenOpen, setCharacterGenOpen] = useState(false)
   // The setup form and the dossier are both too tall to show fully at once
   // without crowding the page, so tapping into either one expands it to
@@ -471,6 +455,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const inputRef = useRef<HTMLInputElement>(null)
   const locationDebounceRef = useRef<number | undefined>(undefined)
   const locationAbortRef = useRef<AbortController | null>(null)
+  // Lets the "Stop" button cancel an in-progress /bootstrap call — same
+  // AbortController-in-a-ref pattern as Chat.tsx's stopAgent/abortRef.
+  const bootstrapAbortRef = useRef<AbortController | null>(null)
   const briefDebounceRef = useRef<number | undefined>(undefined)
   const briefRequestIdRef = useRef(0)
 
@@ -823,6 +810,23 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     onResumeChat(chat)
   }
 
+  // "Hiring" a stabled agent drops straight into a fresh chat with that
+  // agent's already-bootstrapped config, same mechanism as resuming a saved
+  // chat (onResumeChat/handleResumeChat in App.tsx) — just with no prior
+  // message history, since a published agent's own chat history isn't
+  // stored server-side (see agent_registry.py's publish()).
+  function hirePublishedAgent(agent: PublishedAgent) {
+    if (bootstrapping) return
+    setStableModalOpen(false)
+    onResumeChat({
+      id: crypto.randomUUID(),
+      agentName: agent.name,
+      agentConfig: agent.agent_config,
+      messages: [],
+      savedAt: Date.now(),
+    })
+  }
+
   // Shared by loadChatDetails (tapping a Saved Chats card) and the
   // restore-on-mount effect below (returning to Setup from an active chat) —
   // both need to repopulate every field an agent's config actually carries,
@@ -952,6 +956,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         if (!event.passed) setEvalBarCollapsed(false)
       }
     }
+    const controller = new AbortController()
+    bootstrapAbortRef.current = controller
     try {
       const config = await bootstrap(
         purpose,
@@ -959,6 +965,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         provider === 'ollama' ? ollamaModel : null,
         handleProgress,
         agentType,
+        controller.signal,
       )
       onDone({
         ...config,
@@ -977,8 +984,21 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         active_traits: traitPool.filter(t => selectedTraits.includes(t.id)).map(t => t.id),
       })
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Unknown error')
+      if (err instanceof Error && err.name === 'AbortError') {
+        onError('Bootstrap cancelled.')
+      } else {
+        onError(err instanceof Error ? err.message : 'Unknown error')
+      }
     }
+  }
+
+  // "Stop" for the Setup screen's own in-flight query — mirrors Chat.tsx's
+  // stopAgent, just for /bootstrap instead of /agent. Aborting rejects the
+  // bootstrap() promise with an AbortError, which runBootstrap's catch above
+  // turns into a clean "Bootstrap cancelled." revert to the setup form
+  // rather than surfacing the raw AbortError message.
+  function stopBootstrap() {
+    bootstrapAbortRef.current?.abort()
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -999,11 +1019,28 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           type="button"
           className={styles.settingsIconBtn}
           onClick={() => setSettingsOpen(true)}
+          disabled={bootstrapping}
           aria-haspopup="dialog"
           aria-label="Settings"
           title="Settings"
         >
           ⚙
+        </button>
+        <button
+          type="button"
+          className={styles.stableIconBtn}
+          onClick={() => setStableModalOpen(true)}
+          disabled={bootstrapping}
+          aria-haspopup="dialog"
+          aria-label="Agent stable"
+          title="Agent stable — published agents and their track record"
+        >
+          <svg width="27" height="27" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+            <path
+              d="M 21.777344 7 L 19.222656 14.666016 C 15.389656 14.666016 14.111328 21.694016 14.111328 26.166016 L 14.111328 27.251953 C 14.045259 27.999479 14 28.749012 14 29.5 L 14 33.845703 C 13.383 34.764703 12.5 36.438 12.5 38.5 C 12.5 40.993 13.396594 42.971547 15.308594 44.685547 C 18.617594 53.087547 28.502469 58.507547 28.605469 58.560547 L 29.458984 59 L 34.541016 59 L 35.396484 58.558594 C 37.261484 57.593594 45.226875 52.174328 48.171875 44.736328 C 50.322875 42.989328 51.5 40.794 51.5 38.5 C 51.5 36.409 50.615687 34.686687 50.054688 33.804688 L 50 29.5 C 50 28.749012 49.954741 27.999479 49.888672 27.251953 L 49.888672 26.166016 C 49.888672 12.111016 42.221344 7 21.777344 7 z M 21.777344 20.816406 C 21.777344 20.816406 26.25 22.095703 32 22.095703 C 37.75 22.095703 43.5 20.816406 43.5 20.816406 C 45.018325 22.334731 45.679597 25.635756 45.96875 28.685547 C 45.980691 28.981447 46 29.331927 46 29.525391 L 46.064453 34.466797 L 46.089844 35.171875 L 46.515625 35.705078 C 46.771625 36.026078 47.501953 37.231 47.501953 38.5 C 47.501953 40.113 45.980359 41.402672 45.318359 41.888672 L 44.822266 42.251953 L 44.617188 42.828125 C 42.323187 49.269125 34.876312 54.318 33.570312 55 L 30.429688 55 C 28.652688 54.076 21.103766 49.061125 18.884766 42.828125 L 18.697266 42.302734 L 18.263672 41.947266 C 16.978672 40.902266 16.5 39.969 16.5 38.5 C 16.5 37.057 17.501922 35.822484 17.544922 35.771484 L 18 35.216797 L 18 30.681641 C 18.310227 27.367343 19.201234 23.024418 21.777344 20.816406 z"
+              fill="currentColor"
+            />
+          </svg>
         </button>
         <HelpTip
           className={styles.panelHelpTip}
@@ -1244,6 +1281,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 type="button"
                 className={styles.characterGenBtn}
                 onClick={ev => { ev.stopPropagation(); setCharacterGenOpen(true) }}
+                disabled={bootstrapping}
               >
                 Open Agent Files
               </button>
@@ -1279,13 +1317,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         onChange={e => setBriefAnswer(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') handleBriefAnswerSubmit() }}
                         placeholder="Your answer…"
-                        disabled={answeringBrief}
+                        disabled={answeringBrief || bootstrapping}
                       />
                       <button
                         type="button"
                         className={styles.briefAnswerBtn}
                         onClick={handleBriefAnswerSubmit}
-                        disabled={!briefAnswer.trim() || answeringBrief}
+                        disabled={!briefAnswer.trim() || answeringBrief || bootstrapping}
                       >
                         {answeringBrief ? '…' : 'Continue'}
                       </button>
@@ -1372,6 +1410,16 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 >
                   {bootstrapping ? 'Configuring…' : 'Deploy >'}
                 </button>
+                {bootstrapping && (
+                  <button
+                    type="button"
+                    className={styles.bootstrapStopBtn}
+                    onClick={stopBootstrap}
+                    title="Cancel this in-progress bootstrap"
+                  >
+                    Stop
+                  </button>
+                )}
               </div>
             </div>
         </div>
@@ -1491,7 +1539,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         <div
                           key={d.id}
                           className={`${styles.savedRow} ${bootstrapping ? styles.savedRowDisabled : ''}`}
-                          onClick={ev => { ev.stopPropagation(); loadDraft(d) }}
+                          onClick={ev => { ev.stopPropagation(); if (bootstrapping) return; loadDraft(d) }}
                           title={bootstrapping ? 'Agent is being commissioned — profiles can’t be loaded right now' : 'Load this agent profile'}
                           aria-disabled={bootstrapping}
                         >
@@ -1518,6 +1566,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                             type="button"
                             className={styles.savedDelete}
                             onClick={ev => { ev.stopPropagation(); deleteDraft(d.id) }}
+                            disabled={bootstrapping}
                             aria-label="Delete agent profile"
                             title="Delete agent profile"
                           >
@@ -1570,7 +1619,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         <div
                           key={c.id}
                           className={`${styles.savedRow} ${bootstrapping ? styles.savedRowDisabled : ''}`}
-                          onClick={ev => { ev.stopPropagation(); loadChatDetails(c) }}
+                          onClick={ev => { ev.stopPropagation(); if (bootstrapping) return; loadChatDetails(c) }}
                           title={bootstrapping ? 'Agent is being commissioned — details can’t be loaded right now' : 'Load this agent’s details into the form'}
                           aria-disabled={bootstrapping}
                         >
@@ -1618,6 +1667,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                             type="button"
                             className={styles.savedDelete}
                             onClick={ev => { ev.stopPropagation(); hideChat(c.id) }}
+                            disabled={bootstrapping}
                             aria-label={`Remove Agent ${c.agentName}'s chat from this list`}
                             title="Remove from this list (keeps the saved chat itself)"
                           >
@@ -1662,6 +1712,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                             type="button"
                             className={styles.savedDelete}
                             onClick={ev => { ev.stopPropagation(); removePublishedAgent(a.id) }}
+                            disabled={bootstrapping}
                             aria-label={`Deactivate ${a.name}`}
                             title="Deactivate (stop exposing as an MCP tool)"
                           >
@@ -1682,6 +1733,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
 
         </form>
+
+        {bootstrapping && (
+          <div className={styles.bootstrapShield} aria-hidden="true">
+            <div className={styles.bootstrapShieldIcon}>🔒</div>
+            <p className={styles.bootstrapShieldText}>Deploying — locked until this agent is ready</p>
+          </div>
+        )}
         </div>
 
         {(bootstrapping || modelInfo || error) && (
@@ -1764,6 +1822,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         dateFormat={dateFormat}
         onDateFormatChange={handleDateFormatChange}
         disabled={bootstrapping}
+      />
+
+      <AgentStableModal
+        isOpen={stableModalOpen}
+        onClose={() => setStableModalOpen(false)}
+        onHire={hirePublishedAgent}
       />
 
       <CharacterGenerator

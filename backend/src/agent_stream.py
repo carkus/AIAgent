@@ -664,13 +664,14 @@ def _delegation_rule_body(keywords: list[str], max_delegations: int) -> str:
    as many as the limit allows."""
 
 
-def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool = True):
+def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool = True, agent_id: str | None = None):
     """
     Generator that yields event dicts as the agent loop runs.
 
     Event shapes:
       {"type": "plan",        "diagram": "...", "summary": "..." | None}  # emitted at most once, before the first tool_start
-      {"type": "status",      "message": "..."}  # what's happening between visible tool calls (thinking, reviewing results, retrying, self-checking) — same shape as bootstrap.py's pre-existing status event
+      {"type": "status",      "message": "...", "elapsed_seconds": N, "tokens_so_far": {...}}  # what's happening between visible tool calls (thinking, reviewing results, retrying, self-checking); elapsed_seconds/tokens_so_far are real running values, not just the label
+      {"type": "model",       "used": {...} | None, "failed": [...]}  # which provider/model actually served the LLM call this iteration — same shape as bootstrap.py's pre-existing model event, emitted only when it changes (e.g. a mid-turn cascade fallback)
       {"type": "tool_start",  "tool": "name", "inputs": {...}}
       {"type": "tool_result", "tool": "name", "result": "..."}
       {"type": "done",        "response": "...", "tool_calls": [...], "duration_seconds": N}
@@ -746,6 +747,21 @@ an actual attempt genuinely came up empty.
    would add real value to what you're already reporting.
 
 4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — {_findings_desc}. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
+
+4b. NEVER paste a tool's raw output into your reply — no raw JSON, no API
+   response object, no HTML. This applies even when a tool result LOOKS like
+   the answer already (e.g. a search API's own `{{"results": [...], "score":
+   ..., "raw_content": ...}}` payload) — that is a raw response for you to
+   read and extract from, never something to hand the user unprocessed. If
+   you find yourself about to write a curly-brace blob with quoted field
+   names, stop, read the actual values out of it, and write what they mean
+   in your own sentences instead. This is not just a formatting rule — a
+   list of titles/snippets copied out of a search result is still an
+   unprocessed dump, just a tidier-looking one. For every page a `fetch` or
+   `search` tool returns, actually read its content and say what it means:
+   what does it claim, how do sources agree or conflict, what's actually
+   relevant to what was asked. A reply that only lists "Source A says X,
+   Source B says Y" with no synthesis has not analysed anything yet.
 
 5. DISCUSS AND ANALYSE YOUR FINDINGS IN REAL PROSE — A DIAGRAM IS A BONUS,
    NEVER A REPLACEMENT. Your job is to actually talk through what you found:
@@ -898,6 +914,20 @@ an actual attempt genuinely came up empty.
     started_at = time.time()
     total_input_tokens = 0
     total_output_tokens = 0
+
+    def _status(message: str) -> dict:
+        # Real, already-computed values (not synthetic) attached to every
+        # status line: how long this turn has run, and the running token
+        # count across every LLM call so far — closes the "just a static
+        # label with no real signal" gap for the long stretches between
+        # visible tool calls, without needing to rework the agent loop's
+        # single blocking create_chat_completion call into token streaming.
+        return {
+            "type": "status",
+            "message": message,
+            "elapsed_seconds": round(time.time() - started_at, 1),
+            "tokens_so_far": {"input_tokens": total_input_tokens, "output_tokens": total_output_tokens},
+        }
     # Confirmed live: one nudge attempt is sometimes not enough — a model that
     # narrates-instead-of-calling once will sometimes repeat that exact
     # pattern after being corrected once, and a single-shot budget meant the
@@ -912,16 +942,33 @@ an actual attempt genuinely came up empty.
     # tool-calling loop (or a buggy tool) burns unlimited API quota on one request.
     max_iterations = 25
 
+    # Tracks the last {"used", "failed"} reported by create_chat_completion's
+    # _meta, so a 'model' event is only emitted when it actually changes this
+    # turn — a stable, all-successful-Gemini turn stays quiet, but a mid-turn
+    # cascade fallback (Gemini failing over to Ollama) becomes visible instead
+    # of silently invisible, which it was before this call passed no _meta at
+    # all.
+    last_model_used = None
+
     try:
-        yield {"type": "status", "message": "Thinking through your request…"}
+        yield _status("Thinking through your request…")
         for iteration in range(max_iterations):
-            response = create_chat_completion(
-                provider=provider,
-                model=model,
-                max_tokens=16000,
-                tools=tools,
-                messages=current_messages,
-            )
+            call_meta: dict = {}
+            try:
+                response = create_chat_completion(
+                    provider=provider,
+                    model=model,
+                    max_tokens=16000,
+                    tools=tools,
+                    messages=current_messages,
+                    _meta=call_meta,
+                )
+            except Exception:
+                yield {"type": "model", "used": call_meta.get("used"), "failed": call_meta.get("failed", [])}
+                raise
+            if call_meta.get("used") != last_model_used or call_meta.get("failed"):
+                last_model_used = call_meta.get("used")
+                yield {"type": "model", "used": call_meta.get("used"), "failed": call_meta.get("failed", [])}
 
             choice = response.choices[0]
             message = choice.message
@@ -1025,7 +1072,7 @@ an actual attempt genuinely came up empty.
                     and _is_degenerate_reply(final_text)
                 ):
                     degenerate_retries += 1
-                    yield {"type": "status", "message": "Cleaning up an incomplete reply…"}
+                    yield _status("Cleaning up an incomplete reply…")
                     current_messages.append({
                         "role": "user",
                         "content": (
@@ -1046,7 +1093,7 @@ an actual attempt genuinely came up empty.
                     )
                 ):
                     nudge_retries += 1
-                    yield {"type": "status", "message": "Refining the answer before replying…"}
+                    yield _status("Refining the answer before replying…")
                     current_messages.append({
                         "role": "user",
                         "content": (
@@ -1086,7 +1133,7 @@ an actual attempt genuinely came up empty.
 
                 final_text, stripped_link_count = _strip_unverified_links(final_text, tool_calls_log, messages)
 
-                yield {"type": "status", "message": "Double-checking the reply…"}
+                yield _status("Double-checking the reply…")
                 try:
                     last_user_message = next(
                         (m.get("content") for m in reversed(messages) if m.get("role") == "user"), ""
@@ -1095,6 +1142,7 @@ an actual attempt genuinely came up empty.
                         last_user_message = ""
                     for eval_result in eval_checks.check_chat_response(
                         last_user_message, final_text, tool_calls_log, stripped_link_count, provider, model,
+                        agent_id=agent_id,
                     ):
                         eval_log.record(eval_result)
                         yield {"type": "eval_result", **eval_result}
@@ -1153,7 +1201,7 @@ an actual attempt genuinely came up empty.
                 try:
                     for eval_result in eval_checks.check_tool_call(
                         tool_name, tool_inputs, tool_def, result_str, source, call_index,
-                        provider=provider, model=model,
+                        provider=provider, model=model, agent_id=agent_id,
                     ):
                         eval_log.record(eval_result)
                         yield {"type": "eval_result", **eval_result}
@@ -1289,7 +1337,7 @@ an actual attempt genuinely came up empty.
                 executor.shutdown(wait=False)
 
             current_messages.extend(tool_result_messages)
-            yield {"type": "status", "message": "Reviewing tool results…"}
+            yield _status("Reviewing tool results…")
 
         yield {"type": "error", "message": f"Stopped after {max_iterations} tool-call rounds without a final answer."}
 

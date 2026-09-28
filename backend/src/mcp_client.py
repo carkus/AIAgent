@@ -26,6 +26,7 @@ shrink the catalog bootstrap sees, not break bootstrap or the agent loop.
 """
 import asyncio
 import logging
+import os
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -36,6 +37,15 @@ from mcp_registry import MCP_SERVERS
 logger = logging.getLogger(__name__)
 
 _catalog_cache: dict[str, list[dict]] = {}
+
+# Neither the stdio subprocess round trip nor the Streamable HTTP session has
+# any timeout of its own — a vetted server that hangs (crashed subprocess
+# still holding the pipe open, a remote server like Tavily's stalling mid-
+# response) previously blocked this synchronous call, and therefore the whole
+# agent loop that called it, forever. Per the module docstring, stdio startup
+# is ~1s and a real tool call is LLM/network-latency bound, not slow by
+# design, so this is a generous hang guard rather than a tight budget.
+MCP_CALL_TIMEOUT_SECONDS = float(os.environ.get("MCP_CALL_TIMEOUT_SECONDS", "25"))
 
 
 def _session_cm(server_id: str):
@@ -50,10 +60,13 @@ def _session_cm(server_id: str):
 
 
 def _run(coro):
-    """Run an async MCP call from sync code. A fresh event loop per call is
-    simplest and safe here — these are one-shot request/response calls, never
-    long-lived, so there's no state to keep alive across calls."""
-    return asyncio.run(coro)
+    """Run an async MCP call from sync code, bounded by MCP_CALL_TIMEOUT_SECONDS
+    so a hung server surfaces as a fast, catchable error instead of blocking
+    the calling thread (and the whole synchronous agent loop above it)
+    indefinitely. A fresh event loop per call is simplest and safe here —
+    these are one-shot request/response calls, never long-lived, so there's
+    no state to keep alive across calls."""
+    return asyncio.run(asyncio.wait_for(coro, timeout=MCP_CALL_TIMEOUT_SECONDS))
 
 
 async def _list_tools_async(server_id: str) -> list[dict]:

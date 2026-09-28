@@ -50,6 +50,20 @@ OLLAMA_NUM_CTX = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
 # Native Ollama API (for /api/tags — model listing isn't part of the OpenAI-compatible surface)
 OLLAMA_HOST = OLLAMA_BASE_URL.removesuffix("/v1").removesuffix("/")
 
+# Per-request timeouts (seconds), passed straight to the OpenAI SDK's own
+# `timeout=` kwarg (httpx underneath) — without this, a stalled connection to
+# either provider hangs on the SDK's own ~10-minute default before this
+# cascade even tries the next provider, which is indistinguishable from the
+# whole agent turn never returning at all. Gemini is a cloud call over the
+# open internet, so a real stall should fail fast and fall through to Ollama
+# quickly. Ollama is local generation, which can legitimately take a while
+# (especially CPU-only, or with the larger OLLAMA_NUM_CTX above), so it gets
+# a much longer allowance — this is a hang guard, not a quality-of-service
+# cap on slow-but-working local inference. Both overridable per-deployment.
+GEMINI_TIMEOUT_SECONDS = float(os.environ.get("GEMINI_TIMEOUT_SECONDS", "30"))
+OLLAMA_TIMEOUT_SECONDS = float(os.environ.get("OLLAMA_TIMEOUT_SECONDS", "180"))
+_TIMEOUTS = {"gemini": GEMINI_TIMEOUT_SECONDS, "ollama": OLLAMA_TIMEOUT_SECONDS}
+
 _gemini_client = OpenAI(
     api_key=os.environ.get("GEMINI_API_KEY") or "unset",
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
@@ -108,7 +122,9 @@ def create_chat_completion(provider: str | None = None, model: str | None = None
             extra_body.setdefault("options", {}).setdefault("num_ctx", OLLAMA_NUM_CTX)
             call_kwargs = {**kwargs, "extra_body": extra_body}
         try:
-            response = client.chat.completions.create(model=use_model, **call_kwargs)
+            response = client.chat.completions.create(
+                model=use_model, timeout=_TIMEOUTS[name], **call_kwargs
+            )
             if last_error is not None:
                 logger.warning("LLM provider %s failed (%s); fell back to %s", last_error[0], last_error[1], name)
             if _meta is not None:

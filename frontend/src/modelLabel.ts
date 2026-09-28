@@ -1,4 +1,4 @@
-import type { LlmProvider } from './types'
+import type { LlmProvider, ModelAttempt } from './types'
 
 // Mirrors backend/src/llm_client.py's cascade: Gemini first (cloud, cheap),
 // falling back to local Ollama on any provider error — unless the agent's
@@ -30,4 +30,28 @@ export function describeModelFallback(provider: LlmProvider | undefined): string
   if (provider === 'ollama') return 'Pinned to local Ollama — no cloud fallback for this agent'
   if (provider === 'gemini') return 'Pinned to cloud Gemini — no local fallback for this agent'
   return `Auto cascade: Gemini first, falls back to local Ollama (${DEFAULT_OLLAMA_MODEL}) if Gemini is unavailable`
+}
+
+// Formats a real, in-flight `{"type": "model", ...}` stream event (which
+// provider/model actually served a call, and which were tried and failed
+// first) — distinct from describeModel/describeModelFallback above, which
+// only describe the agent's own static, pre-run provider *choice*. Shared by
+// Setup.tsx (bootstrap) and Chat.tsx (the agent loop) so both screens
+// describe a live cascade fallback identically.
+export interface ModelInfo {
+  used: ModelAttempt | null
+  failed: ModelAttempt[]
+}
+
+export function formatModelInfo({ used, failed }: ModelInfo): string {
+  const failedNames = failed.map(f => `${f.provider}:${f.model}`)
+  if (used) {
+    const usedName = `${used.provider}:${used.model}`
+    return failedNames.length > 0
+      ? `Model: ${usedName} (fell back from ${failedNames.join(', ')})`
+      : `Model: ${usedName}`
+  }
+  return failedNames.length > 0
+    ? `Model attempt failed: ${failedNames.join(', ')}`
+    : 'Model: unknown'
 }

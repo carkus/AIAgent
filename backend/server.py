@@ -41,6 +41,7 @@ import bandit
 import rate_limit
 import saved_searches
 import agent_registry
+import agent_stats
 import agent_drafts
 import mcp_client
 from mcp_registry import MCP_SERVERS
@@ -205,7 +206,11 @@ def published_agents_collection():
     if request.method == "OPTIONS":
         return "", 204
     if request.method == "GET":
-        return jsonify({"agents": agent_registry.list_agents()})
+        agents = agent_registry.list_agents()
+        stats = agent_stats.stats_for_agents([a["id"] for a in agents])
+        for a in agents:
+            a["stats"] = stats[a["id"]]
+        return jsonify({"agents": agents})
     body = request.get_json() or {}
     name = (body.get("name") or "").strip()
     description = (body.get("description") or "").strip()
@@ -222,6 +227,13 @@ def published_agents_item(agent_id):
         return "", 204
     agent_registry.unpublish(agent_id)
     return "", 204
+
+
+@app.route("/agents/<agent_id>/eval-log", methods=["GET", "OPTIONS"])
+def published_agent_eval_log(agent_id):
+    if request.method == "OPTIONS":
+        return "", 204
+    return jsonify({"entries": agent_stats.recent_entries_for_agent(agent_id)})
 
 
 @app.route("/mcp-tools", methods=["GET", "OPTIONS"])

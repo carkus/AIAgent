@@ -31,6 +31,14 @@ _lock = threading.Lock()
 _MAX_ENTRIES = 200
 _SYSTEM_PROMPT_EXCERPT_LEN = 300
 
+# Small tie-breaker weight (not a re-ranking override) added to a candidate's
+# cosine-similarity score when it matches a published agent's own
+# persona-name+toolset signature — "teach conventions, then favor past
+# examples that became successful published agents" per the user's stated
+# direction, without a schema migration to stored entries (this is a live
+# cross-reference against agent_registry.py/eval_log.py at query time).
+_SUCCESS_BOOST_WEIGHT = 0.15
+
 
 def _data_path() -> str:
     data_dir = os.environ.get("DATA_DIR", os.getcwd())
@@ -101,6 +109,48 @@ def record(
         logger.info("bootstrap_memory.record skipped: %s", e)
 
 
+def _signature(persona: dict | None, tool_names: list) -> tuple | None:
+    if not persona or not persona.get("name"):
+        return None
+    return (persona.get("name"), frozenset(n for n in tool_names if n))
+
+
+def _apply_success_boost(scored: list[tuple[float, dict]]) -> list[tuple[float, dict]]:
+    """Best-effort, self-contained: on any failure (registry unreadable,
+    eval_log unreadable, import error), returns `scored` unchanged so plain
+    cosine-similarity ordering is always the safe fallback."""
+    try:
+        import agent_registry
+        import agent_stats
+
+        agents = agent_registry.list_agents()
+        sig_to_agent_id = {}
+        for a in agents:
+            config = a.get("agent_config") or {}
+            tools = [t for t in config.get("tools", []) if isinstance(t, dict)]
+            sig = _signature(config.get("persona"), [t.get("name") for t in tools])
+            if sig is not None:
+                sig_to_agent_id[sig] = a["id"]
+
+        if not sig_to_agent_id:
+            return scored
+
+        rates = agent_stats.stats_for_agents(list(sig_to_agent_id.values()))
+
+        boosted = []
+        for score, entry in scored:
+            sig = _signature(entry.get("persona"), entry.get("tool_names") or [])
+            agent_id = sig_to_agent_id.get(sig) if sig is not None else None
+            rate = rates[agent_id]["rate"] if agent_id is not None else None
+            if rate is not None:
+                score = score + _SUCCESS_BOOST_WEIGHT * rate
+            boosted.append((score, entry))
+        return boosted
+    except Exception as e:
+        logger.info("bootstrap_memory success-boost skipped: %s", e)
+        return scored
+
+
 def retrieve_similar(
     purpose: str, provider: str | None, is_worker: bool = False, k: int = 2, min_similarity: float = 0.6,
     agent_type: str | None = None,
@@ -137,6 +187,7 @@ def retrieve_similar(
             if score >= min_similarity:
                 scored.append((score, entry))
 
+        scored = _apply_success_boost(scored)
         scored.sort(key=lambda pair: pair[0], reverse=True)
         return [entry for _, entry in scored[:k]]
     except Exception as e:

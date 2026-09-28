@@ -122,6 +122,10 @@ export interface EvalResultItem {
   // (e.g. a future bandit over provider/tool choice, using `passed` as reward).
   provider?: string | null
   model?: string | null
+  // Which published agent (backend/src/agent_registry.py) produced this
+  // check, when the run was invoked over MCP (backend/mcp_server.py) rather
+  // than an interactive chat/bootstrap session — null for the latter.
+  agent_id?: string | null
 }
 
 // Stream events emitted by the agent loop
@@ -138,7 +142,18 @@ export type StreamEvent =
   // those gaps. Same shape as bootstrap's pre-existing 'status' event
   // (BootstrapStreamEvent below); superseded by the next 'status' or
   // 'tool_start' event, whichever comes first.
-  | { type: 'status'; message: string }
+  // elapsed_seconds/tokens_so_far are real, already-computed backend values
+  // (not synthetic) — how long this turn has run and the running token count
+  // across every LLM call so far this turn — surfaced so the chat UI can show
+  // more than the bare message string during a long gap between tool calls.
+  | { type: 'status'; message: string; elapsed_seconds?: number; tokens_so_far?: { input_tokens: number; output_tokens: number } }
+  // Which provider/model actually served the agent loop's LLM call this
+  // iteration (and which were tried and failed first) — same shape and
+  // purpose as bootstrap's pre-existing 'model' event below, just not
+  // wired into the chat loop until now. Only emitted when it differs from
+  // the last one seen this turn, so a long tool-heavy turn on a stable
+  // provider doesn't repeat the same line every iteration.
+  | { type: 'model'; used: ModelAttempt | null; failed: ModelAttempt[] }
   | { type: 'tool_start'; tool: string; inputs: Record<string, unknown>; source?: ToolCall['source']; call_index: number }
   | { type: 'tool_result'; tool: string; result: string; source?: ToolCall['source']; call_index: number }
   | ({ type: 'eval_result' } & EvalResultItem)

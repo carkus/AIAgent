@@ -1,0 +1,86 @@
+/* Collapsible JSON tree view — see JsonTree.tsx. Shared between
+   ToolActivity's raw-result fallback and Chat's assistant-reply JSON
+   safety net, so both get the same styling. */
+.wrap {
+  position: relative;
+}
+
+.copyBtn {
+  position: absolute;
+  right: 0.3rem;
+  top: 0.2rem;
+}
+
+.tree {
+  background: #f7f9fb;
+  border: 1px solid #dde6ea;
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  padding-right: 3.4rem;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: var(--font-size-sm);
+  overflow-x: auto;
+}
+
+.branch {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.1rem 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+}
+
+.branch:hover {
+  background: rgba(31, 111, 115, 0.06);
+}
+
+.leaf {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.1rem 0;
+  word-break: break-word;
+}
+
+.chevron {
+  color: var(--color-muted);
+  flex-shrink: 0;
+  width: 0.9rem;
+  text-align: center;
+}
+
+.key {
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.meta {
+  color: var(--color-muted);
+}
+
+.string {
+  color: #166534;
+}
+
+.number {
+  color: #7a4f14;
+}
+
+.boolean {
+  color: #7a1e6b;
+}
+
+.nullVal {
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.link {
+  color: var(--color-accent-secondary);
+  word-break: break-all;
+}

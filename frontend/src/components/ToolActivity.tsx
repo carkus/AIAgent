@@ -7,6 +7,7 @@ import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate as formatDateShared, getDateFormat } from '../dateFormat'
 import styles from '../styles/ToolActivity.module.css'
 import CopyButton from './CopyButton'
+import JsonTree from './JsonTree'
 
 interface Props {
   toolCalls: ToolCall[]
@@ -851,14 +852,10 @@ function RawResult({ result }: { result: string }) {
     )
   }
 
-  // ── Last resort: formatted JSON ───────────────────────────────────────────
-  const json = JSON.stringify(data, null, 2)
-  return (
-    <div className={styles.codeCopyWrap}>
-      <pre className={styles.plainResult}>{json}</pre>
-      <CopyButton text={json} className={styles.codeCopyBtn} />
-    </div>
-  )
+  // ── Last resort: no recognized shape — collapsible tree instead of a flat
+  // JSON.stringify dump, so an unrecognized payload (e.g. a raw MCP search
+  // API response) is still browsable instead of an unreadable one-line blob.
+  return <JsonTree data={data} />
 }
 
 // ─── Live: single tool call row ───────────────────────────────────────────────

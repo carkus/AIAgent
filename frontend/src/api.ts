@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, LlmProvider, StreamEvent } from './types';
+import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, StreamEvent } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -14,6 +14,7 @@ export async function bootstrap(
   ollamaModel?: string | null,
   onProgress?: (event: BootstrapStreamEvent) => void,
   agentType?: AgentTemplateId,
+  signal?: AbortSignal,
 ): Promise<AgentConfig> {
   const res = await fetch(`${API_URL}/bootstrap`, {
     method: 'POST',
@@ -24,6 +25,7 @@ export async function bootstrap(
       ollama_model: ollamaModel ?? undefined,
       agentType: agentType ?? undefined,
     }),
+    signal,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -259,6 +261,10 @@ export interface PublishedAgent {
   description: string;
   agent_config: AgentConfig;
   created_at: number;
+  // Success/failure history aggregated from eval_log.json (backend/src/agent_stats.py),
+  // attributed via the agent_id every MCP-invoked run now carries. Absent pulls
+  // means the agent has never been called over MCP since attribution was added.
+  stats?: { pulls: number; successes: number; rate: number | null };
 }
 
 /** Published agents — server-side registry (backend/src/agent_registry.py)
@@ -296,6 +302,19 @@ export async function publishAgent(
 
 export async function unpublishAgent(id: string): Promise<void> {
   await fetch(`${API_URL}/agents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/** Recent eval_checks.py history for one published agent (backend/src/agent_stats.py),
+ * newest first. [] on any failure, same degrade-quietly shape as listPublishedAgents. */
+export async function fetchAgentEvalLog(agentId: string): Promise<EvalResultItem[]> {
+  try {
+    const res = await fetch(`${API_URL}/agents/${encodeURIComponent(agentId)}/eval-log`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.entries) ? data.entries : [];
+  } catch {
+    return [];
+  }
 }
 
 export interface McpServerInfo {

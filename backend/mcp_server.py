@@ -99,19 +99,21 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     if entry is None:
         raise ValueError(f"Unknown tool: {name}")
     message = (arguments or {}).get("message", "")
-    text = await asyncio.to_thread(_run_once, entry["agent_config"], message)
+    text = await asyncio.to_thread(_run_once, entry["agent_config"], message, entry["id"])
     return [types.TextContent(type="text", text=text)]
 
 
-def _run_once(agent_config: dict, message: str) -> str:
+def _run_once(agent_config: dict, message: str, agent_id: str | None = None) -> str:
     """Runs one stateless turn of the published agent's own loop to
     completion (run_agent_stream is a generator; this drains it) and
     returns its final response text. Mirrors "the backend is stateless" —
     one call in, one call out, no server-side conversation carried between
-    MCP tool calls."""
+    MCP tool calls. agent_id is threaded through so eval_checks results from
+    this run are attributable back to which published agent produced them
+    (agent_stats.py aggregates eval_log.json by this field)."""
     messages = [{"role": "user", "content": message}]
     final_text = ""
-    for event in run_agent_stream(messages, agent_config, allow_delegation=True):
+    for event in run_agent_stream(messages, agent_config, allow_delegation=True, agent_id=agent_id):
         if event.get("type") == "done":
             final_text = event.get("response", "")
         elif event.get("type") == "error":

@@ -1000,6 +1000,13 @@
   animation: workingCursorBlink 1s steps(1, end) infinite;
 }
 
+.modelInfoLine {
+  color: var(--color-accent) !important;
+  font-weight: 600;
+  font-size: var(--chat-footer-size);
+  margin: 0.25rem 0 0;
+}
+
 @keyframes workingCursorBlink {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0; }

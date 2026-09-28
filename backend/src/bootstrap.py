@@ -415,6 +415,11 @@ def generate_agent_config(
     # far more likely to mangle a payload this size than Gemini, so this
     # matters a lot more for provider="ollama" than for the cloud default.
     if config is None:
+        # _try_parse always returns error alongside a None config — this
+        # assert just tells Pylance what that invariant already guarantees
+        # at runtime (the tuple's two halves are independently optional to
+        # the type checker, even though exactly one is ever None).
+        assert error is not None
         correction_response = create_chat_completion(
             provider=provider,
             model=model,
@@ -434,6 +439,7 @@ def generate_agent_config(
         config, error = _try_parse(text)
 
     if config is None:
+        assert error is not None
         logger.warning(
             "Bootstrap JSON parse failed after retry (error at char %d: %s). Raw response:\n%s",
             error.pos, error.msg, text,
@@ -594,6 +600,9 @@ def generate_agent_config_stream(
     # streamed itself — a malformed response is the rare path, not worth
     # re-deriving token-level progress for.
     if config is None:
+        # See the assert in generate_agent_config for why this is safe:
+        # _try_parse never returns a None config alongside a None error.
+        assert error is not None
         yield {"type": "status", "message": "Fixing malformed response…"}
         correction_meta: dict = {}
         try:
@@ -622,6 +631,7 @@ def generate_agent_config_stream(
             return
 
     if config is None:
+        assert error is not None
         logger.warning(
             "Bootstrap JSON parse failed after retry (error at char %d: %s). Raw response:\n%s",
             error.pos, error.msg, text,

@@ -7,12 +7,13 @@ import { buildChatPdf, type PdfAgentContext, type PdfMessage } from '../chatPdf'
 import { BEHAVIOR_TOGGLES, PERSONALITY_TRAITS } from '../agentTypes'
 import ToolActivity from './ToolActivity'
 import MermaidDiagram from './MermaidDiagram'
+import JsonTree from './JsonTree'
 import CodeBlock from './CodeBlock'
 import PdfPreviewModal from './PdfPreviewModal'
 import ImageViewer from './ImageViewer'
 import FeedbackStatusBar from './FeedbackStatusBar'
 import type { AgentConfig, EvalResultItem, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
-import { describeModel, describeModelFallback } from '../modelLabel'
+import { describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
 import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate, getDateFormat } from '../dateFormat'
 import styles from '../styles/Chat.module.css'
@@ -37,6 +38,30 @@ function extractMermaidDiagrams(content: string): { text: string; diagrams: stri
     return ''
   })
   return { text, diagrams }
+}
+
+// Safety net for agent_stream.py's rule 4b ("never paste raw tool output into
+// your reply") in case a model ignores it anyway — a whole paragraph that's
+// nothing but a JSON object/array (a raw search-API payload pasted verbatim,
+// not prose that merely mentions JSON) is pulled out and rendered as a
+// browsable JsonTree instead of an unreadable single-line blob of markdown text.
+function extractJsonBlobs(content: string): { text: string; blobs: unknown[] } {
+  const blobs: unknown[] = []
+  const paragraphs = content.split(/\n{2,}/).filter(para => {
+    const trimmed = para.trim()
+    const looksLikeJson = (trimmed.startsWith('{') && trimmed.endsWith('}'))
+      || (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    if (!looksLikeJson) return true
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (typeof parsed !== 'object' || parsed === null) return true
+      blobs.push(parsed)
+      return false
+    } catch {
+      return true
+    }
+  })
+  return { text: paragraphs.join('\n\n'), blobs }
 }
 
 // Walks a rendered markdown <li>'s React children down to plain text, for
@@ -263,6 +288,15 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // arrives (the tool card itself becomes the "what's happening" signal)
   // and whenever the turn ends.
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  // Running token count across every LLM call so far this turn
+  // (agent_stream.py's 'status' events now carry it) — real, already-
+  // computed usage, not just a static status label.
+  const [statusTokens, setStatusTokens] = useState<{ input_tokens: number; output_tokens: number } | null>(null)
+  // Which provider/model is actually serving this turn's LLM calls, and
+  // whether any provider failed over mid-turn (agent_stream.py's 'model'
+  // event) — previously invisible during chat; bootstrap already surfaced
+  // this via the same event shape.
+  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [now, setNow] = useState(() => new Date())
   const [error, setError] = useState<string | null>(null)
@@ -294,9 +328,14 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // Stable identity for this conversation so re-saving it (after more
   // messages) updates the same localStorage entry instead of duplicating it.
   const chatIdRef = useRef(chatId ?? crypto.randomUUID())
-  // A resumed chat already has its history — don't re-fire the initial
-  // auto-search that a fresh bootstrap triggers.
-  const autoSentRef = useRef(Boolean(initialMessages && initialMessages.length > 0))
+  // Only a genuinely fresh bootstrap (App.tsx's handleBootstrapDone, which
+  // never passes a chatId) should auto-fire the initial search below. Every
+  // path that supplies a chatId is some flavor of "resume" — a real saved
+  // chat with its own history, or hiring a published agent straight into a
+  // blank chat (Setup.tsx's hirePublishedAgent) — and neither should replay
+  // the bootstrap-only auto-search, even when there's no history yet to
+  // check the length of.
+  const autoSentRef = useRef(Boolean(chatId))
   const abortRef = useRef<AbortController | null>(null)
   // Composer's attached-diagram state. `attachingImage` covers the brief
   // window while FileReader is still converting the picked file to a data
@@ -325,16 +364,14 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     if (!kws?.length) return
     autoSentRef.current = true
     const loc = agentConfig.location ? ` in ${agentConfig.location}` : ''
-    // The backend still needs a concrete instruction to act on, but the
-    // bubble shows a short greeting instead — the full agentConfig.purpose
-    // string (often a long, verbatim setup description) read like the
-    // agent narrating its own bio back at the user rather than someone
-    // opening a conversation.
+    // Location is already shown as its own pill in the header (see
+    // .locationBadge below), so the bubble doesn't need to restate it —
+    // just show the actual instruction sent, kept brief.
     sendMessage(
       `Run your standard search across your full specialty pool${loc}.`,
       messages,
       undefined,
-      `Hi — what's your analysis${loc}?`,
+      'Run your standard search across your full specialty pool.',
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -613,6 +650,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     setMessages([...withUser, { role: 'assistant', content: '', liveToolCalls: [] }])
     setThinking(true)
     setStatusMessage(null)
+    setStatusTokens(null)
+    setModelInfo(null)
 
     const apiMessages = withUser.map(m => ({ role: m.role, content: m.content, image: m.image }))
 
@@ -625,6 +664,11 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
 
           case 'status':
             setStatusMessage(event.message)
+            if (event.tokens_so_far) setStatusTokens(event.tokens_so_far)
+            break
+
+          case 'model':
+            setModelInfo({ used: event.used, failed: event.failed })
             break
 
           case 'tool_start':
@@ -918,13 +962,21 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             {msg.content && (
               msg.role === 'assistant'
                 ? (() => {
-                    const { text, diagrams } = extractMermaidDiagrams(msg.content)
+                    const { text: textAfterDiagrams, diagrams } = extractMermaidDiagrams(msg.content)
+                    const { text, blobs } = extractJsonBlobs(textAfterDiagrams)
                     return (
                       <>
                         {diagrams.length > 0 && (
                           <div className={styles.extractedDiagrams}>
                             {diagrams.map((chart, di) => (
                               <MermaidDiagram key={di} chart={chart} />
+                            ))}
+                          </div>
+                        )}
+                        {blobs.length > 0 && (
+                          <div className={styles.extractedDiagrams}>
+                            {blobs.map((blob, bi) => (
+                              <JsonTree key={bi} data={blob} />
                             ))}
                           </div>
                         )}
@@ -1018,9 +1070,17 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
               </p>
             )}
             {thinking && i === messages.length - 1 && msg.role === 'assistant' && !msg.content && (
-              <p className={styles.workingText}>
-                {statusMessage ?? 'Working'}{elapsed > 0 ? ` · ${elapsed}s` : ''}
-              </p>
+              <>
+                <p className={styles.workingText}>
+                  {statusMessage ?? 'Working'}{elapsed > 0 ? ` · ${elapsed}s` : ''}
+                  {statusTokens && (statusTokens.input_tokens > 0 || statusTokens.output_tokens > 0) && (
+                    <> · {(statusTokens.input_tokens + statusTokens.output_tokens).toLocaleString()} tokens so far</>
+                  )}
+                </p>
+                {modelInfo && (
+                  <p className={styles.modelInfoLine}>{formatModelInfo(modelInfo)}</p>
+                )}
+              </>
             )}
           </div>
         ))}
