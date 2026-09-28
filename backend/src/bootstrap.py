@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import uuid
 from llm_client import create_chat_completion
 import bootstrap_memory
 import eval_checks
@@ -497,6 +498,11 @@ def generate_agent_config(
     # reuses the same provider/model choice made on the Setup screen.
     config["provider"] = provider
     config["ollama_model"] = model
+    # Stable identity for this generated config, independent of its
+    # (mutable) name/description — lets agent_registry.publish() recognize
+    # "this is the same agent being re-published" and update the existing
+    # MCP-tool entry in place instead of creating a duplicate.
+    config["agent_config_id"] = uuid.uuid4().hex
     bootstrap_memory.record(purpose, config, provider, is_worker, agent_type=agent_type)
     return config, fewshot_count
 
@@ -697,6 +703,9 @@ def generate_agent_config_stream(
     config["purpose"] = purpose
     config["provider"] = provider
     config["ollama_model"] = model
+    # See generate_agent_config's identical assignment above for why this
+    # exists — a stable id agent_registry.publish() can key off of.
+    config["agent_config_id"] = uuid.uuid4().hex
 
     try:
         for eval_result in eval_checks.check_bootstrap(

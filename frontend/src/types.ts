@@ -44,6 +44,11 @@ export interface AgentConfig {
   purpose: string;
   system_prompt: string;
   tools: ToolDefinition[];
+  // Stable identity assigned by bootstrap.py, independent of name/description —
+  // lets agent_registry.publish() recognize a re-publish of the same agent and
+  // update its existing MCP-tool entry in place instead of duplicating it.
+  // Absent on configs bootstrapped before this field existed.
+  agent_config_id?: string;
   persona?: AgentPersona;
   keywords?: string[];
   location?: string;

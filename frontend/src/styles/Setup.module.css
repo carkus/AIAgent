@@ -465,6 +465,20 @@
    as direct .agentCard children so they never scroll away — only the
    editable fields + Brief in between do, once they exceed the space
    .agentCard's min/max-height leaves for this flex-grown middle. */
+/* Wraps .agentCardMain + .agentCardBody only — NOT .profileCommissionRow
+   below (Save/Deploy/Stop + agent-type pills) and not the dossier form at
+   all. Takes over the flex-grow/shrink .agentCardBody used to do directly
+   as an .agentCard child; .profileCommissionRow stays pinned below exactly
+   as before. position: relative exists so .bootstrapShield can scope itself
+   to just this area instead of the whole card. */
+.agentCardFields {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
 .agentCardBody {
   display: flex;
   flex-direction: column;
@@ -1931,16 +1945,18 @@
   display: none;
 }
 
-/* Visual "closed off" cover over the whole agent-creation UI (both the
-   setup face and the dossier face — whichever is active) while a bootstrap
-   is actually running. The scattered disabled={bootstrapping} attributes
-   already block individual controls, but gave no unified sense that the
-   whole card is locked; this sits on top of both .focusStack children at
-   once (position: relative on .focusStack, set above) and outranks the
-   dossier's own z-index: 1 when it's the active face. It deliberately stops
-   at .focusStack's own edge — .loadingHint (the existing progress/status
-   panel) is a sibling AFTER .focusStack closes, not a descendant, so it's
-   never covered by this. */
+/* Visual "closed off" cover over just the editable agent-creation fields
+   (.agentCardFields: the name/location/model row plus the scrollable
+   personality/specialties/brief body) while a bootstrap is actually
+   running. Deliberately scoped narrower than the whole card: it must NOT
+   cover .profileCommissionRow (Save/Deploy/Stop buttons — the Stop button
+   is exactly how the user cancels the in-flight bootstrap this shield is
+   covering for, so it has to stay clickable) and must NOT cover the
+   dossier face at all (browsing Saved Chats/Searches/Agent Roster while a
+   bootstrap runs doesn't interfere with it). An earlier version covered the
+   entire .focusStack, which blocked the Stop button along with everything
+   else — this version's position: relative lives on .agentCardFields
+   itself, not .focusStack. */
 .bootstrapShield {
   position: absolute;
   inset: 0;

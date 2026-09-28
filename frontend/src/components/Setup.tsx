@@ -1064,6 +1064,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           onPointerDown={handlePanelPointerDown}
           onClick={e => handlePanelTap('setup', e)}
         >
+          <div className={styles.agentCardFields}>
           <div className={styles.agentCardMain}>
             <div className={styles.agentCardInfo}>
               <h1 className={styles.title}>Agent {agentName}</h1>
@@ -1357,6 +1358,14 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               )
             )}
           </div>
+          </div>
+
+          {bootstrapping && (
+            <div className={styles.bootstrapShield} aria-hidden="true">
+              <div className={styles.bootstrapShieldIcon}>🔒</div>
+              <p className={styles.bootstrapShieldText}>Deploying — locked until this agent is ready</p>
+            </div>
+          )}
           </div>
 
           <div className={styles.profileCommissionRow}>
@@ -1705,7 +1714,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                           <div className={styles.savedChatInfo}>
                             <span className={styles.savedChatName}>{a.name}</span>
                             <span className={styles.savedChatMeta}>
-                              Callable as: {a.tool_name}{a.description ? ` · ${a.description}` : ''}
+                              Agent No. {a.id} · Callable as: {a.tool_name}{a.description ? ` · ${a.description}` : ''}
                             </span>
                           </div>
                           <button
@@ -1733,13 +1742,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
 
         </form>
-
-        {bootstrapping && (
-          <div className={styles.bootstrapShield} aria-hidden="true">
-            <div className={styles.bootstrapShieldIcon}>🔒</div>
-            <p className={styles.bootstrapShieldText}>Deploying — locked until this agent is ready</p>
-          </div>
-        )}
         </div>
 
         {(bootstrapping || modelInfo || error) && (

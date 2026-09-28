@@ -91,13 +91,39 @@ def get_by_tool_name(tool_name: str) -> dict | None:
 
 
 def publish(name: str, description: str, agent_config: dict) -> dict:
-    """Publish an AgentConfig, making it callable as an MCP tool. tool_name
-    is derived from name and deduplicated against existing published agents
-    — it's the literal MCP tool name a client calls, so once assigned it
-    stays fixed for this entry (re-publishing under the same name creates a
-    new entry with a suffixed tool_name, it does not overwrite)."""
+    """Publish an AgentConfig, making it callable as an MCP tool.
+
+    bootstrap.py stamps every generated AgentConfig with a stable
+    `agent_config_id`, independent of its (editable) name/description. If
+    this agent_config_id already has a published entry, that entry is
+    updated in place (same `id`/`tool_name`, refreshed name/description/
+    agent_config/created_at) rather than inserting a duplicate — without
+    this, clicking "Publish as MCP tool" again for the same bootstrapped
+    agent (e.g. after continuing the chat) silently produced a second
+    registry row for what was conceptually the same agent, just under a
+    suffixed tool_name like `_2`. An older AgentConfig with no
+    agent_config_id (bootstrapped before this field existed) has nothing to
+    match against, so it falls through to the original create-new-entry
+    behavior unchanged.
+
+    tool_name is derived from name and deduplicated against existing
+    published agents for a genuinely new entry — it's the literal MCP tool
+    name a client calls, so once assigned it stays fixed for that entry."""
     with _lock:
         agents = _load()
+        config_id = agent_config.get("agent_config_id")
+        existing = next(
+            (a for a in agents if config_id and a.get("agent_config", {}).get("agent_config_id") == config_id),
+            None,
+        )
+        if existing is not None:
+            existing["name"] = name
+            existing["description"] = description
+            existing["agent_config"] = agent_config
+            existing["created_at"] = time.time()
+            _save(agents)
+            return existing
+
         entry = {
             "id": uuid.uuid4().hex,
             "tool_name": _unique_tool_name(name, agents),

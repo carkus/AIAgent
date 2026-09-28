@@ -1,5 +1,37 @@
+import os
 import traceback
 import builtins
+
+# Generated tool implementations get the raw `requests` module (see
+# execute_tool below) and the bootstrap prompt doesn't mandate a timeout on
+# every call a model writes — unlike fetch_page/search_jobs/search_image
+# above, which all hardcode one. A generated `requests.get(url)` with no
+# timeout against an unresponsive host previously hung this exec() call, and
+# with it the whole synchronous agent loop, forever — indistinguishable from
+# the agent simply never responding. _TimeoutRequests defaults `timeout=` to
+# this value on every HTTP-verb call the generated code makes, only when it
+# didn't already pass its own.
+DEFAULT_TOOL_HTTP_TIMEOUT_SECONDS = float(os.environ.get("TOOL_HTTP_TIMEOUT_SECONDS", "20"))
+_HTTP_METHODS = ("get", "post", "put", "delete", "patch", "head", "options", "request")
+
+
+class _TimeoutRequests:
+    """Proxy over the `requests` module for exec()'d generated tool code —
+    same module surface (requests.get, requests.exceptions.Timeout, etc.),
+    except the HTTP-verb functions get a default timeout injected."""
+
+    def __init__(self, module, default_timeout):
+        self._module = module
+        self._default_timeout = default_timeout
+
+    def __getattr__(self, name):
+        attr = getattr(self._module, name)
+        if name in _HTTP_METHODS and callable(attr):
+            def wrapped(*args, **kwargs):
+                kwargs.setdefault("timeout", self._default_timeout)
+                return attr(*args, **kwargs)
+            return wrapped
+        return attr
 
 
 # Allowlist of safe builtins for tool execution.
@@ -281,7 +313,7 @@ def execute_tool(implementation: str, inputs: dict) -> object:
         "input_data": inputs,   # alias — Claude sometimes generates this name
         "input": inputs,        # alias — Claude sometimes generates this name too (singular, not the builtin)
         **inputs,               # bare names: query, location, filename, etc.
-        "requests": requests,
+        "requests": _TimeoutRequests(requests, DEFAULT_TOOL_HTTP_TIMEOUT_SECONDS),
         "json": json,
         "os": os,
         "re": re,
