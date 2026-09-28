@@ -24,7 +24,7 @@ import logging
 import math
 import requests
 
-from llm_client import _gemini_client, GEMINI_EMBED_MODEL, OLLAMA_HOST
+from llm_client import _gemini_client, GEMINI_EMBED_MODEL, GEMINI_TIMEOUT_SECONDS, OLLAMA_HOST
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,16 @@ def embed_text(text: str, provider: str | None = None) -> list[float] | None:
 
 def _embed_gemini(text: str) -> list[float] | None:
     try:
-        response = _gemini_client.embeddings.create(model=GEMINI_EMBED_MODEL, input=text)
+        # Without an explicit timeout, the OpenAI SDK falls back to its own
+        # ~10-minute default — same trap llm_client.py's GEMINI_TIMEOUT_SECONDS
+        # already guards chat completions against, just missed here. Bootstrap
+        # calls this twice (retrieve_similar before the real prompt, record
+        # after), synchronously, so a stalled embeddings call used to block the
+        # whole bootstrap for minutes with the UI stuck on "Thinking about your
+        # purpose…" and no error surfaced.
+        response = _gemini_client.embeddings.create(
+            model=GEMINI_EMBED_MODEL, input=text, timeout=GEMINI_TIMEOUT_SECONDS,
+        )
         return list(response.data[0].embedding)
     except Exception as e:
         logger.info("Gemini embedding failed: %s", e)

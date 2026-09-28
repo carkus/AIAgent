@@ -400,6 +400,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [progress, setProgress] = useState<string | null>(null)
   const [toolsSoFar, setToolsSoFar] = useState<string[]>([])
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
+  // Ticks once a second for the deploying overlay's "Ns elapsed" line — same
+  // reset-on-stop/interval-while-active shape as Chat.tsx's own `elapsed`
+  // (its `thinking` there is `bootstrapping` here).
+  const [bootstrapElapsed, setBootstrapElapsed] = useState(0)
   // Self-evaluation status bar (root CLAUDE.md eval-framework task) — same
   // component/shape as Chat.tsx's, scoped to just this bootstrap attempt
   // (reset alongside progress/toolsSoFar in runBootstrap below).
@@ -1001,6 +1005,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     bootstrapAbortRef.current?.abort()
   }
 
+  useEffect(() => {
+    if (!bootstrapping) { setBootstrapElapsed(0); return }
+    const t = setInterval(() => setBootstrapElapsed(s => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [bootstrapping])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     await runBootstrap()
@@ -1065,6 +1075,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           onClick={e => handlePanelTap('setup', e)}
         >
           <div className={styles.agentCardFields}>
+          <div className={`${styles.agentCardFieldsContent} ${bootstrapping ? styles.agentCardFieldsHidden : ''}`}>
           <div className={styles.agentCardMain}>
             <div className={styles.agentCardInfo}>
               <h1 className={styles.title}>Agent {agentName}</h1>
@@ -1359,11 +1370,31 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             )}
           </div>
           </div>
+          </div>
 
           {bootstrapping && (
             <div className={styles.bootstrapShield} aria-hidden="true">
-              <div className={styles.bootstrapShieldIcon}>🔒</div>
-              <p className={styles.bootstrapShieldText}>Deploying — locked until this agent is ready</p>
+              <p className={styles.bootstrapShieldText}>
+                {progress ?? (provider === 'ollama'
+                  ? `${ollamaModel ?? 'Your local model'} is designing your agent's tools and behaviour…`
+                  : 'Designing your agent\'s tools and behaviour…')}
+              </p>
+              <div className={styles.bootstrapShieldDots}>
+                <span />
+                <span />
+                <span />
+              </div>
+              <p className={styles.bootstrapShieldMeta}>
+                {modelInfo ? formatModelInfo(modelInfo) : describeModel(provider, ollamaModel)}
+                {' · '}{bootstrapElapsed}s elapsed
+              </p>
+              {toolsSoFar.length > 0 && (
+                <ul className={styles.bootstrapShieldTools}>
+                  {toolsSoFar.map(name => (
+                    <li key={name}>✓ {name}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
           </div>
@@ -1765,13 +1796,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     </p>
                   )
                 })()}
-                {toolsSoFar.length > 0 && (
-                  <ul className={styles.loadingTools}>
-                    {toolsSoFar.map(name => (
-                      <li key={name}>✓ {name}</li>
-                    ))}
-                  </ul>
-                )}
                 <FeedbackStatusBar
                   results={evalResults}
                   collapsed={evalBarCollapsed}
