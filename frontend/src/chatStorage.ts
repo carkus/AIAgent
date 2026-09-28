@@ -52,3 +52,36 @@ export function hideSavedChat(id: string): string[] {
   localStorage.setItem(HIDDEN_KEY, JSON.stringify(updated))
   return updated
 }
+
+// Remembers which chat/agent was last open so a page reload can drop the
+// user straight back into it instead of the splash/setup screen — but only
+// a *pointer* (kind + id), never a full snapshot, so "still exist" means
+// something: App.tsx re-checks the pointer against the live source (saved
+// chats in localStorage, or the published-agent registry on the backend)
+// on every load rather than trusting a possibly-stale cached copy. A saved
+// chat that's since been deleted, or a published agent that's since been
+// unpublished, correctly fails that check and falls back to a fresh start.
+export type LastOpenedPointer =
+  | { kind: 'savedChat'; id: string }
+  | { kind: 'publishedAgent'; id: string }
+
+const LAST_OPENED_KEY = 'aiagent_last_opened'
+
+export function getLastOpenedPointer(): LastOpenedPointer | null {
+  try {
+    const raw = localStorage.getItem(LAST_OPENED_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+export function setLastOpenedPointer(pointer: LastOpenedPointer | null) {
+  try {
+    if (pointer) localStorage.setItem(LAST_OPENED_KEY, JSON.stringify(pointer))
+    else localStorage.removeItem(LAST_OPENED_KEY)
+  } catch {
+    // localStorage unavailable (private browsing, quota) — reopening on
+    // reload just won't work this session, nothing else depends on it.
+  }
+}

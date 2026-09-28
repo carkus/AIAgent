@@ -2,7 +2,7 @@ import { isValidElement, useEffect, useRef, useState, type ReactNode } from 'rea
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { publishAgent, runAgent } from '../api'
-import { saveChat } from '../chatStorage'
+import { saveChat, setLastOpenedPointer } from '../chatStorage'
 import { buildChatPdf, type PdfAgentContext, type PdfMessage } from '../chatPdf'
 import { BEHAVIOR_TOGGLES, PERSONALITY_TRAITS } from '../agentTypes'
 import ToolActivity from './ToolActivity'
@@ -353,7 +353,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   const [evalResults, setEvalResults] = useState<EvalResultItem[]>([])
   const [evalBarCollapsed, setEvalBarCollapsed] = useState(true)
 
-  // Auto-send an initial task when the agent has a configured specialty
+  // Auto-send an initial task when the agent has a configured focus
   // pool. The pool itself (agentConfig.keywords) is now the keyword source
   // the backend's delegation rule iterates over (see agent_stream.py's
   // _delegation_rule_body) — this message no longer needs to spell out
@@ -368,10 +368,10 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     // .locationBadge below), so the bubble doesn't need to restate it —
     // just show the actual instruction sent, kept brief.
     sendMessage(
-      `Run your standard search across your full specialty pool${loc}.`,
+      `Run your standard search across your full focus pool${loc}.`,
       messages,
       undefined,
-      'Run your standard search across your full specialty pool.',
+      'Run your standard search across your full focus pool.',
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -390,6 +390,11 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
 
   function saveChatLocally() {
     saveChat(buildSavedChat())
+    // An explicit save is also an implicit "this is the one to reopen on
+    // reload" — otherwise a freshly-bootstrapped-then-saved chat would only
+    // become reopenable the next time it's resumed from the dossier, not
+    // immediately after the save that made it possible to resume at all.
+    setLastOpenedPointer({ kind: 'savedChat', id: chatIdRef.current })
   }
 
   // Downloads the same SavedChat shape saveChatLocally() writes to
@@ -934,6 +939,17 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         )}
         {messages.map((msg, i) => (
           <div key={i} className={msg.role === 'user' ? styles.userBubble : styles.assistantBubble}>
+            {!(thinking && i === messages.length - 1) && (
+              <button
+                type="button"
+                className={styles.messageDelete}
+                onClick={() => setMessages(prev => prev.filter((_, mi) => mi !== i))}
+                aria-label="Remove this message from the chat"
+                title="Remove from chat"
+              >
+                ✕
+              </button>
+            )}
             {msg.image && (
               <button
                 type="button"
@@ -1046,7 +1062,13 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                   })()
                 : <p className={styles.bubbleText}>{msg.displayContent ?? msg.content}</p>
             )}
-            {msg.toolCalls && <ToolActivity toolCalls={msg.toolCalls} live={false} location={agentConfig.location} />}
+            {msg.toolCalls && (
+              <ToolActivity
+                toolCalls={msg.toolCalls}
+                live={false}
+                location={agentConfig.location}
+              />
+            )}
             {msg.durationSeconds !== undefined && (
               <p className={styles.duration}>
                 {msg.toolCalls?.length
@@ -1112,6 +1134,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         onToggleCollapse={() => setEvalBarCollapsed(c => !c)}
         onClear={() => setEvalResults([])}
         onRetry={handleRetryEval}
+        onRemoveItem={(item) => setEvalResults(prev => prev.filter(r => r !== item))}
       />
       <form className={styles.inputRow} onSubmit={handleSend}>
         <input

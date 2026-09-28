@@ -26,6 +26,21 @@ export function isTinyOllamaModel(model: string | null | undefined): boolean {
   return parseFloat(match[1]) <= 3
 }
 
+// Ollama has no tag metadata flagging a model as "reasoning" (long
+// chain-of-thought before the final answer) — this is name-pattern matching
+// against the known reasoning-model families available to pull, not a real
+// capability check. These models are frequently much slower per turn than a
+// same-size instruct model because they spend tokens thinking before ever
+// producing the JSON/tool-call output this app's bootstrap and agent loop
+// need, and can be slow enough locally to look hung.
+const REASONING_MODEL_PATTERNS = [/deepseek-r1/, /\bqwq\b/, /\bqwen3\b/, /\bo1\b/, /\br1\b/]
+
+export function isReasoningOllamaModel(model: string | null | undefined): boolean {
+  if (!model) return false
+  const lower = model.toLowerCase()
+  return REASONING_MODEL_PATTERNS.some(p => p.test(lower))
+}
+
 export function describeModelFallback(provider: LlmProvider | undefined): string {
   if (provider === 'ollama') return 'Pinned to local Ollama — no cloud fallback for this agent'
   if (provider === 'gemini') return 'Pinned to cloud Gemini — no local fallback for this agent'

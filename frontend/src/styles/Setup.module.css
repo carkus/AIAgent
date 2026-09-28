@@ -117,17 +117,26 @@
 }
 
 .chipX {
-  background: none;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  background: var(--color-surface);
+  border: 1px solid rgba(107, 152, 149, 0.4);
+  border-radius: 999px;
   color: #6b9895;
   cursor: pointer;
-  font-size: var(--font-size-lg);
+  font-size: 0.65rem;
   line-height: 1;
-  padding: 0 0.1rem;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .chipX:hover {
   color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .chipInput {
@@ -1438,23 +1447,32 @@
 }
 
 .savedKeywordDelete {
-  /* Same rest/hover coloring as .chipX (the "×" on a current specialty
-     chip in the main creation panel above) instead of a standalone danger
-     red, so both delete glyphs read as the same control. Sits inside the
-     clickable chip, so its own click handler stops propagation. */
-  background: none;
-  border: none;
+  /* Same rest/hover coloring and circular chrome as .chipX (the "×" on a
+     current specialty chip in the main creation panel above) instead of a
+     standalone danger red, so both delete glyphs read as the same control.
+     Sits inside the clickable chip, so its own click handler stops
+     propagation. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  background: var(--color-surface);
+  border: 1px solid rgba(107, 152, 149, 0.4);
+  border-radius: 999px;
   color: #6b9895;
   cursor: pointer;
   flex-shrink: 0;
-  font-size: var(--font-size-lg);
+  font-size: 0.65rem;
   font-weight: 400;
   line-height: 1;
-  padding: 0 0.1rem;
+  padding: 0;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .savedKeywordDelete:hover {
   color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .savedKeywordAddNew {
@@ -1555,6 +1573,13 @@
   min-width: 0;
 }
 
+.savedChatNameRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
 .savedChatName {
   color: var(--color-accent);
   font-family: 'Space Grotesk', 'Inter', sans-serif;
@@ -1562,6 +1587,19 @@
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+}
+
+.savedAgentNo {
+  color: var(--color-muted);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .savedChatTraits {
@@ -1660,20 +1698,31 @@
 }
 
 .savedDelete {
-  /* Plain-text danger glyph, matching .savedKeywordDelete in Specialties. */
-  background: none;
-  border: none;
+  /* Same circular chrome as .savedKeywordDelete/.chipX, keeping the danger
+     red text instead of their teal since this one deletes for good. Hover
+     shifts border/text color only (no background fill), matching
+     Chat.module.css's .messageDelete convention. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  background: var(--color-surface);
+  border: 1px solid rgba(185, 28, 28, 0.35);
+  border-radius: 999px;
   color: #b91c1c;
   cursor: pointer;
   flex-shrink: 0;
-  font-size: var(--font-size-lg);
+  font-size: 0.65rem;
   font-weight: 700;
   line-height: 1;
-  padding: 0 0.15rem;
+  padding: 0;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .savedDelete:hover {
   color: #8f1414;
+  border-color: #8f1414;
 }
 
 /* Action row */
@@ -1978,11 +2027,35 @@
   justify-content: center;
   gap: 0.7rem;
   background: rgba(255, 255, 255, 0.94);
-  border: 2px solid rgba(22, 50, 74, 0.28);
+  border: 1px solid var(--color-accent);
   border-radius: 10px;
   text-align: center;
   padding: 1rem;
   animation: bootstrapShieldIn 0.2s ease;
+}
+
+/* Escape hatch for a bootstrap that's taking far longer than expected (e.g.
+   a slow local Ollama reasoning model) without having to scroll down to the
+   separate Stop button in the commission row below the card. Calls the same
+   stopBootstrap() as that button — just reachable right where the user is
+   already looking. */
+.bootstrapShieldClose {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+}
+
+.bootstrapShieldClose:hover {
+  background: rgba(22, 50, 74, 0.08);
+  color: var(--color-text);
 }
 
 @keyframes bootstrapShieldIn {

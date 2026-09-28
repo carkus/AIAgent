@@ -182,7 +182,7 @@ export const PERSONALITY_TRAITS: Record<AgentTemplateId, PersonalityTrait[]> = {
   ],
   general: [
     { id: 'adaptable', label: 'Adaptable', instruction: 'Adopt an adaptable personality: shift depth and approach to fit each topic rather than applying one fixed format to all of them.' },
-    { id: 'practical', label: 'Practical', instruction: 'Adopt a practical personality: favor concrete, actionable takeaways over abstract discussion.' },
+    { id: 'practical', label: 'Practical', instruction: 'Adopt a practical personality: favors concrete, actionable takeaways over abstract discussion.' },
     { id: 'attentive', label: 'Attentive', instruction: 'Adopt an attentive personality: track small details across topics and call back to them when relevant instead of treating each one in isolation.' },
     { id: 'versatile', label: 'Versatile', instruction: 'Adopt a versatile personality: draw connections across the different topics covered rather than reporting on each in a silo.' },
     { id: 'observant', label: 'Observant', instruction: 'Adopt an observant personality: note what has changed since anything already discussed, and highlight what is genuinely new.' },

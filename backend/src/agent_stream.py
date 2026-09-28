@@ -1,11 +1,12 @@
 import concurrent.futures
 import json
 import logging
+import os
 import re
 import time
 from types import SimpleNamespace
 from urllib.parse import urlsplit
-from llm_client import create_chat_completion
+from llm_client import create_chat_completion, OLLAMA_NUM_CTX
 from tools import execute_tool, fetch_page, search_jobs, search_image
 import eval_checks
 import eval_log
@@ -928,6 +929,47 @@ an actual attempt genuinely came up empty.
             "elapsed_seconds": round(time.time() - started_at, 1),
             "tokens_so_far": {"input_tokens": total_input_tokens, "output_tokens": total_output_tokens},
         }
+    # Local Ollama models run with a small, fixed context window (OLLAMA_NUM_CTX
+    # in llm_client.py) that this app's own system prompt + tool schemas already
+    # eat a large chunk of on their own. Past that budget, Ollama silently drops
+    # tokens from the front of the prompt rather than erroring — observed live
+    # as the model answering as though earlier turns of the conversation never
+    # happened, even though the full history is sent on every request. Trim
+    # deterministically here instead: always keep the system message, then keep
+    # as many of the MOST RECENT history messages as fit a conservative token
+    # budget, dropping the oldest ones first — so when a trim is unavoidable
+    # it's predictable and visible (via a status event) rather than a silent,
+    # provider-side artifact that can eat into the system prompt itself.
+    using_ollama = provider == "ollama" or (
+        not provider and os.environ.get("LLM_PROVIDER", "").strip().lower() == "ollama"
+    )
+    if using_ollama and len(current_messages) > 1:
+        def _approx_tokens(msg: dict) -> int:
+            content = msg.get("content") or ""
+            text = content if isinstance(content, str) else json.dumps(content)
+            return len(text) // 4 + 10  # +10/msg for role/formatting overhead
+
+        # Reserve room for the tool schemas (sent on every call, not part of
+        # current_messages) and for the model's own reply, then spend whatever
+        # is left on history, most recent first.
+        reserve_for_output = 2000
+        budget = OLLAMA_NUM_CTX - _approx_tokens(current_messages[0]) - (len(json.dumps(tools)) // 4) - reserve_for_output
+        history = current_messages[1:]
+        kept: list[dict] = []
+        used = 0
+        for m in reversed(history):
+            cost = _approx_tokens(m)
+            if kept and used + cost > budget:
+                break
+            kept.append(m)
+            used += cost
+        trimmed_count = len(history) - len(kept)
+        if trimmed_count > 0:
+            kept.reverse()
+            current_messages = [current_messages[0]] + kept
+    else:
+        trimmed_count = 0
+
     # Confirmed live: one nudge attempt is sometimes not enough — a model that
     # narrates-instead-of-calling once will sometimes repeat that exact
     # pattern after being corrected once, and a single-shot budget meant the
@@ -951,7 +993,14 @@ an actual attempt genuinely came up empty.
     last_model_used = None
 
     try:
-        yield _status("Thinking through your request…")
+        if trimmed_count > 0:
+            yield _status(
+                f"Trimmed {trimmed_count} earlier message(s) to fit the local model's "
+                "context window (switch to Gemini in Settings for full history). "
+                "Thinking through your request…"
+            )
+        else:
+            yield _status("Thinking through your request…")
         for iteration in range(max_iterations):
             call_meta: dict = {}
             try:

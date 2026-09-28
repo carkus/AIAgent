@@ -50,10 +50,8 @@
    panel. */
 .letterhead {
   margin: 0.9rem 1.1rem 0;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: var(--font-size-xs);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+  font-style: italic;
+  font-size: var(--font-size-sm);
   color: var(--color-muted);
 }
 
@@ -92,14 +90,19 @@
 }
 
 .closeBtn {
-  background: transparent;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  background: var(--color-surface);
+  border: 1px solid rgba(107, 90, 50, 0.35);
   color: #8a7a52;
   cursor: pointer;
-  font-size: var(--font-size-lg);
+  font-size: 1rem;
   line-height: 1;
-  padding: 0.3rem 0.5rem;
-  border-radius: 6px;
+  padding: 0;
+  border-radius: 50%;
 }
 
 .closeBtn:hover {
@@ -127,26 +130,14 @@
    applied between sections instead of as a standalone element so no JSX
    change was needed to add it. */
 .section + .section {
-  border-top: 1px solid #cfbf94;
+  border-top: 1px solid var(--color-border);
   padding-top: 1rem;
 }
 
 .sectionLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
   color: var(--color-accent-secondary);
-  font-family: 'Share Tech Mono', monospace;
-  font-size: var(--font-size-xs);
-  font-weight: 400;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.sectionLabel::before {
-  content: '◆';
-  color: var(--color-accent);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
 }
 
 .locationRow {
@@ -163,8 +154,8 @@
 }
 
 .locationInput {
-  background: #f8f4e7;
-  border: 1px solid #ddd0a5;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   color: var(--color-text);
   font-family: inherit;
@@ -177,7 +168,7 @@
 }
 
 .locationInput:hover:not(:disabled) {
-  border-color: #cfbf94;
+  border-color: var(--color-accent-secondary);
 }
 
 .locationInput:focus {
@@ -191,8 +182,8 @@
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: #f8f4e7;
-  border: 1px solid #ddd0a5;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   list-style: none;
   margin: 0;
@@ -211,7 +202,7 @@
 }
 
 .locationSuggestions li:hover {
-  background: #ede4cd;
+  background: rgba(31, 111, 115, 0.08);
   color: var(--color-text);
 }
 
@@ -238,8 +229,8 @@
 }
 
 .providerSelect {
-  background-color: #f8f4e7;
-  border: 1px solid #ddd0a5;
+  background-color: #ffffff;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   color: var(--color-text);
   font-family: inherit;
@@ -265,7 +256,7 @@
 }
 
 .providerSelect:hover:not(:disabled) {
-  border-color: #cfbf94;
+  border-color: var(--color-accent-secondary);
 }
 
 .providerSelect:focus {
@@ -280,7 +271,7 @@
 }
 
 .providerHint {
-  color: #8a7a52;
+  color: var(--color-muted);
   font-size: var(--font-size-sm);
   margin: 0.25rem 0 0;
 }
@@ -296,8 +287,8 @@
 }
 
 .numberInput {
-  background: #f8f4e7;
-  border: 1px solid #ddd0a5;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   color: var(--color-text);
   font-family: inherit;
@@ -310,7 +301,7 @@
 }
 
 .numberInput:hover:not(:disabled) {
-  border-color: #cfbf94;
+  border-color: var(--color-accent-secondary);
 }
 
 .numberInput:focus {
@@ -335,7 +326,7 @@
   flex-direction: column;
   gap: 0.3rem;
   font-size: var(--font-size-sm);
-  color: #8a7a52;
+  color: var(--color-muted);
 }
 
 .mcpList {
@@ -348,8 +339,8 @@
 }
 
 .mcpServer {
-  background: #f8f4e7;
-  border: 1px solid #ddd0a5;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
 }
@@ -373,7 +364,7 @@
 }
 
 .mcpDotOff {
-  background: #b9ab84;
+  background: var(--color-border);
 }
 
 .mcpServerName {

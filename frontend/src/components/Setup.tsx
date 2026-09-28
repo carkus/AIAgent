@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, fetchModelInfo, listAgentDrafts, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
 import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
-import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat } from '../chatStorage'
+import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat, setLastOpenedPointer } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
 import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, type BehaviorToggle } from '../agentTypes'
 import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
@@ -133,7 +133,7 @@ function SaveIcon() {
 }
 
 // Shared header for every collapsible subsection in the agent profile card
-// (Behavior/Personality/Specialties/Brief) — a clickable row that expands/
+// (Behavior/Personality/Focus/Brief) — a clickable row that expands/
 // collapses the section, plus a "?" HelpTip button. The row itself can't be
 // a <button> (a HelpTip button living inside it would be an invalid
 // button-in-button), so it's a div with role="button" instead; the HelpTip's
@@ -197,7 +197,7 @@ function describeBehaviorEffect(toggle: BehaviorToggle, type: AgentTemplateId, k
       return `${toggle.description} Its reports on ${subject} read in a professional register, no casual asides.`
     case 'max-delegation':
       return kw.length > 1
-        ? `${toggle.description} With ${kw.length} specialties (${subject}), it splits the work across a worker agent per specialty instead of researching all of them itself.`
+        ? `${toggle.description} With ${kw.length} focus areas (${subject}), it splits the work across a worker agent per focus area instead of researching all of them itself.`
         : `${toggle.description} Even with just ${subject} to cover, it still splits research into parallel worker agents rather than doing it all itself.`
     default:
       return toggle.description
@@ -225,7 +225,7 @@ const MAX_SPECIALTIES = 5
 function buildDeterministicWarning(keywords: string[], agentType: AgentTemplateId, loc: string, maxDelegations: number | null): string | null {
   const limit = maxDelegations ?? DEFAULT_MAX_DELEGATIONS
   if (keywords.length > limit) {
-    return `${keywords.length} specialties is more than the ${limit} the agent can delegate to in one turn — some will be dropped or under-covered.`
+    return `${keywords.length} focus areas is more than the ${limit} the agent can delegate to in one turn — some will be dropped or under-covered.`
   }
   if (agentType === 'job_search' && !loc) {
     return 'No location set — job listings will be searched without a geographic filter.'
@@ -721,7 +721,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       // same collapse, this just keeps local state in sync with it.
       setSaved(prev => [entry, ...prev.filter(s => !(s.name === entry.name && s.agentType === entry.agentType))])
       setOpenSavedSections(prev => ({ ...prev, searches: true }))
-      setSaveFeedback('Saved to Select Specialties ✓')
+      setSaveFeedback('Added to Saved Focus ✓')
     } catch {
       setSaveFeedback('Save failed — backend unreachable')
     }
@@ -757,7 +757,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // Commission is clicked.
   async function saveAgentDraft() {
     if (keywords.length === 0) {
-      setSaveFeedback('Add at least one specialty first')
+      setSaveFeedback('Add at least one focus area first')
       setTimeout(() => setSaveFeedback(null), 2500)
       return
     }
@@ -811,6 +811,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
 
   function resumeChat(chat: SavedChat) {
     if (bootstrapping) return
+    setLastOpenedPointer({ kind: 'savedChat', id: chat.id })
     onResumeChat(chat)
   }
 
@@ -822,6 +823,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   function hirePublishedAgent(agent: PublishedAgent) {
     if (bootstrapping) return
     setStableModalOpen(false)
+    setLastOpenedPointer({ kind: 'publishedAgent', id: agent.id })
     onResumeChat({
       id: crypto.randomUUID(),
       agentName: agent.name,
@@ -924,7 +926,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   async function runBootstrap() {
     if (bootstrapping) return
     if (keywords.length === 0) {
-      setCommissionHint('Add at least one specialty above — the brief needs it before this agent can be commissioned.')
+      setCommissionHint('Add at least one focus area above — the brief needs it before this agent can be commissioned.')
       return
     }
     const loc = location.trim()
@@ -1056,7 +1058,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           className={styles.panelHelpTip}
           size="lg"
           label="What is this screen?"
-          text="This card designs your agent before it exists. Pick an agent type, add specialties for it to focus on, and optionally tune its behavior and personality — the Brief below updates live to show what it's agreed to do. Hit Commission to bootstrap it and start chatting."
+          text="This card designs your agent before it exists. Pick an agent type, add focus areas for it to work on, and optionally tune its behavior and personality — the Brief below updates live to show what it's agreed to do. Hit Commission to bootstrap it and start chatting."
         />
         <button
           type="button"
@@ -1188,10 +1190,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
 
             <div className={styles.specialtiesRow}>
               <SectionHeader
-                label="Specialties"
+                label="Focus"
                 expanded={specialtiesOpen}
                 onToggle={() => setSpecialtiesOpen(o => !o)}
-                help="Specialties are the topics, roles, or keywords this agent will actually work on. Add at least one — they drive the Brief below and what the agent searches or reports on once commissioned."
+                help="Focus: the topics, roles, or keywords this agent will actually work on. Add at least one — they drive the Brief below and what the agent searches or reports on once commissioned."
                 right={!specialtiesOpen && keywords.length > 0 && (
                   <span className={styles.fieldLabelCount}>{keywords.length}/{savedKeywordPool.length}</span>
                 )}
@@ -1199,8 +1201,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               {specialtiesOpen && (
                 <p className={styles.specialtiesHint}>
                   {keywords.length >= MAX_SPECIALTIES
-                    ? `Limit of ${MAX_SPECIALTIES} specialties reached — remove one to add another.`
-                    : 'Type a keyword and press Enter, or select a Saved Specialty from the Agent Dossier below'}
+                    ? `Limit of ${MAX_SPECIALTIES} reached — remove one to add another.`
+                    : 'Type a keyword and press Enter, or select a Saved Focus item from the Agent Dossier below'}
                 </p>
               )}
               {specialtiesOpen && (
@@ -1226,7 +1228,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     onChange={e => setDraft(e.target.value.slice(0, 50))}
                     onKeyDown={handleKeyDown}
                     onBlur={() => { if (draft.trim()) addKeyword() }}
-                    placeholder={keywords.length >= MAX_SPECIALTIES ? `Limit of ${MAX_SPECIALTIES} reached` : (keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : '+ Add Speciality')}
+                    placeholder={keywords.length >= MAX_SPECIALTIES ? `Limit of ${MAX_SPECIALTIES} reached` : (keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : '+ Add Focus')}
                     disabled={bootstrapping || keywords.length >= MAX_SPECIALTIES}
                     maxLength={50}
                   />
@@ -1259,9 +1261,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         className={styles.profileSaveBtn}
                         onClick={saveSearch}
                         disabled={bootstrapping || !hasUnsavedSpecialties}
-                        title={hasUnsavedSpecialties ? 'Save the specialties above that aren\'t saved yet' : 'All current specialties are already saved'}
+                        title={hasUnsavedSpecialties ? 'Save the focus items above that aren\'t saved yet' : 'All current focus items are already saved'}
                       >
-                        Save Specialties
+                        Save Focus
                       </button>
                     )}
                   </div>
@@ -1271,7 +1273,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
 
             <div className={styles.resetToolbar}>
               <HelpTip
-                text="Clears every change made in this form — specialties, behavior, personality — and starts a fresh, blank agent."
+                text="Clears every change made in this form — focus, behavior, personality — and starts a fresh, blank agent."
                 label="Clear agent help"
               />
               <button
@@ -1302,7 +1304,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
 
           {/* Brief lives in its own subsection, outside the editable-fields
-              scroll list above — it's generated from Specialties/Behavior,
+              scroll list above — it's generated from Focus/Behavior,
               never typed into directly, so it reads as assembled output
               rather than another field to fill in. */}
           <div className={styles.briefSection}>
@@ -1310,13 +1312,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               label="Brief"
               expanded={briefOpen}
               onToggle={() => setBriefOpen(o => !o)}
-              help="The Brief is a live preview of what this agent has agreed to do, generated from its type, specialties, behavior and personality. It's read-only — edit the fields above to change it."
+              help="The Brief is a live preview of what this agent has agreed to do, generated from its type, focus, behavior and personality. It's read-only — edit the fields above to change it."
             />
             {briefOpen && (
               keywords.length === 0 ? (
                 <p className={styles.briefPlaceholderText}>
                   <span className={styles.briefPlaceholderIcon} aria-hidden="true">✎</span>
-                  Add Specialties and behaviors to build this agent’s brief.
+                  Add Focus and behaviors to build this agent’s brief.
                 </p>
               ) : aiBrief?.type === 'question' ? (
                 <>
@@ -1373,7 +1375,16 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
 
           {bootstrapping && (
-            <div className={styles.bootstrapShield} aria-hidden="true">
+            <div className={styles.bootstrapShield}>
+              <button
+                type="button"
+                className={styles.bootstrapShieldClose}
+                onClick={stopBootstrap}
+                title="Cancel this in-progress bootstrap"
+                aria-label="Cancel bootstrap"
+              >
+                &times;
+              </button>
               <p className={styles.bootstrapShieldText}>
                 {progress ?? (provider === 'ollama'
                   ? `${ollamaModel ?? 'Your local model'} is designing your agent's tools and behaviour…`
@@ -1436,7 +1447,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   className={`${styles.profileSaveBtn} ${styles.profileSaveBtnCommission}`}
                   onClick={saveAgentDraft}
                   disabled={bootstrapping}
-                  title="Save Agent profile — name, type, location and specialties"
+                  title="Save Agent profile — name, type, location and focus areas"
                   aria-label="Save agent"
                 >
                   <span aria-hidden="true"><SaveIcon /></span>
@@ -1487,13 +1498,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 <span className={styles.savedSectionCaret} aria-hidden="true">
                   {openSavedSections.searches ? '▾' : '▸'}
                 </span>
-                <span className={styles.savedSectionTitle}>Saved Specialties</span>
+                <span className={styles.savedSectionTitle}>Saved Focus</span>
                 <span className={styles.savedSectionCount}>{savedKeywordPool.length}</span>
               </button>
               {openSavedSections.searches && (
                 <div className={styles.savedSectionBody}>
                   {savedKeywordPool.length === 0 && !addingSavedKeyword && (
-                    <p className={styles.savedEmpty}>No specialties saved yet.</p>
+                    <p className={styles.savedEmpty}>No focus items saved yet.</p>
                   )}
                   <div className={styles.savedKeywordPool}>
                     {savedKeywordPool.map(kw => {
@@ -1510,8 +1521,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } }}
                           aria-pressed={alreadyAdded}
                           aria-disabled={atCap}
-                          aria-label={alreadyAdded ? `${kw} is in current specialties — tap to remove` : atCap ? `Cannot add ${kw} — limit of ${MAX_SPECIALTIES} specialties reached` : `Add saved specialty ${kw} to current specialties`}
-                          title={alreadyAdded ? 'Tap to remove from current specialties' : atCap ? `Limit of ${MAX_SPECIALTIES} specialties reached` : 'Tap to add to current specialties'}
+                          aria-label={alreadyAdded ? `${kw} is in current focus areas — tap to remove` : atCap ? `Cannot add ${kw} — limit of ${MAX_SPECIALTIES} focus areas reached` : `Add saved focus area ${kw} to current focus areas`}
+                          title={alreadyAdded ? 'Tap to remove from current focus areas' : atCap ? `Limit of ${MAX_SPECIALTIES} focus areas reached` : 'Tap to add to current focus areas'}
                         >
                           <span className={styles.savedKeywordLabel}>{kw}</span>
                           <button
@@ -1519,8 +1530,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                             className={styles.savedKeywordDelete}
                             onClick={ev => { ev.stopPropagation(); deleteSavedKeyword(kw) }}
                             disabled={bootstrapping}
-                            aria-label={`Delete saved specialty ${kw}`}
-                            title="Delete saved specialty"
+                            aria-label={`Delete saved focus area ${kw}`}
+                            title="Delete saved focus area"
                           >
                             ×
                           </button>
@@ -1538,7 +1549,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                           if (e.key === 'Escape') { setNewSavedKeywordDraft(''); setAddingSavedKeyword(false) }
                         }}
                         onBlur={addNewSavedKeyword}
-                        placeholder="New specialty…"
+                        placeholder="New focus area…"
                         autoFocus
                         maxLength={50}
                       />
@@ -1548,7 +1559,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         className={styles.savedKeywordAddNew}
                         onClick={() => setAddingSavedKeyword(true)}
                         disabled={bootstrapping}
-                        title="Add a new specialty straight to the saved pool"
+                        title="Add a new focus area straight to the saved pool"
                       >
                         Add New
                       </button>
@@ -1743,9 +1754,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       {publishedAgents.map(a => (
                         <div key={a.id} className={styles.savedRow} title={a.description}>
                           <div className={styles.savedChatInfo}>
-                            <span className={styles.savedChatName}>{a.name}</span>
+                            <span className={styles.savedChatNameRow}>
+                              <span className={styles.savedChatName}>{a.name}</span>
+                              <span className={styles.savedAgentNo}>Agent No. {a.id}</span>
+                            </span>
                             <span className={styles.savedChatMeta}>
-                              Agent No. {a.id} · Callable as: {a.tool_name}{a.description ? ` · ${a.description}` : ''}
+                              Callable as: {a.tool_name}{a.description ? ` · ${a.description}` : ''}
                             </span>
                           </div>
                           <button
@@ -1801,6 +1815,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   collapsed={evalBarCollapsed}
                   onToggleCollapse={() => setEvalBarCollapsed(c => !c)}
                   onClear={() => setEvalResults([])}
+                  onRemoveItem={(item) => setEvalResults(prev => prev.filter(r => r !== item))}
                 />
               </>
             ) : error ? (

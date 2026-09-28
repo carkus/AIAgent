@@ -453,7 +453,7 @@ function drawContextSection(layout: PdfLayout, ctx: PdfAgentContext) {
 
   layout.plainText(ctx.purpose, PAGE_MARGIN, layout.contentWidth, BODY_SIZE)
 
-  if (ctx.keywords?.length) layout.meta(`Specialties: ${ctx.keywords.join(', ')}`)
+  if (ctx.keywords?.length) layout.meta(`Focus: ${ctx.keywords.join(', ')}`)
   if (ctx.location) layout.meta(`Location: ${ctx.location}`)
   if (ctx.model) layout.meta(`Model: ${ctx.model}`)
   if (ctx.behaviorToggles?.length) layout.meta(`Behavior: ${ctx.behaviorToggles.join(', ')}`)

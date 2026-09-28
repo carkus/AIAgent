@@ -9,6 +9,7 @@ interface FeedbackStatusBarProps {
   onToggleCollapse: () => void
   onClear?: () => void
   onRetry?: (item: EvalResultItem) => void
+  onRemoveItem?: (item: EvalResultItem) => void
 }
 
 function targetLabel(item: EvalResultItem): string {
@@ -31,7 +32,7 @@ function targetLabel(item: EvalResultItem): string {
 // worker delegation), that a test was run, what it was, and what it found.
 // Presentational only — Chat.tsx and Setup.tsx each own their own
 // results/collapsed state and pass it down.
-export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse, onClear, onRetry }: FeedbackStatusBarProps) {
+export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse, onClear, onRetry, onRemoveItem }: FeedbackStatusBarProps) {
   const [reportItem, setReportItem] = useState<EvalResultItem | null>(null)
   const [maximized, setMaximized] = useState(false)
 
@@ -123,6 +124,17 @@ export default function FeedbackStatusBar({ results, collapsed, onToggleCollapse
                   </button>
                 )}
               </span>
+              {onRemoveItem && (
+                <button
+                  type="button"
+                  className={styles.removeBtn}
+                  onClick={() => onRemoveItem(item)}
+                  aria-label="Remove this check"
+                  title="Remove"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           ))}
         </div>

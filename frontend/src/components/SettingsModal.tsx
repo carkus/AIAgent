@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ArmStat, LlmProvider, SearchDefaults } from '../types'
 import { listMcpTools, type McpServerInfo } from '../api'
-import { isTinyOllamaModel } from '../modelLabel'
+import { isTinyOllamaModel, isReasoningOllamaModel } from '../modelLabel'
 import { DATE_FORMAT_OPTIONS, type DateFormatId } from '../dateFormat'
 import styles from '../styles/SettingsModal.module.css'
 
@@ -210,6 +210,13 @@ export default function SettingsModal({
                     (Gemini) or a larger local model instead.
                   </p>
                 )}
+                {isReasoningOllamaModel(ollamaModel) && (
+                  <p className={styles.providerWarning}>
+                    ⚠ {ollamaModel} is a reasoning model — it "thinks" at length before
+                    replying, which is likely to feel slow (or hung) for bootstrap and
+                    every agent turn. A plain instruct model will respond faster.
+                  </p>
+                )}
               </>
             )}
           </section>
@@ -231,7 +238,7 @@ export default function SettingsModal({
             />
             <p className={styles.providerHint}>
               Max worker agents this agent can spin up per turn when a task splits
-              across several specialties/topics. Higher means more parallel research
+              across several focus areas/topics. Higher means more parallel research
               but more API cost per message. Default {DEFAULT_MAX_DELEGATIONS}.
             </p>
           </section>

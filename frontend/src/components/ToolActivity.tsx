@@ -929,8 +929,12 @@ export default function ToolActivity({ toolCalls, live = false, location }: Prop
         {open && (
           <>
             <AgentsEmployedSummary workers={extractWorkerSummaries(toolCalls)} />
-            {extractCompletedWorkers(toolCalls).map((data, i) => <WorkerResultCard key={i} data={data} />)}
-            {toolCalls.filter(tc => tc.tool !== 'delegate_to_worker').map((tc, i) => <LiveToolRow key={i} tc={tc} location={location} />)}
+            {extractCompletedWorkers(toolCalls).map((data, i) => (
+              <WorkerResultCard key={i} data={data} />
+            ))}
+            {toolCalls.filter(tc => tc.tool !== 'delegate_to_worker').map((tc, i) => (
+              <LiveToolRow key={i} tc={tc} location={location} />
+            ))}
           </>
         )}
       </div>
@@ -958,7 +962,7 @@ export default function ToolActivity({ toolCalls, live = false, location }: Prop
 
   const savedFromOther = other
     .map(tc => extractSavedFile(tc.result))
-    .filter(Boolean) as string[]
+    .filter((f): f is string => !!f)
   const unsavedOther = other.filter(tc => !extractSavedFile(tc.result) && !isEmptyResult(tc.result) && !isErrorResult(tc.result) && !isBlockedResult(tc.result))
 
   return (
@@ -982,15 +986,17 @@ export default function ToolActivity({ toolCalls, live = false, location }: Prop
           ))}
 
           <AgentsEmployedSummary workers={extractWorkerSummaries(toolCalls)} />
-          {extractCompletedWorkers(toolCalls).map((data, i) => <WorkerResultCard key={i} data={data} />)}
-
-          {savedFromOther.map(f => (
-            <div key={f} className={styles.kwSection}>
-              <SavedFileViewer filename={f} />
-            </div>
+          {extractCompletedWorkers(toolCalls).map((data, i) => (
+            <WorkerResultCard key={i} data={data} />
           ))}
 
-          {unsavedOther.map((tc, i) => <LiveToolRow key={i} tc={tc} location={location} />)}
+          {savedFromOther.map(filename => (
+            <SavedFileViewer key={filename} filename={filename} />
+          ))}
+
+          {unsavedOther.map((tc, i) => (
+            <LiveToolRow key={i} tc={tc} location={location} />
+          ))}
         </>
       )}
     </div>

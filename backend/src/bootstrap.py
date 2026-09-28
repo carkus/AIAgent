@@ -51,7 +51,7 @@ Execution environment for tool implementations:
 - Tool inputs are available as: `inputs` (dict), `input_data` (alias for `inputs`), or directly by name (e.g. if the tool has a `keyword` param, you can write `keyword` directly)
 
 {primitives_block}
-IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write `search_jobs(...)`, `fetch_page(...)`, or `search_image(...)` inside an `implementation` string. The same rule applies to every tool name in the "Vetted MCP tools" list below (e.g. `tavily_search`) — those are NOT Python functions either, in any implementation string. If a tool needs a primitive's or a vetted MCP tool's capability, don't generate a Python implementation for it at all — add the primitive by name to the system_prompt's instructions, or add the MCP tool using the exact `"source": "mcp"` object shape shown below, never a generated `implementation` that calls it like a function.
+IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write `search_jobs(...)`, `fetch_page(...)`, or `search_image(...)` inside an `implementation` string. The same rule applies to every tool name in the "Vetted MCP tools" list below (e.g. `tavily_search`) — those are NOT Python functions either, in any implementation string. There is also no local HTTP service that runs or proxies these tools for you — never write `requests.get(...)`/`requests.post(...)` against `127.0.0.1`, `localhost`, or any local port to "call" a primitive or vetted MCP tool; nothing listens there and the request will simply fail. If a tool needs a primitive's or a vetted MCP tool's capability, don't generate a Python implementation for it at all — add the primitive by name to the system_prompt's instructions, or add the MCP tool using the exact `"source": "mcp"` object shape shown below, never a generated `implementation` that calls it like a function or proxies to it over HTTP.
 
 Vetted MCP tools (real, independently-maintained servers — prefer these over writing your own implementation when one already covers the need):
 {mcp_catalog}
@@ -192,6 +192,41 @@ def _forbidden_call_errors(config: dict, forbidden_names: set[str]) -> list[tupl
                     ),
                 ))
                 break
+    return errors
+
+
+_LOCAL_ENDPOINT_PATTERN = re.compile(r"(https?://)?(127\.0\.0\.1|localhost)(:\d+)?", re.IGNORECASE)
+
+
+def _local_endpoint_errors(config: dict) -> list[tuple[str, _UndefinedCallError]]:
+    """A second, distinct variant of the bug _forbidden_call_errors catches:
+    live traffic surfaced a generated tool whose `implementation` didn't call
+    `tavily_search(...)` as a bare function (which the regex above would have
+    caught) but instead POSTed to a hallucinated local tool-invocation
+    service — `requests.post("http://127.0.0.1:9696/tool/tavily_search", ...)`
+    — imagining an HTTP proxy in front of vetted/primitive tools that doesn't
+    exist. Nothing in this sandbox ever listens on 127.0.0.1/localhost for a
+    generated tool to call, so any implementation referencing one is a
+    guaranteed connection-refused failure at execution time, just like a bare
+    forbidden-name call is a guaranteed NameError — same bug class, same
+    one-retry/then-drop treatment."""
+    errors: list[tuple[str, _UndefinedCallError]] = []
+    for tool in config.get("tools", []):
+        if not isinstance(tool, dict) or tool.get("source") == "mcp":
+            continue
+        impl = tool.get("implementation")
+        if not isinstance(impl, str):
+            continue
+        if _LOCAL_ENDPOINT_PATTERN.search(impl):
+            errors.append((
+                tool.get("name", "<unnamed>"),
+                _UndefinedCallError(
+                    "implementation makes an HTTP request to 127.0.0.1/localhost — "
+                    "there is no local tool-invocation service for generated code to "
+                    "call; call a real external API directly, or for a primitive/"
+                    "vetted-MCP capability don't write an implementation at all"
+                ),
+            ))
     return errors
 
 
@@ -454,14 +489,17 @@ def generate_agent_config(
     # Second validation pass: valid JSON doesn't mean valid Python inside the
     # `implementation` strings. One correction retry, same shape as the JSON
     # retry above; if it's still broken, drop just the offending tool(s)
-    # rather than failing the whole agent over one bad tool. Bundles two
-    # error classes: outright syntax errors, and valid-but-doomed Python that
+    # rather than failing the whole agent over one bad tool. Bundles three
+    # error classes: outright syntax errors; valid-but-doomed Python that
     # calls a primitive/vetted-MCP tool name as a bare function (guaranteed
-    # NameError the first time tools.py execs it — see _forbidden_call_errors).
+    # NameError the first time tools.py execs it — see _forbidden_call_errors);
+    # and valid-but-doomed Python that instead POSTs/GETs a hallucinated
+    # 127.0.0.1/localhost "tool service" (guaranteed connection-refused — see
+    # _local_endpoint_errors).
     forbidden_names = {"search_jobs", "fetch_page", "search_image"} | {
         c["tool_name"] for c in mcp_client.catalog_summary()
     }
-    tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names)
+    tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names) + _local_endpoint_errors(config)
     if tool_errors:
         correction_response = create_chat_completion(
             provider=provider,
@@ -482,7 +520,7 @@ def generate_agent_config(
         retried_config, retry_error = _try_parse(text)
         if retried_config is not None:
             config = retried_config
-            tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names)
+            tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names) + _local_endpoint_errors(config)
 
     if tool_errors:
         broken = {name for name, _ in tool_errors}
@@ -650,14 +688,15 @@ def generate_agent_config_stream(
         return
 
     # Same compile-check + one correction retry as generate_agent_config —
-    # see _tool_syntax_errors for why JSON validity alone isn't enough, and
-    # _forbidden_call_errors for the second error class caught alongside it
-    # (a generated tool calling a primitive/vetted-MCP tool name as a bare
-    # function — valid Python, guaranteed NameError at execution time).
+    # see _tool_syntax_errors for why JSON validity alone isn't enough,
+    # _forbidden_call_errors for a generated tool calling a primitive/
+    # vetted-MCP tool name as a bare function (valid Python, guaranteed
+    # NameError at execution time), and _local_endpoint_errors for the same
+    # bug via a hallucinated 127.0.0.1/localhost HTTP call instead.
     forbidden_names = {"search_jobs", "fetch_page", "search_image"} | {
         c["tool_name"] for c in mcp_client.catalog_summary()
     }
-    tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names)
+    tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names) + _local_endpoint_errors(config)
     if tool_errors:
         yield {"type": "status", "message": "Fixing broken tool code…"}
         tool_fix_meta: dict = {}
@@ -683,7 +722,7 @@ def generate_agent_config_stream(
             retried_config, _ = _try_parse(text)
             if retried_config is not None:
                 config = retried_config
-                tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names)
+                tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names) + _local_endpoint_errors(config)
         except Exception as e:
             yield _model_event(tool_fix_meta)
             yield {"type": "error", "message": f"Tool-code correction retry failed: {e}"}

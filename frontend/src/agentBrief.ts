@@ -27,7 +27,7 @@ export function buildAgentBrief(agentType: AgentTemplateId, keywords: string[], 
     case 'research':
       return `${name} will research and analyze ${topics}${beat}. If commissioned, it will search, cross-reference sources, and report back with findings and key data points.${extrasClause}`
     case 'job_search':
-      return `${name} will find roles in ${topics}${beat}. If commissioned, it will search listings, screen them against your criteria, and report back the strongest matches.${extrasClause}`
+      return `${name} will focus on ${topics}${beat}. If commissioned, it will search listings, screen them against your criteria, and report back the strongest matches.${extrasClause}`
     default:
       return `${name} will track ${topics}${beat}. If commissioned, it will monitor developments and report back on what's most relevant.${extrasClause}`
   }

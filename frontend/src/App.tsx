@@ -1,18 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Setup from './components/Setup'
 import Chat from './components/Chat'
 import SplashScreen from './components/SplashScreen'
 import type { AgentConfig, SavedChat } from './types'
 import { SURNAMES } from './surnames'
+import { getLastOpenedPointer, loadSavedChats, setLastOpenedPointer } from './chatStorage'
+import { listPublishedAgents } from './api'
 
-type Phase = 'splash' | 'setup' | 'bootstrapping' | 'chat'
+// 'restoring' is a brief, render-nothing gate while the mount effect below
+// checks for a previously-opened chat/agent to reopen — it exists purely to
+// avoid a flash of the splash screen for the (common, once this feature is
+// used) case where that check succeeds and jumps straight to 'chat'.
+type Phase = 'restoring' | 'splash' | 'setup' | 'bootstrapping' | 'chat'
 
 function randomSurname(): string {
   return SURNAMES[Math.floor(Math.random() * SURNAMES.length)]
 }
 
 export default function App() {
-  const [phase, setPhase] = useState<Phase>('splash')
+  const [phase, setPhase] = useState<Phase>('restoring')
   const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null)
   const [bootstrapError, setBootstrapError] = useState<string | null>(null)
   // Picked once per agent (re-rolled on "New agent") so this instance has a
@@ -26,9 +32,55 @@ export default function App() {
   // resumed conversation's history doesn't leak into an unrelated agent.
   const [resumedChat, setResumedChat] = useState<SavedChat | null>(null)
 
+  // Runs once on mount: if a chat/agent was open when the page was last
+  // closed or reloaded, re-check it against its live source of truth
+  // (localStorage for a saved chat, the backend registry for a published
+  // agent) and drop straight into it if it's still there — otherwise clear
+  // the stale pointer and fall through to the normal splash/setup start.
+  useEffect(() => {
+    let cancelled = false
+    async function restore() {
+      const pointer = getLastOpenedPointer()
+      if (pointer) {
+        if (pointer.kind === 'savedChat') {
+          const chat = loadSavedChats().find(c => c.id === pointer.id)
+          if (chat) {
+            if (!cancelled) handleResumeChat(chat)
+            return
+          }
+        } else if (pointer.kind === 'publishedAgent') {
+          const agents = await listPublishedAgents()
+          const agent = agents.find(a => a.id === pointer.id)
+          if (agent) {
+            if (!cancelled) {
+              handleResumeChat({
+                id: crypto.randomUUID(),
+                agentName: agent.name,
+                agentConfig: agent.agent_config,
+                messages: [],
+                savedAt: Date.now(),
+              })
+            }
+            return
+          }
+        }
+        setLastOpenedPointer(null)
+      }
+      if (!cancelled) setPhase('splash')
+    }
+    restore()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function handleBootstrapStart() {
     setBootstrapError(null)
     setResumedChat(null)
+    // A brand-new design deliberately supersedes whatever was previously
+    // open — without this, reloading mid-way through designing a new agent
+    // would snap the user back into the old resumed chat instead of letting
+    // them continue setting up the new one.
+    setLastOpenedPointer(null)
     setPhase('bootstrapping')
   }
 
@@ -86,7 +138,7 @@ export default function App() {
 
   return (
     <div style={styles.root}>
-      {phase === 'splash' ? (
+      {phase === 'restoring' ? null : phase === 'splash' ? (
         <SplashScreen onDone={() => setPhase('setup')} />
       ) : phase === 'setup' || phase === 'bootstrapping' ? (
         <Setup

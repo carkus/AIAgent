@@ -469,6 +469,7 @@
 }
 
 .userBubble {
+  position: relative;
   align-self: flex-end;
   background: linear-gradient(135deg, #1c3a52 0%, var(--color-text) 100%);
   border: 1px solid rgba(31, 111, 115, 0.3);
@@ -479,9 +480,46 @@
 }
 
 .assistantBubble {
+  position: relative;
   align-self: flex-start;
   max-width: 100%;
   width: 100%;
+}
+
+/* Per-message remove button — tucked into the bubble's own top-right
+   corner and hidden until hover/focus so it doesn't clutter a normal read
+   of the conversation, same "reveal on hover" convention as .attachmentRemove
+   uses inline instead of an always-visible icon. */
+.messageDelete {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.userBubble:hover .messageDelete,
+.assistantBubble:hover .messageDelete,
+.messageDelete:focus-visible {
+  opacity: 1;
+}
+
+.messageDelete:hover {
+  color: #b91c1c;
+  border-color: #b91c1c;
 }
 
 .bubbleText {
@@ -1159,18 +1197,27 @@
 }
 
 .attachmentRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
   margin-left: auto;
-  background: none;
-  border: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
   color: #6b7785;
   cursor: pointer;
-  font-size: var(--font-size-base);
+  font-size: 0.65rem;
   line-height: 1;
-  padding: 0.2rem;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .attachmentRemove:hover {
   color: #b91c1c;
+  border-color: #b91c1c;
 }
 
 /* A user-uploaded diagram, rendered inside the user bubble above any text —

@@ -897,13 +897,26 @@
 }
 
 .fileModalClose {
-  background: none;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
   color: var(--color-muted);
   cursor: pointer;
-  font-size: var(--font-size-lg);
+  font-size: 1rem;
   line-height: 1;
-  padding: 0 0.2rem;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.fileModalClose:hover {
+  background: #eef1f0;
+  color: var(--color-text);
 }
 
 .fileModalClose:hover {

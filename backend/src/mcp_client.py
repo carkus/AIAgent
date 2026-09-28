@@ -25,6 +25,7 @@ than raising: an uninstalled, unreachable, or crashing vetted server should
 shrink the catalog bootstrap sees, not break bootstrap or the agent loop.
 """
 import asyncio
+import concurrent.futures
 import logging
 import os
 
@@ -47,6 +48,24 @@ _catalog_cache: dict[str, list[dict]] = {}
 # design, so this is a generous hang guard rather than a tight budget.
 MCP_CALL_TIMEOUT_SECONDS = float(os.environ.get("MCP_CALL_TIMEOUT_SECONDS", "25"))
 
+# _run() used to enforce MCP_CALL_TIMEOUT_SECONDS with a bare
+# `asyncio.wait_for(coro, timeout=...)` inside `asyncio.run(...)`. That bounds
+# how long the *coroutine* is awaited, but wait_for's timeout only requests
+# cancellation — it doesn't guarantee the cancelled task actually unwinds. If
+# a stdio subprocess (mcp_server_time/mcp_server_fetch) is wedged holding its
+# pipe open, the cancelled task can sit forever at a blocking pipe read that
+# never observes the CancelledError, and `asyncio.run()` then hangs in its own
+# internal shutdown (`_cancel_all_tasks`) waiting for that task to finish —
+# before `list_tools()`'s `try/except` ever gets a chance to catch anything.
+# This surfaced as bootstrap hanging indefinitely on the very first "Thinking
+# about your purpose…" status, well past the supposed 25s budget, with
+# nothing else printed. Running the whole `asyncio.run(coro)` call in a worker
+# thread and bounding it with `future.result(timeout=...)` fixes this: even if
+# the background thread never returns, the calling thread stops waiting on
+# schedule. The abandoned thread (and its wedged subprocess) leaks rather than
+# blocking forever — an acceptable trade for a rare hang case.
+_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="mcp-call")
+
 
 def _session_cm(server_id: str):
     """The right async context manager for this server's transport — callers
@@ -60,13 +79,24 @@ def _session_cm(server_id: str):
 
 
 def _run(coro):
-    """Run an async MCP call from sync code, bounded by MCP_CALL_TIMEOUT_SECONDS
-    so a hung server surfaces as a fast, catchable error instead of blocking
-    the calling thread (and the whole synchronous agent loop above it)
-    indefinitely. A fresh event loop per call is simplest and safe here —
-    these are one-shot request/response calls, never long-lived, so there's
-    no state to keep alive across calls."""
-    return asyncio.run(asyncio.wait_for(coro, timeout=MCP_CALL_TIMEOUT_SECONDS))
+    """Run an async MCP call from sync code, hard-bounded by
+    MCP_CALL_TIMEOUT_SECONDS so a hung server surfaces as a fast, catchable
+    error instead of blocking the calling thread (and the whole synchronous
+    bootstrap/agent loop above it) indefinitely. A fresh event loop per call
+    is simplest and safe here — these are one-shot request/response calls,
+    never long-lived, so there's no state to keep alive across calls.
+
+    The timeout is enforced from *outside* the event loop (see module
+    comment above `_executor`) rather than via `asyncio.wait_for` alone,
+    since a wedged subprocess pipe can prevent that cancellation from ever
+    completing."""
+    future = _executor.submit(asyncio.run, coro)
+    try:
+        return future.result(timeout=MCP_CALL_TIMEOUT_SECONDS)
+    except concurrent.futures.TimeoutError:
+        raise TimeoutError(
+            f"MCP call did not complete within {MCP_CALL_TIMEOUT_SECONDS}s (server may be hung)"
+        )
 
 
 async def _list_tools_async(server_id: str) -> list[dict]:

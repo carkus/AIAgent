@@ -79,15 +79,19 @@
   position: absolute;
   top: 0.9rem;
   right: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: #ffffff;
   border: 1px solid var(--color-border);
   border-radius: 50%;
-  width: 2.1rem;
-  height: 2.1rem;
+  width: 1.6rem;
+  height: 1.6rem;
   color: var(--color-muted);
   cursor: pointer;
-  font-size: var(--font-size-base);
+  font-size: 0.9rem;
   line-height: 1;
+  padding: 0;
   z-index: 1;
   transition: background-color 0.15s, color 0.15s;
 }

@@ -70,14 +70,19 @@
 }
 
 .closeBtn {
-  background: none;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  background: var(--color-surface);
+  border: 1px solid rgba(107, 90, 50, 0.35);
   border-radius: 50%;
   color: #8a7a52;
   cursor: pointer;
-  font-size: 1.4rem;
+  font-size: 1rem;
   line-height: 1;
-  padding: 0.25rem 0.55rem;
+  padding: 0;
   transition: background-color 0.15s, color 0.15s;
 }
 
