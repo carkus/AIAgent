@@ -96,6 +96,19 @@ export interface Message {
 // it. `target_id` is the tool call's `call_index` for a tool_call check, or
 // the worker's persona name for a worker_delegation/bootstrap check; null
 // for the top-level bootstrap and chat_response checks.
+// One (provider, model) arm's UCB1 stats from backend/src/bandit.py, computed
+// over eval_log.json's accumulated pass/fail history for that arm. `score` is
+// null for a not-yet-tried arm (infinite in the backend's own math, sanitized
+// to null since JSON has no Infinity) — it's still the must-explore pick.
+export interface ArmStat {
+  provider: string
+  model: string
+  pulls: number
+  successes: number
+  rate: number | null
+  score: number | null
+}
+
 export interface EvalResultItem {
   check: string
   target: 'bootstrap' | 'chat_response' | 'tool_call' | 'worker_delegation'
@@ -104,6 +117,11 @@ export interface EvalResultItem {
   reason: string
   method: 'deterministic' | 'llm_judge'
   severity?: 'info' | 'warning'
+  // Which provider/model produced the thing being checked — carried so a
+  // recorded pass/fail can be attributed back to the arm that produced it
+  // (e.g. a future bandit over provider/tool choice, using `passed` as reward).
+  provider?: string | null
+  model?: string | null
 }
 
 // Stream events emitted by the agent loop

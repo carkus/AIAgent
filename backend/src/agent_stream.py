@@ -1153,6 +1153,7 @@ an actual attempt genuinely came up empty.
                 try:
                     for eval_result in eval_checks.check_tool_call(
                         tool_name, tool_inputs, tool_def, result_str, source, call_index,
+                        provider=provider, model=model,
                     ):
                         eval_log.record(eval_result)
                         yield {"type": "eval_result", **eval_result}

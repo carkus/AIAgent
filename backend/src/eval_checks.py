@@ -14,7 +14,15 @@ below, each returning a list of uniform result dicts so the frontend
     "reason": str,
     "method": "deterministic" | "llm_judge",
     "severity": "info" | "warning",
+    "provider": str | None,   # which LLM provider produced the thing being checked
+    "model": str | None,      # which model, within that provider
 }
+
+provider/model are carried on every result (not just llm_judge ones) so a
+result can be attributed back to the arm that produced it — e.g. a future
+bandit over provider/tool choice, using `passed` as reward, needs to know
+which arm each recorded outcome belongs to. Without this, eval_log.json is
+just a pass/fail feed with no way to tell whose output was graded.
 
 Deterministic checks are cheap, structural, and never call an LLM. An
 llm_judge check for a given stage only runs once that stage's own
@@ -53,7 +61,7 @@ _SCHEMA_TYPE_MAP = {
 }
 
 
-def _result(check, target, target_id, passed, reason, method, severity="info"):
+def _result(check, target, target_id, passed, reason, method, severity="info", provider=None, model=None):
     return {
         "check": check,
         "target": target,
@@ -62,6 +70,8 @@ def _result(check, target, target_id, passed, reason, method, severity="info"):
         "reason": reason,
         "method": method,
         "severity": severity,
+        "provider": provider,
+        "model": model,
     }
 
 
@@ -131,6 +141,7 @@ def check_bootstrap(
     results.append(_result(
         "tool_syntax", "bootstrap", target_id, tool_syntax_passed, reason,
         "deterministic", severity="info" if tool_syntax_passed else "warning",
+        provider=provider, model=model,
     ))
 
     names = {t.get("name") for t in tools}
@@ -139,6 +150,7 @@ def check_bootstrap(
         "required_tool_present", "bootstrap", target_id, has_save_output,
         "save_output tool is present" if has_save_output else "save_output tool is missing from the generated config",
         "deterministic", severity="info" if has_save_output else "warning",
+        provider=provider, model=model,
     ))
 
     shape_issues = []
@@ -156,6 +168,7 @@ def check_bootstrap(
         "every tool has the required keys for its kind" if shape_passed
         else f"malformed tool entries: {', '.join(shape_issues)}",
         "deterministic", severity="info" if shape_passed else "warning",
+        provider=provider, model=model,
     ))
 
     if tools and has_save_output and tool_syntax_passed and shape_passed:
@@ -175,6 +188,7 @@ def check_bootstrap(
             results.append(_result(
                 "purpose_fit_judge", "bootstrap", target_id, passed, reason,
                 "llm_judge", severity="info" if passed else "warning",
+                provider=provider, model=model,
             ))
 
     return results
@@ -190,6 +204,7 @@ def check_chat_response(
         "non_empty_response", "chat_response", None, non_empty,
         "response is non-empty" if non_empty else "response text was empty",
         "deterministic", severity="info" if non_empty else "warning",
+        provider=provider, model=model,
     ))
 
     links_ok = stripped_link_count == 0
@@ -198,6 +213,7 @@ def check_chat_response(
         "no unverified links were found in the reply" if links_ok
         else f"{stripped_link_count} unverified link(s) were demoted to plain text before showing the reply",
         "deterministic", severity="info" if links_ok else "warning",
+        provider=provider, model=model,
     ))
 
     if non_empty:
@@ -213,6 +229,7 @@ def check_chat_response(
             results.append(_result(
                 "response_relevance_judge", "chat_response", None, passed, reason,
                 "llm_judge", severity="info" if passed else "warning",
+                provider=provider, model=model,
             ))
     return results
 
@@ -237,7 +254,7 @@ def _schema_violations(inputs: dict, schema: dict) -> list[str]:
 
 def check_tool_call(
     tool_name: str, tool_inputs: dict, tool_def: dict | None, result_str: str,
-    source: str, call_index: int,
+    source: str, call_index: int, provider: str | None = None, model: str | None = None,
 ) -> list[dict]:
     results = []
     schema = (tool_def or {}).get("input_schema")
@@ -248,6 +265,7 @@ def check_tool_call(
             "tool_input_schema", "tool_call", str(call_index), passed,
             "inputs match the tool's declared schema" if passed else "; ".join(issues),
             "deterministic", severity="info" if passed else "warning",
+            provider=provider, model=model,
         ))
 
     errored = isinstance(result_str, str) and result_str.startswith("Tool execution error:")
@@ -255,6 +273,7 @@ def check_tool_call(
         "tool_execution_error", "tool_call", str(call_index), not errored,
         f"{tool_name} executed without error" if not errored else f"{tool_name} raised an exception during execution",
         "deterministic", severity="info" if not errored else "warning",
+        provider=provider, model=model,
     ))
     return results
 
@@ -269,6 +288,7 @@ def check_worker_delegation(
         "worker_completed", "worker_delegation", worker_name, not failed,
         "worker returned a final response" if not failed else final_response,
         "deterministic", severity="info" if not failed else "warning",
+        provider=provider, model=model,
     ))
 
     if tool_calls:
@@ -282,6 +302,7 @@ def check_worker_delegation(
             "none of the worker's tool calls errored" if ok
             else f"{len(errors)} of {len(tool_calls)} of the worker's tool call(s) errored",
             "deterministic", severity="info" if ok else "warning",
+            provider=provider, model=model,
         ))
 
     if not failed:
@@ -296,5 +317,6 @@ def check_worker_delegation(
             results.append(_result(
                 "worker_task_fit_judge", "worker_delegation", worker_name, passed, reason,
                 "llm_judge", severity="info" if passed else "warning",
+                provider=provider, model=model,
             ))
     return results

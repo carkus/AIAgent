@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, LlmProvider, StreamEvent } from './types';
+import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, LlmProvider, StreamEvent } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -130,15 +130,29 @@ export async function fetchAgentBrief(
   return res.json();
 }
 
-/** Names of models currently pulled in the developer's local Ollama install. [] if unreachable. */
-export async function listOllamaModels(): Promise<string[]> {
+/**
+ * Names of models currently pulled in the developer's local Ollama install,
+ * plus a UCB1 bandit recommendation (backend/src/bandit.py) computed from
+ * eval_checks.py's recorded pass/fail history per (provider, model) arm.
+ * `recommended`/`armStats` are informational only — the picker in
+ * SettingsModal stays fully manual, this just badges the data-backed pick.
+ */
+export async function fetchModelInfo(): Promise<{
+  models: string[]
+  recommended: { provider: string; model: string } | null
+  armStats: ArmStat[]
+}> {
   try {
     const res = await fetch(`${API_URL}/models`);
-    if (!res.ok) return [];
+    if (!res.ok) return { models: [], recommended: null, armStats: [] };
     const data = await res.json();
-    return Array.isArray(data.models) ? data.models : [];
+    return {
+      models: Array.isArray(data.models) ? data.models : [],
+      recommended: data.recommended ?? null,
+      armStats: Array.isArray(data.arm_stats) ? data.arm_stats : [],
+    };
   } catch {
-    return [];
+    return { models: [], recommended: null, armStats: [] };
   }
 }
 

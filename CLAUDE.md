@@ -77,6 +77,9 @@ expecting it to reach production.
 | `backend/src/mcp_client.py` | Sync wrapper around the official `mcp` SDK — `_session_cm()` picks stdio or Streamable HTTP per server; `catalog_summary()` lists real tool schemas, `call_tool()` executes one |
 | `backend/src/agent_registry.py` | File-store of *published* agents (`data/agent_registry.json`) — the explicit, human-in-the-loop persistence step (partially addresses Limitation #7) that backs `mcp_server.py`'s tool list; `publish()`/`unpublish()`/`list_agents()`/`get_by_tool_name()` |
 | `backend/mcp_server.py` | Runnable entrypoint (sibling of `server.py`, not in `src/`) exposing every published agent as an MCP tool over Streamable HTTP — its own ASGI process (`uvicorn`), since the `mcp` SDK's HTTP transports are Starlette-only and can't share Flask/gunicorn |
+| `backend/src/eval_checks.py` | Self-evaluation checks (bootstrap/chat-response/tool-call/worker-delegation) — every recorded result carries the `provider`/`model` that produced the thing being graded, which is what makes `bandit.py` possible |
+| `backend/src/eval_log.py` | File-store of `eval_checks.py` results (`data/eval_results.json`); `list_all()` returns the full retained history (unordered, uncapped-per-call) for `bandit.py`'s per-arm aggregation, alongside the pre-existing `list_recent()` used for display |
+| `backend/src/bandit.py` | UCB1 multi-armed-bandit ranking over `eval_log.py` history — `recommend(candidates)` scores each `(provider, model)` arm and returns the top pick plus per-arm stats; advisory only, consumed by `/models` |
 | `backend/src/rate_limit.py` | Per-IP rate limiting (process-local counters — see gunicorn `--workers 1` note in Deployment) |
 | `backend/src/tools.py` | `execute_tool()` — runs Gemini-generated Python via `exec()`; also the primitive tools (`fetch_page`, `search_jobs`) |
 | `backend/src/handler.py`, `backend/src/agent.py`, `template.yaml` | AWS SAM/Lambda path — dev-only (`sam local`), not deployed |
@@ -137,6 +140,49 @@ A tool whose definition carries `source: "mcp"` skips this entirely — `agent_s
 - `mcp_client.py` — sync wrapper (`asyncio.run`) around the official `mcp` SDK. `_session_cm(server_id)` returns the right async context manager per server — `stdio_client(StdioServerParameters(...))` for a `"stdio"`-transport entry, `streamable_http_client(url)` for an `"http"`-transport entry (Tavily) — and both `_list_tools_async`/`_call_tool_async` unpack only `streams[0], streams[1]` (`read, write`) so the rest of the code is transport-agnostic regardless of whether the SDK hands back a 2-tuple (stdio) or a 3-tuple (HTTP, plus a session-id callback). `catalog_summary()` fetches real tool schemas from every registered server (a server that fails to start/connect is logged and simply omitted — bootstrap still works with zero vetted tools available); `call_tool()` runs one, returning `{"error": ...}` on failure instead of raising.
 - Both features apply to worker bootstraps automatically — `orchestrator.run_worker()` calls `generate_agent_config(..., is_worker=True)`, the same function the main agent uses, just bucketed separately in `bootstrap_memory` so a narrow subtask doesn't get matched against a broad top-level purpose (or vice versa).
 - **Both are surfaced in the UI for delegated workers, not just the main agent.** `generate_agent_config()` returns `(config, fewshot_count)` — previously `_build_prompt()`'s fewshot count was only read by the streaming bootstrap path (`generate_agent_config_stream`, main-agent-only) and silently discarded by the synchronous one `run_worker()` calls. `orchestrator.run_worker()` now returns that count as `fewshot_count`, plus `tool_sources` (parallel array to `tools_used`, each entry the matching call's `"mcp"/"primitive"/"generated"` tag already computed by `agent_stream.py`) in the `delegate_to_worker` tool result. `ToolActivity.tsx`'s `WorkerResultCard` renders a "🧠 grounded ×N" badge next to the worker's name when `fewshot_count > 0`, and a "🔌 MCP" badge (the same `styles.mcpBadge` class already used for the main agent's own tool rows) on each worker tool pill whose source is `"mcp"`.
+
+### Provider/model selection — UCB1 bandit over self-eval history
+
+Root `c:\_work\CLAUDE.md`'s stated AI-discipline gap around reinforcement
+learning is closed here, not in jobfit — jobfit has no persisted
+appraisal-history data to learn from (verified directly: no DB, no
+persisted job-description/appraisal pairs), while AIAgent already had a
+self-evaluation layer (`eval_checks.py`/`eval_log.py`) recording pass/fail
+history for every bootstrap, chat response, tool call, and worker
+delegation. That history just wasn't attributable to *which* provider/model
+produced the thing being graded — the prerequisite fix, and the actual
+selection logic built on top of it:
+
+- **Reward attribution (`eval_checks.py`)** — every result dict now carries
+  `provider`/`model` alongside the existing `check`/`target`/`passed`/
+  `reason` fields, threaded through from each call site's own `agent_config`
+  (`agent_stream.py`, `orchestrator.py`). Without this, `eval_log.json` was
+  an anonymous pass/fail feed with no way to tell whose output was graded.
+- **`eval_log.list_all()`** — a new export alongside the pre-existing
+  `list_recent(limit)` (which reverses order and truncates for display);
+  `bandit.py` needs the full unordered history to aggregate per-arm counts,
+  which `list_recent` isn't shaped for.
+- **`bandit.py`** — UCB1 (Auer, Cesa-Bianchi & Fischer, 2002): treats each
+  `(provider, model)` pair as an arm, scores it as
+  `mean_pass_rate + sqrt(2 * ln(total_pulls) / pulls_for_this_arm)`. The
+  second term is an exploration bonus that favors under-tried arms; an arm
+  with zero recorded pulls gets an infinite score (sanitized to `null`
+  before the JSON response, since `math.inf` serializes to the invalid-JSON
+  literal `Infinity`) so a brand-new model always gets tried at least once
+  instead of being permanently starved by an early leader. `arm_stats()`
+  aggregates pulls/successes/rate per candidate; `recommend()` ranks and
+  returns the top pick plus the full ranked list.
+- **`GET /models`** builds the candidate list — every locally-pulled Ollama
+  model, plus Gemini only when `GEMINI_API_KEY` is actually set (consistent
+  with `llm_client.py`'s own "skip silently, don't advertise a broken
+  integration" convention) — calls `bandit.recommend()`, and returns
+  `{models, recommended, arm_stats}`.
+- **Advisory only, never auto-selected** — same human-in-the-loop pattern as
+  MCP tool resolution and agent publishing elsewhere in this file.
+  `Setup.tsx` fetches this once (`api.ts`'s `fetchModelInfo()`) and passes
+  `recommendedArm`/`armStats` down to `SettingsModal.tsx`, which shows a
+  "🏆 Data-backed pick" hint and marks the matching Ollama `<option>` — the
+  provider/model `<select>`s' own `onChange`/`value` wiring is untouched.
 
 ### Live status updates during the agent loop
 

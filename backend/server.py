@@ -36,7 +36,8 @@ from flask import Flask, Response, jsonify, request, stream_with_context
 from bootstrap import generate_agent_config_stream
 from agent_stream import run_agent_stream
 from brief import generate_brief
-from llm_client import list_ollama_models
+from llm_client import list_ollama_models, GEMINI_MODEL
+import bandit
 import rate_limit
 import saved_searches
 import agent_registry
@@ -90,7 +91,20 @@ def bootstrap():
 def models():
     if request.method == "OPTIONS":
         return "", 204
-    return jsonify({"models": list_ollama_models()})
+    ollama_models = list_ollama_models()
+    candidates = [("ollama", m) for m in ollama_models]
+    if os.environ.get("GEMINI_API_KEY"):
+        candidates.append(("gemini", GEMINI_MODEL))
+    try:
+        rec = bandit.recommend(candidates)
+    except Exception as e:
+        app.logger.info("bandit.recommend skipped: %s", e)
+        rec = {"recommended": None, "arms": []}
+    return jsonify({
+        "models": ollama_models,
+        "recommended": rec["recommended"],
+        "arm_stats": rec["arms"],
+    })
 
 
 @app.route("/brief", methods=["POST", "OPTIONS"])

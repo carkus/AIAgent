@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { LlmProvider, SearchDefaults } from '../types'
+import type { ArmStat, LlmProvider, SearchDefaults } from '../types'
 import { listMcpTools, type McpServerInfo } from '../api'
 import { isTinyOllamaModel } from '../modelLabel'
 import { DATE_FORMAT_OPTIONS, type DateFormatId } from '../dateFormat'
@@ -29,6 +29,11 @@ interface Props {
   onOllamaModelChange: (m: string | null) => void
   availableModels: string[]
   modelsLoaded: boolean
+  // Data-backed pick from backend/src/bandit.py's UCB1 ranking over
+  // eval_log.json history — advisory only, badged next to the manual
+  // picker below rather than driving `onProviderChange`/`onOllamaModelChange`.
+  recommendedArm: { provider: string; model: string } | null
+  armStats: ArmStat[]
   maxDelegations: number | null
   onMaxDelegationsChange: (n: number | null) => void
   searchDefaults: SearchDefaults
@@ -56,6 +61,8 @@ export default function SettingsModal({
   onOllamaModelChange,
   availableModels,
   modelsLoaded,
+  recommendedArm,
+  armStats,
   maxDelegations,
   onMaxDelegationsChange,
   searchDefaults,
@@ -160,6 +167,17 @@ export default function SettingsModal({
               <option value="ollama">Local only (Ollama) — free, needs `ollama serve` running</option>
             </select>
 
+            {recommendedArm && (
+              <p className={styles.providerHint}>
+                🏆 Data-backed pick: <strong>{recommendedArm.provider} / {recommendedArm.model}</strong>
+                {(() => {
+                  const stat = armStats.find(a => a.provider === recommendedArm.provider && a.model === recommendedArm.model)
+                  if (!stat || stat.pulls === 0) return ' — not tried yet, worth exploring.'
+                  return ` — ${Math.round((stat.rate ?? 0) * 100)}% pass rate over ${stat.pulls} checks.`
+                })()}
+              </p>
+            )}
+
             {provider === 'ollama' && (
               <>
                 {availableModels.length > 0 ? (
@@ -170,7 +188,9 @@ export default function SettingsModal({
                     disabled={disabled}
                   >
                     {availableModels.map(m => (
-                      <option key={m} value={m}>{m}</option>
+                      <option key={m} value={m}>
+                        {m}{recommendedArm?.provider === 'ollama' && recommendedArm.model === m ? ' ★ recommended' : ''}
+                      </option>
                     ))}
                   </select>
                 ) : (

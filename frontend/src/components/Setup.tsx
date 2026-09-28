@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, listAgentDrafts, listOllamaModels, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
+import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, fetchModelInfo, listAgentDrafts, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
 import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
 import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat } from '../chatStorage'
-import type { AgentConfig, AgentTemplateId, BootstrapStreamEvent, EvalResultItem, LlmProvider, ModelAttempt, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
+import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, ModelAttempt, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
 import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, type BehaviorToggle } from '../agentTypes'
 import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback } from '../modelLabel'
 import { buildAgentBrief, joinNatural } from '../agentBrief'
@@ -347,6 +347,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   }
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelsLoaded, setModelsLoaded] = useState(false)
+  const [recommendedArm, setRecommendedArm] = useState<{ provider: string; model: string } | null>(null)
+  const [armStats, setArmStats] = useState<ArmStat[]>([])
   const [saved, setSaved] = useState<SavedSearch[]>([])
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
   // Shown next to the Commission Agent button when it's pressed with no
@@ -473,11 +475,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const briefRequestIdRef = useRef(0)
 
   useEffect(() => {
-    if (provider !== 'ollama' || modelsLoaded) return
-    listOllamaModels().then(models => {
+    if (modelsLoaded) return
+    fetchModelInfo().then(({ models, recommended, armStats }) => {
       setAvailableModels(models)
       setModelsLoaded(true)
-      if (models.length > 0) setOllamaModel(prev => (prev && models.includes(prev)) ? prev : models[0])
+      setRecommendedArm(recommended)
+      setArmStats(armStats)
+      if (provider === 'ollama' && models.length > 0) {
+        setOllamaModel(prev => (prev && models.includes(prev)) ? prev : models[0])
+      }
     })
   }, [provider, modelsLoaded])
 
@@ -1749,6 +1755,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         onOllamaModelChange={handleOllamaModelChange}
         availableModels={availableModels}
         modelsLoaded={modelsLoaded}
+        recommendedArm={recommendedArm}
+        armStats={armStats}
         maxDelegations={maxDelegations}
         onMaxDelegationsChange={handleMaxDelegationsChange}
         searchDefaults={searchDefaults}

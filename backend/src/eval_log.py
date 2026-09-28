@@ -80,3 +80,16 @@ def list_recent(limit: int = 100) -> list[dict]:
     except Exception as e:
         logger.info("eval_log.list_recent skipped: %s", e)
         return []
+
+
+def list_all() -> list[dict]:
+    """Every stored entry (up to _MAX_ENTRIES), oldest first. Unlike
+    list_recent(), not capped by a caller-supplied limit — used by bandit.py
+    to compute per-arm pull/success counts across the full retained history.
+    Returns [] on any failure."""
+    try:
+        with _lock:
+            return _load()
+    except Exception as e:
+        logger.info("eval_log.list_all skipped: %s", e)
+        return []

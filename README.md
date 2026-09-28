@@ -77,6 +77,27 @@ instance — can call it directly, not just this project's own frontend.
 
 ---
 
+## Provider/Model Recommendation
+
+The Settings screen's provider/model picker stays fully manual — but it's no
+longer a blind guess. Every self-evaluation check the platform already runs
+against its own output (bootstrap validity, chat-response relevance,
+tool-call correctness, worker-delegation success — `backend/src/eval_checks.py`)
+is tagged with the provider/model that produced the thing being graded, so
+the accumulated pass/fail history (`data/eval_results.json`) is attributable
+per model, not just an anonymous feed.
+
+`backend/src/bandit.py` runs a UCB1 multi-armed-bandit ranking over that
+history: each `(provider, model)` pair is an "arm," scored by its observed
+pass rate plus an exploration bonus that favors under-tried arms, so a
+newly pulled Ollama model gets a fair shot instead of being permanently
+buried under an early leader. `GET /models` returns this ranking alongside
+the model list, and the Settings modal shows the top pick as a "🏆
+Data-backed pick" hint next to the manual dropdowns — advisory only, never
+auto-selected.
+
+---
+
 ## Stack
 
 | Layer    | Technology                                                      |
@@ -111,6 +132,9 @@ AIAgent/
 │   │   ├── mcp_registry.py      # Directory of vetted MCP servers bootstrap can pick a real tool from (time, fetch, Tavily web search)
 │   │   ├── mcp_client.py        # Sync wrapper around the official MCP SDK — stdio or Streamable HTTP per server
 │   │   ├── agent_registry.py    # File-store of published agents — backs mcp_server.py's tool list
+│   │   ├── eval_checks.py       # Self-evaluation checks (bootstrap/chat/tool-call/delegation), tagged per provider+model
+│   │   ├── eval_log.py          # File-store of eval_checks.py results — the bandit's reward history
+│   │   ├── bandit.py            # UCB1 ranking over eval_log.py history — powers /models' recommendation
 │   │   ├── tools.py             # exec()'s Gemini-generated tool implementations; primitive tools (fetch_page, search_jobs)
 │   │   ├── rate_limit.py        # Per-IP rate limiting
 │   │   ├── handler.py, agent.py # AWS SAM/Lambda path — dev-only (sam local), not deployed
