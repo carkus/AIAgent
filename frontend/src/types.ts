@@ -113,6 +113,14 @@ export type StreamEvent =
   // at most once, before any tool_start, distinct from a ```mermaid diagram
   // the agent may separately embed in its final answer text.
   | { type: 'plan'; diagram: string; summary: string | null }
+  // What the agent loop is doing between visible tool calls — the model
+  // "thinking", reviewing tool results before its next move, retrying a
+  // weak reply, or running its own post-answer self-check — so the chat UI
+  // has something better than a bare "Working…" spinner to show during
+  // those gaps. Same shape as bootstrap's pre-existing 'status' event
+  // (BootstrapStreamEvent below); superseded by the next 'status' or
+  // 'tool_start' event, whichever comes first.
+  | { type: 'status'; message: string }
   | { type: 'tool_start'; tool: string; inputs: Record<string, unknown>; source?: ToolCall['source']; call_index: number }
   | { type: 'tool_result'; tool: string; result: string; source?: ToolCall['source']; call_index: number }
   | ({ type: 'eval_result' } & EvalResultItem)

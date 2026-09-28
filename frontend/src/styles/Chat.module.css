@@ -256,6 +256,15 @@
   cursor: default;
 }
 
+.copyBtn:hover:not(:disabled) {
+  background: #d3e8e6;
+}
+
+.copyBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .saveBtn:hover:not(:disabled) {
   background: #d3e8e6;
 }
@@ -375,6 +384,24 @@
   flex-direction: column;
   flex: 1;
   overflow: hidden;
+}
+
+.headerKeywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.5rem 1.25rem;
+  border-bottom: 1px solid rgba(31, 111, 115, 0.25);
+  flex-shrink: 0;
+}
+
+.headerChip {
+  background: #e6f2f1;
+  border: 1px solid #bcdbd8;
+  border-radius: 5px;
+  color: #1f6f73;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
 }
 
 .toolsBadges {

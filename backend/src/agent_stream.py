@@ -4,6 +4,7 @@ import logging
 import re
 import time
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 from llm_client import create_chat_completion
 from tools import execute_tool, fetch_page, search_jobs, search_image
 import eval_checks
@@ -151,6 +152,39 @@ _REFUSAL_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Confirmed live: a model can narrate delegate_to_worker as prose — literally
+# "Delegate_to_worker task: \"...\"" — and then just stop, with zero real
+# tool_calls, even after both nudge retries above re-ask it to make the real
+# structured call instead. The narration repeats near-verbatim each time
+# rather than converting into an actual call, so burning both nudges on it
+# only delays the same "described an action instead of taking it" dead end.
+# delegate_to_worker's schema is just one required string (`task`, plus
+# optional `context`), so the model's own narrated task description is
+# almost always a complete, directly usable value for it — extract it and
+# execute a REAL delegation immediately instead of nudging first. `finditer`
+# (not `search`) so a turn narrating several workers at once — the normal
+# shape for a multi-keyword request per the delegation-mandatory system
+# prompt rule — spawns one real worker per narrated task, not just the first.
+_DELEGATE_NARRATION_RE = re.compile(
+    r'delegate[_ ]?(?:to[_ ]?)?worker\b[^"“\n]{0,60}?["“]([^"”]{10,500})["”]',
+    re.IGNORECASE,
+)
+
+
+def _extract_narrated_delegations(text: str) -> list[dict]:
+    """Best-effort extraction of one or more delegate_to_worker task
+    descriptions a model wrote as prose instead of a real structured tool
+    call. Returns [] if no such pattern is found — callers fall back to the
+    ordinary nudge-retry path in that case rather than fabricating a call."""
+    seen: set[str] = set()
+    calls: list[dict] = []
+    for match in _DELEGATE_NARRATION_RE.finditer(text or ""):
+        task = match.group(1).strip()
+        if task and task not in seen:
+            seen.add(task)
+            calls.append({"task": task})
+    return calls
+
 # Confirmed live complaint: the model sometimes writes a plausible-looking
 # markdown link — [Acme Careers](https://acme.com/careers) — from training
 # data/memory rather than from any URL a tool actually returned this turn.
@@ -183,14 +217,40 @@ def _collect_verified_urls(tool_calls_log: list[dict], history: list) -> list[st
     return urls
 
 
+def _url_key(url: str) -> tuple[str, str, str] | None:
+    # scheme+host lowercased (case-insensitive per RFC 3986), path with any
+    # trailing slash stripped so "/job/123" and "/job/123/" are the same
+    # page. Query string and fragment are deliberately excluded — that's the
+    # part legitimately allowed to differ (tracking params a tool appended
+    # that the model dropped while quoting the link, or vice versa).
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return None
+    if not parts.scheme or not parts.netloc:
+        return None
+    return (parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"))
+
+
 def _url_is_verified(url: str, verified_urls: list[str]) -> bool:
     # Strip trailing punctuation a model tacks onto a copied URL from its own
     # prose (a closing paren/period) before comparing — that shouldn't fail
-    # an otherwise-real link. A substring match either way tolerates minor
-    # differences (tracking params, trailing slash) between the URL a tool
-    # returned and how the model reproduced it.
-    candidate = url.rstrip(".,;:)")
-    return any(candidate == real or candidate in real or real in candidate for real in verified_urls)
+    # an otherwise-real link.
+    #
+    # Exact scheme+host+path match only (query/fragment ignored — see
+    # _url_key). A prior version accepted a plain substring match in EITHER
+    # direction, meant to tolerate the query-string/trailing-slash case
+    # above, but that also meant a tool result containing just a domain
+    # root (or any shorter real URL) would "verify" ANY deeper, entirely
+    # fabricated path on that same domain, since the short real URL is a
+    # substring of the long fake one — the exact "looks like a real link,
+    # 404s when clicked" shape reported live. Comparing structured
+    # scheme/host/path instead of raw substrings keeps the trailing-slash/
+    # query tolerance while closing that gap.
+    candidate = _url_key(url.rstrip(".,;:)"))
+    if candidate is None:
+        return False
+    return any(candidate == _url_key(real) for real in verified_urls)
 
 
 def _strip_unverified_links(text: str, tool_calls_log: list[dict], history: list) -> tuple[str, int]:
@@ -293,15 +353,25 @@ def _extract_text_tool_calls(content: str | None, valid_names: set[str]):
                 return calls
 
     # Fall back further to one-or-more bare JSON call objects, each on its
-    # own line, allowed to be preceded by ordinary narration lines. Confirmed
-    # against a real turn: "I'm about to fetch the population data for
-    # Sydney, Melbourne, and Brisbane.\n\n{\"name\": \"fetch_page\", ...}\n
-    # {...}\n{...}" — case 2 above requires EVERY line to be JSON, so it
-    # aborts on that leading sentence and the raw JSON gets shown to the user
-    # as the final answer instead of being executed. Once the first line
-    # starting with '{' appears, every subsequent non-blank line must itself
-    # be a valid call — a stray '{' inside genuine prose that isn't followed
-    # by more call lines still fails this and falls through, so an isolated
+    # own line, allowed to be preceded AND followed by ordinary narration
+    # lines. Confirmed against a real turn: "I'm about to fetch the
+    # population data for Sydney, Melbourne, and Brisbane.\n\n{\"name\":
+    # \"fetch_page\", ...}\n{...}\n{...}" — case 2 above requires EVERY line
+    # to be JSON, so it aborts on that leading sentence and the raw JSON
+    # gets shown to the user as the final answer instead of being executed.
+    # Once the first line starting with '{' appears, subsequent lines are
+    # collected as calls until one fails to parse as a valid call — at that
+    # point, if at least one real call was already collected, the rest of
+    # the text is treated as trailing narration/chatter and discarded rather
+    # than invalidating the calls already found. Confirmed against a real
+    # worker-delegation turn (qwen2.5-coder:7b): a persona narrated its
+    # plan, emitted one valid `search_jobs` call, then appended a trailing
+    # follow-up question in plain text ("Please let me know if you have any
+    # Preferences.") on the next line — the old all-or-nothing rule threw
+    # the valid call away along with the trailing chatter and showed the
+    # whole raw block to the user instead of executing the real call. A
+    # stray '{' inside genuine prose that isn't followed by at least one
+    # valid call line still fails this and falls through, so an isolated
     # illustrative example is not mistaken for a real call.
     calls = []
     started = False
@@ -316,10 +386,14 @@ def _extract_text_tool_calls(content: str | None, valid_names: set[str]):
         try:
             obj = json.loads(line)
         except json.JSONDecodeError:
+            if calls:
+                break
             calls = None
             break
         call = _as_call(obj)
         if not call:
+            if calls:
+                break
             calls = None
             break
         calls.append(call)
@@ -596,6 +670,7 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
 
     Event shapes:
       {"type": "plan",        "diagram": "...", "summary": "..." | None}  # emitted at most once, before the first tool_start
+      {"type": "status",      "message": "..."}  # what's happening between visible tool calls (thinking, reviewing results, retrying, self-checking) — same shape as bootstrap.py's pre-existing status event
       {"type": "tool_start",  "tool": "name", "inputs": {...}}
       {"type": "tool_result", "tool": "name", "result": "..."}
       {"type": "done",        "response": "...", "tool_calls": [...], "duration_seconds": N}
@@ -838,6 +913,7 @@ an actual attempt genuinely came up empty.
     max_iterations = 25
 
     try:
+        yield {"type": "status", "message": "Thinking through your request…"}
         for iteration in range(max_iterations):
             response = create_chat_completion(
                 provider=provider,
@@ -888,6 +964,10 @@ an actual attempt genuinely came up empty.
             synthetic_calls = None
             if not effective_tool_calls:
                 extracted = _extract_text_tool_calls(raw_content, tool_names)
+                if not extracted and "delegate_to_worker" in tool_names:
+                    narrated = _extract_narrated_delegations(raw_content)
+                    if narrated:
+                        extracted = [("delegate_to_worker", args) for args in narrated]
                 if extracted:
                     synthetic_calls = [
                         SimpleNamespace(
@@ -945,6 +1025,7 @@ an actual attempt genuinely came up empty.
                     and _is_degenerate_reply(final_text)
                 ):
                     degenerate_retries += 1
+                    yield {"type": "status", "message": "Cleaning up an incomplete reply…"}
                     current_messages.append({
                         "role": "user",
                         "content": (
@@ -965,6 +1046,7 @@ an actual attempt genuinely came up empty.
                     )
                 ):
                     nudge_retries += 1
+                    yield {"type": "status", "message": "Refining the answer before replying…"}
                     current_messages.append({
                         "role": "user",
                         "content": (
@@ -985,8 +1067,26 @@ an actual attempt genuinely came up empty.
                     })
                     continue
 
+                # Both nudge retries are exhausted and the reply is still just
+                # narration/decline with zero real tool calls this turn — the
+                # model failed to self-correct twice in a row. Rather than
+                # silently showing that narration as if it were a completed
+                # answer (the exact "looks done but there's nothing real in
+                # it" symptom reported live against qwen2.5-coder:7b), say so
+                # plainly so the user isn't misled into thinking real research
+                # happened.
+                if (described_not_called or outright_decline) and nudge_retries >= 2:
+                    final_text = (
+                        "_(Note: the model described an action instead of "
+                        "actually taking it, even after being asked twice to "
+                        "follow through — this reply may not reflect real "
+                        "results. Try rephrasing the request or asking "
+                        "again.)_\n\n" + final_text
+                    )
+
                 final_text, stripped_link_count = _strip_unverified_links(final_text, tool_calls_log, messages)
 
+                yield {"type": "status", "message": "Double-checking the reply…"}
                 try:
                     last_user_message = next(
                         (m.get("content") for m in reversed(messages) if m.get("role") == "user"), ""
@@ -1188,6 +1288,7 @@ an actual attempt genuinely came up empty.
                 executor.shutdown(wait=False)
 
             current_messages.extend(tool_result_messages)
+            yield {"type": "status", "message": "Reviewing tool results…"}
 
         yield {"type": "error", "message": f"Stopped after {max_iterations} tool-call rounds without a final answer."}
 

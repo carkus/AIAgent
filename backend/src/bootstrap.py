@@ -50,7 +50,7 @@ Execution environment for tool implementations:
 - Tool inputs are available as: `inputs` (dict), `input_data` (alias for `inputs`), or directly by name (e.g. if the tool has a `keyword` param, you can write `keyword` directly)
 
 {primitives_block}
-IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write `search_jobs(...)`, `fetch_page(...)`, or `search_image(...)` inside an `implementation` string; if a tool needs that capability, don't generate it as a Python implementation at all — instruct the agent (via the system_prompt) to call the primitive tool itself instead.
+IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write `search_jobs(...)`, `fetch_page(...)`, or `search_image(...)` inside an `implementation` string. The same rule applies to every tool name in the "Vetted MCP tools" list below (e.g. `tavily_search`) — those are NOT Python functions either, in any implementation string. If a tool needs a primitive's or a vetted MCP tool's capability, don't generate a Python implementation for it at all — add the primitive by name to the system_prompt's instructions, or add the MCP tool using the exact `"source": "mcp"` object shape shown below, never a generated `implementation` that calls it like a function.
 
 Vetted MCP tools (real, independently-maintained servers — prefer these over writing your own implementation when one already covers the need):
 {mcp_catalog}
@@ -65,7 +65,7 @@ Rules:
 - Tool implementations must be self-contained Python snippets
 - Do NOT generate a fetch_url, fetch_page, scrape, or HTTP-request tool — use the built-in `fetch_page` primitive instead
 - Do NOT generate an image-search or fetch-image tool — use the built-in `search_image` primitive instead
-{jobsearch_rule}- Do NOT generate a web_search, search_web, google_search, or any internet-search tool — there is no search engine available; agents must use `fetch_page` with direct URLs{jobsearch_pronoun_suffix}
+{jobsearch_rule}{search_rule}
 - Always include a `save_output` tool that writes a final result using os.path.join(TEMP_DIR, filename); the tool must set result = {{"status": "saved", "filename": filename, "path": os.path.join(TEMP_DIR, filename)}}
 - The system_prompt you generate MUST instruct the agent that after all tool calls are done it must present the actual findings (listings, data, analysis) in its reply — not list tool names, not say "search complete"
 - Search/fetch tools MUST filter results for relevance: only include items where the search keyword appears in the title or description/snippet (case-insensitive). Discard unrelated results returned by the API.
@@ -150,6 +150,48 @@ def _tool_syntax_errors(config: dict) -> list[tuple[str, SyntaxError]]:
 
 def _describe_tool_errors(errors: list[tuple[str, SyntaxError]]) -> str:
     return "; ".join(f"tool '{name}': {e.msg} at line {e.lineno}" for name, e in errors)
+
+
+class _UndefinedCallError:
+    """Mimics enough of SyntaxError's shape (.msg/.lineno) to reuse
+    _describe_tool_errors and the retry/drop flow in _tool_syntax_errors'
+    caller, for a bug _tool_syntax_errors itself can't catch: valid Python
+    that compiles fine but calls an undefined name at runtime."""
+    def __init__(self, msg: str):
+        self.msg = msg
+        self.lineno = "?"
+
+
+def _forbidden_call_errors(config: dict, forbidden_names: set[str]) -> list[tuple[str, _UndefinedCallError]]:
+    """A generated tool's `implementation` calling a primitive
+    (search_jobs/fetch_page/search_image) or a vetted MCP tool name (e.g.
+    tavily_search) as if it were a pre-injected Python function compiles
+    fine — it's valid Python — but is a guaranteed NameError the moment
+    tools.py actually execs it, since the sandbox never defines those names.
+    The bootstrap prompt already tells the model not to do this; this is the
+    same "catch the bug at bootstrap time, not first live call" safety net
+    _tool_syntax_errors provides for outright syntax errors, extended to
+    this specific, deterministically-detectable mistake instead of trusting
+    the prompt alone."""
+    errors: list[tuple[str, _UndefinedCallError]] = []
+    for tool in config.get("tools", []):
+        if not isinstance(tool, dict) or tool.get("source") == "mcp":
+            continue
+        impl = tool.get("implementation")
+        if not isinstance(impl, str):
+            continue
+        for name in forbidden_names:
+            if re.search(rf'\b{re.escape(name)}\s*\(', impl):
+                errors.append((
+                    tool.get("name", "<unnamed>"),
+                    _UndefinedCallError(
+                        f"implementation calls `{name}(...)` as if it were a Python "
+                        "function, but that name is a primitive/vetted-MCP tool, not "
+                        "something defined inside a generated implementation string"
+                    ),
+                ))
+                break
+    return errors
 
 
 def _format_mcp_catalog(catalog: list[dict]) -> str:
@@ -259,6 +301,7 @@ def _build_prompt(
     is surfaced as a status event by the streaming variant."""
     fewshot_entries = bootstrap_memory.retrieve_similar(purpose, provider, is_worker, agent_type=agent_type)
     mcp_catalog = mcp_client.catalog_summary()
+    _has_web_search_mcp = any(c["server_id"] == "search" for c in mcp_catalog)
     # search_jobs is only ever wired up at runtime for a job_search agent
     # (agent_stream.run_agent_stream gates it by AgentConfig.template) — an
     # unset agent_type (e.g. a delegated worker whose parent isn't job_search)
@@ -315,13 +358,37 @@ def _build_prompt(
         )
         jobsearch_rule = ""
         jobsearch_pronoun_suffix = ""
+    # This used to be a hardcoded "there is no search engine available" rule,
+    # written before any vetted MCP search server existed. Left as a flat
+    # constant, it silently went stale the moment mcp_registry.py added the
+    # Tavily "search" server: the model was being told a real, catalog-listed
+    # tool didn't exist, so it kept "obeying" by writing fetch_page calls
+    # against guessed/hallucinated URLs (and describing a nonexistent "Google
+    # search" step in its plan) instead of picking the vetted tool. Now
+    # conditional on whether "search" is actually reachable right now.
+    if _has_web_search_mcp:
+        search_rule = (
+            "- Do NOT generate a web_search, search_web, google_search, or any other "
+            "internet-search tool of your own, and do NOT call `fetch_page` with a "
+            "guessed or hardcoded URL when the actual need is \"find pages about X\" "
+            "rather than \"fetch this exact URL I already have\" — use the vetted "
+            "`tavily_search` MCP tool (server \"search\" in the list above, added via "
+            "the `\"source\": \"mcp\"` shape) for that instead"
+            f"{jobsearch_pronoun_suffix}\n"
+        )
+    else:
+        search_rule = (
+            "- Do NOT generate a web_search, search_web, google_search, or any "
+            "internet-search tool — there is no search engine available; agents must "
+            f"use `fetch_page` with direct URLs{jobsearch_pronoun_suffix}\n"
+        )
     prompt = _BOOTSTRAP_PROMPT.format(
         purpose=purpose,
         fewshot=_format_fewshot(fewshot_entries),
         mcp_catalog=_format_mcp_catalog(mcp_catalog),
         primitives_block=primitives_block,
         jobsearch_rule=jobsearch_rule,
-        jobsearch_pronoun_suffix=jobsearch_pronoun_suffix,
+        search_rule=search_rule,
     )
     return prompt, len(fewshot_entries)
 
@@ -380,8 +447,14 @@ def generate_agent_config(
     # Second validation pass: valid JSON doesn't mean valid Python inside the
     # `implementation` strings. One correction retry, same shape as the JSON
     # retry above; if it's still broken, drop just the offending tool(s)
-    # rather than failing the whole agent over one bad tool.
-    tool_errors = _tool_syntax_errors(config)
+    # rather than failing the whole agent over one bad tool. Bundles two
+    # error classes: outright syntax errors, and valid-but-doomed Python that
+    # calls a primitive/vetted-MCP tool name as a bare function (guaranteed
+    # NameError the first time tools.py execs it — see _forbidden_call_errors).
+    forbidden_names = {"search_jobs", "fetch_page", "search_image"} | {
+        c["tool_name"] for c in mcp_client.catalog_summary()
+    }
+    tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names)
     if tool_errors:
         correction_response = create_chat_completion(
             provider=provider,
@@ -392,7 +465,7 @@ def generate_agent_config(
                 {"role": "assistant", "content": text},
                 {"role": "user", "content": (
                     "The JSON parsed, but these tools' `implementation` strings are not "
-                    f"valid Python and fail to compile: {_describe_tool_errors(tool_errors)}. "
+                    f"valid: {_describe_tool_errors(tool_errors)}. "
                     "Return ONLY the corrected, complete, valid JSON object with fixed "
                     "implementations — no markdown fences, no explanation, no truncation."
                 )},
@@ -402,7 +475,7 @@ def generate_agent_config(
         retried_config, retry_error = _try_parse(text)
         if retried_config is not None:
             config = retried_config
-            tool_errors = _tool_syntax_errors(config)
+            tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names)
 
     if tool_errors:
         broken = {name for name, _ in tool_errors}
@@ -561,8 +634,14 @@ def generate_agent_config_stream(
         return
 
     # Same compile-check + one correction retry as generate_agent_config —
-    # see _tool_syntax_errors for why JSON validity alone isn't enough.
-    tool_errors = _tool_syntax_errors(config)
+    # see _tool_syntax_errors for why JSON validity alone isn't enough, and
+    # _forbidden_call_errors for the second error class caught alongside it
+    # (a generated tool calling a primitive/vetted-MCP tool name as a bare
+    # function — valid Python, guaranteed NameError at execution time).
+    forbidden_names = {"search_jobs", "fetch_page", "search_image"} | {
+        c["tool_name"] for c in mcp_client.catalog_summary()
+    }
+    tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names)
     if tool_errors:
         yield {"type": "status", "message": "Fixing broken tool code…"}
         tool_fix_meta: dict = {}
@@ -577,7 +656,7 @@ def generate_agent_config_stream(
                     {"role": "assistant", "content": text},
                     {"role": "user", "content": (
                         "The JSON parsed, but these tools' `implementation` strings are not "
-                        f"valid Python and fail to compile: {_describe_tool_errors(tool_errors)}. "
+                        f"valid: {_describe_tool_errors(tool_errors)}. "
                         "Return ONLY the corrected, complete, valid JSON object with fixed "
                         "implementations — no markdown fences, no explanation, no truncation."
                     )},
@@ -588,7 +667,7 @@ def generate_agent_config_stream(
             retried_config, _ = _try_parse(text)
             if retried_config is not None:
                 config = retried_config
-                tool_errors = _tool_syntax_errors(config)
+                tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names)
         except Exception as e:
             yield _model_event(tool_fix_meta)
             yield {"type": "error", "message": f"Tool-code correction retry failed: {e}"}

@@ -56,7 +56,7 @@ expecting it to reach production.
 
 - **`server.py`** — Flask entry point for both `sam local`-replacement dev and the deployed gunicorn service; routes: `/bootstrap`, `/agent`, `/models`, `/file/<name>`
 - **`bootstrap.py`** (`generate_agent_config_stream`) — streams bootstrap progress, ends with `AgentConfig` JSON
-- **`agent_stream.py`** (`run_agent_stream`) — the agentic loop actually used in production (streams `tool_start`/`tool_result`/`done` events); `agent.py`'s non-streaming `run_agent` is dead code, unused by any deployed path
+- **`agent_stream.py`** (`run_agent_stream`) — the agentic loop actually used in production (streams `status`/`tool_start`/`tool_result`/`eval_result`/`done` events — `status` covers the gaps between visible tool calls, e.g. the initial LLM call, retries, and the post-answer self-check, so the UI always has something better than a bare spinner to show); `agent.py`'s non-streaming `run_agent` is dead code, unused by any deployed path
 - **`llm_client.py`** — provider cascade: Gemini (cloud) → Ollama (local-only; only reachable from `sam local`/`server.py` dev, never a deployed instance)
 - **Frontend** — three phases managed in `App.tsx`: `setup` → `bootstrapping` → `chat`
 
@@ -73,8 +73,8 @@ expecting it to reach production.
 | `backend/src/llm_client.py` | Gemini → Ollama cascade (`create_chat_completion`), model listing for the Setup screen's picker |
 | `backend/src/embeddings.py` | `embed_text()` — Gemini (`gemini-embedding-2-preview`) or Ollama (`nomic-embed-text`) embeddings + cosine similarity, used for bootstrap grounding |
 | `backend/src/bootstrap_memory.py` | JSON-file store of past `purpose → generated config` pairs (`data/bootstrap_memory.json`); `record()`/`retrieve_similar()` power bootstrap few-shot grounding (RAG) |
-| `backend/src/mcp_registry.py` | The vetted MCP server directory (currently `mcp-server-time`) — where a new trusted MCP server is added |
-| `backend/src/mcp_client.py` | Sync wrapper around the official `mcp` SDK's stdio client — `catalog_summary()` lists real tool schemas, `call_tool()` executes one |
+| `backend/src/mcp_registry.py` | The vetted MCP server directory — `mcp-server-time`/`mcp-server-fetch` (stdio, official reference servers) plus Tavily's official remote MCP server for general web search (`"http"` transport, only added when `TAVILY_API_KEY` is set) — where a new trusted MCP server is added |
+| `backend/src/mcp_client.py` | Sync wrapper around the official `mcp` SDK — `_session_cm()` picks stdio or Streamable HTTP per server; `catalog_summary()` lists real tool schemas, `call_tool()` executes one |
 | `backend/src/agent_registry.py` | File-store of *published* agents (`data/agent_registry.json`) — the explicit, human-in-the-loop persistence step (partially addresses Limitation #7) that backs `mcp_server.py`'s tool list; `publish()`/`unpublish()`/`list_agents()`/`get_by_tool_name()` |
 | `backend/mcp_server.py` | Runnable entrypoint (sibling of `server.py`, not in `src/`) exposing every published agent as an MCP tool over Streamable HTTP — its own ASGI process (`uvicorn`), since the `mcp` SDK's HTTP transports are Starlette-only and can't share Flask/gunicorn |
 | `backend/src/rate_limit.py` | Per-IP rate limiting (process-local counters — see gunicorn `--workers 1` note in Deployment) |
@@ -115,6 +115,8 @@ The bootstrap prompt lives in `bootstrap.py` as `_BOOTSTRAP_PROMPT`, built by `_
 
 After a config is generated, `_resolve_mcp_tools()` overwrites any `source: "mcp"` tool's name/description/input_schema from the real catalog (dropping it if the model named a server/tool that doesn't exist), and `bootstrap_memory.record()` embeds `purpose` and stores the config as a future few-shot example — both best-effort, never fail the bootstrap over either.
 
+**A generated tool calling a primitive/MCP tool name as a bare function is a distinct, deterministically-catchable bug, not just a prompt-following problem.** Live traffic surfaced a model writing a `"generated"` tool whose `implementation` called `tavily_search(query=...)` directly, as though it were pre-injected — it isn't; the sandbox only exposes `inputs`/`requests`/`json`/`os`/etc. — so it compiled fine at bootstrap time and threw `NameError` the first time a chat turn actually executed it. The prompt's existing warning against calling `search_jobs`/`fetch_page`/`search_image` this way (`_build_prompt()`'s `primitives_block` paragraph) now explicitly extends to every name in the live MCP catalog too. As a safety net beyond the prompt, `_forbidden_call_errors()` (next to `_tool_syntax_errors()`) regex-scans every non-MCP tool's `implementation` for a call to any primitive name or any `mcp_client.catalog_summary()` tool name, and its results are merged into the exact same one-retry/then-drop flow `_tool_syntax_errors()` already used for outright syntax errors — both `generate_agent_config` and `generate_agent_config_stream` run both checks together now, not just the compile check.
+
 ### Tool execution
 
 `tools.py:execute_tool()` compiles and runs the implementation string with:
@@ -131,10 +133,35 @@ A tool whose definition carries `source: "mcp"` skips this entirely — `agent_s
 
 - `embeddings.py` — `embed_text(text, provider)` calls Gemini's OpenAI-compatible embeddings endpoint (`gemini-embedding-2-preview`) or, for `provider == "ollama"`, Ollama's native `/api/embed` (`nomic-embed-text`); returns `None` on any failure so callers degrade to "no grounding" rather than erroring.
 - `bootstrap_memory.py` — file-backed store (`DATA_DIR/bootstrap_memory.json`, same lock/atomic-replace pattern as `saved_searches.py`) of past `{purpose, embedding, persona, tool_names, tool_descriptions, ...}` entries, capped at 200. `retrieve_similar()` does an in-memory cosine-similarity scan, filtered by `is_worker` so top-level user purposes and delegated worker subtasks (see below) aren't cross-matched.
-- `mcp_registry.py` — the vetted MCP server directory; currently one entry (`mcp-server-time`, official Anthropic reference server, spawned via stdio). Add a new trusted server here, not by asking the model to shell out to one.
-- `mcp_client.py` — sync wrapper (`asyncio.run`) around the official `mcp` SDK's `StdioServerParameters`/`stdio_client`/`ClientSession`. `catalog_summary()` fetches real tool schemas from every registered server (a server that fails to start is logged and simply omitted — bootstrap still works with zero vetted tools available); `call_tool()` runs one, returning `{"error": ...}` on failure instead of raising.
+- `mcp_registry.py` — the vetted MCP server directory; `mcp-server-time` and `mcp-server-fetch` (both official Anthropic reference servers, spawned via stdio) plus a conditional `"search"` entry — Tavily's own official *remote* MCP server (Streamable HTTP, `https://mcp.tavily.com/mcp/?tavilyApiKey=...`), added to `MCP_SERVERS` only when `TAVILY_API_KEY` is set in the environment, omitted entirely otherwise (same "skip silently, don't advertise a broken integration" convention as `llm_client.py` skipping Gemini without `GEMINI_API_KEY`). This is the first general web-search capability anywhere in the platform — previously the only tools touching the outside world were `fetch_page` (a known URL) and `search_jobs` (Adzuna listings only), and the bootstrap prompt explicitly bans a `web_search`/`google_search` tool since none was connected. A community pip wrapper for Tavily (`mcp-tavily`) was checked and found archived/deprecated in favor of this official server, so it was never installed. Add a new trusted server here, not by asking the model to shell out to one.
+- `mcp_client.py` — sync wrapper (`asyncio.run`) around the official `mcp` SDK. `_session_cm(server_id)` returns the right async context manager per server — `stdio_client(StdioServerParameters(...))` for a `"stdio"`-transport entry, `streamable_http_client(url)` for an `"http"`-transport entry (Tavily) — and both `_list_tools_async`/`_call_tool_async` unpack only `streams[0], streams[1]` (`read, write`) so the rest of the code is transport-agnostic regardless of whether the SDK hands back a 2-tuple (stdio) or a 3-tuple (HTTP, plus a session-id callback). `catalog_summary()` fetches real tool schemas from every registered server (a server that fails to start/connect is logged and simply omitted — bootstrap still works with zero vetted tools available); `call_tool()` runs one, returning `{"error": ...}` on failure instead of raising.
 - Both features apply to worker bootstraps automatically — `orchestrator.run_worker()` calls `generate_agent_config(..., is_worker=True)`, the same function the main agent uses, just bucketed separately in `bootstrap_memory` so a narrow subtask doesn't get matched against a broad top-level purpose (or vice versa).
 - **Both are surfaced in the UI for delegated workers, not just the main agent.** `generate_agent_config()` returns `(config, fewshot_count)` — previously `_build_prompt()`'s fewshot count was only read by the streaming bootstrap path (`generate_agent_config_stream`, main-agent-only) and silently discarded by the synchronous one `run_worker()` calls. `orchestrator.run_worker()` now returns that count as `fewshot_count`, plus `tool_sources` (parallel array to `tools_used`, each entry the matching call's `"mcp"/"primitive"/"generated"` tag already computed by `agent_stream.py`) in the `delegate_to_worker` tool result. `ToolActivity.tsx`'s `WorkerResultCard` renders a "🧠 grounded ×N" badge next to the worker's name when `fewshot_count > 0`, and a "🔌 MCP" badge (the same `styles.mcpBadge` class already used for the main agent's own tool rows) on each worker tool pill whose source is `"mcp"`.
+
+### Live status updates during the agent loop
+
+The user asked for the frontend to say what's happening while a turn is
+running in the background, rather than showing a bare "Working" spinner
+through every silent gap. `agent_stream.py` already had a `plan`/`tool_start`/
+`tool_result`/`eval_result`/`done` event vocabulary but nothing for the LLM
+call itself, the retry loops, or the final self-check pass — all real
+wall-clock time with no signal. It now `yield`s a `{"type": "status",
+"message": "..."}` event (the exact shape `bootstrap.py` already used for its
+own progress messages) at five points: before the first LLM call
+("Thinking through your request…"), before the degenerate-reply retry
+("Cleaning up an incomplete reply…"), before the nudge retry ("Refining the
+answer before replying…"), before the post-answer eval-checks pass
+("Double-checking the reply…"), and after tool results are merged back into
+history before looping to the next LLM call ("Reviewing tool results…"). No
+new concurrency or backend state — every `status` event is an additional
+`yield` in the same synchronous generator, consistent with the standing
+"stay stateless, don't reach for async for a latency fix" preference.
+
+`Chat.tsx` holds the latest one in `statusMessage` state, shown in place of
+the bare "Working" placeholder for the still-streaming assistant bubble;
+it's cleared the moment a `tool_start` arrives (the tool card itself becomes
+the "what's happening" signal from then on) and on `done`/`error`/abort, so
+it never survives past the turn it described.
 
 ### Output style: diagrams over prose, and delegation defaults
 

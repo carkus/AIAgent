@@ -36,6 +36,17 @@ GEMINI_MODEL = "gemini-3.6-flash"
 GEMINI_EMBED_MODEL = "gemini-embedding-2-preview"
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:7b")
+# Ollama's own runtime default (4096, confirmed live via /api/ps) is easily
+# blown by this app's own prompt overhead alone — bootstrap system prompt +
+# MCP catalog + tool schemas + few-shot grounding examples — before a single
+# turn of real conversation history is added. Once a chat session grows past
+# that budget, Ollama silently truncates rather than erroring, and the model
+# starts answering a mangled/incomplete prompt instead of the real one —
+# observed live as the exact same generic non-answer ("I don't have specific
+# data yet...") coming back for every message regardless of what was asked.
+# 8192 doubles the budget within this machine's ~2GB of free VRAM headroom
+# (confirmed via nvidia-smi) without risking an OOM reload.
+OLLAMA_NUM_CTX = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
 # Native Ollama API (for /api/tags — model listing isn't part of the OpenAI-compatible surface)
 OLLAMA_HOST = OLLAMA_BASE_URL.removesuffix("/v1").removesuffix("/")
 
@@ -89,8 +100,15 @@ def create_chat_completion(provider: str | None = None, model: str | None = None
             logger.info("Skipping gemini: GEMINI_API_KEY not set")
             continue
         use_model = model if (model and name == "ollama") else default_model
+        call_kwargs = kwargs
+        if name == "ollama":
+            # Ollama-only: extra_body passes through to its native /api/chat
+            # `options`, not part of the OpenAI-compat schema Gemini expects.
+            extra_body = {**kwargs.get("extra_body", {})}
+            extra_body.setdefault("options", {}).setdefault("num_ctx", OLLAMA_NUM_CTX)
+            call_kwargs = {**kwargs, "extra_body": extra_body}
         try:
-            response = client.chat.completions.create(model=use_model, **kwargs)
+            response = client.chat.completions.create(model=use_model, **call_kwargs)
             if last_error is not None:
                 logger.warning("LLM provider %s failed (%s); fell back to %s", last_error[0], last_error[1], name)
             if _meta is not None:

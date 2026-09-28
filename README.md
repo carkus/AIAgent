@@ -8,6 +8,8 @@ And once it starts, it doesn't forget. Every tool call, every search result, eve
 
 The platform can also delegate: a request naming several distinct topics ("Python developer, React developer, DevOps engineer" — or "renewable energy, EV batteries, grid storage") spins up one disposable worker agent per topic, each with its own tools, searching and reporting back independently, capped at 6 per turn.
 
+While a turn is working — thinking, retrying a weak reply, reviewing tool results, double-checking its own answer — the chat UI shows what's actually happening instead of a bare spinner, so background work never looks stalled.
+
 ---
 
 ## What You Can Do With It
@@ -82,7 +84,7 @@ instance — can call it directly, not just this project's own frontend.
 | Frontend | React 18, TypeScript, Vite, `react-markdown` + `mermaid` for diagrammed replies |
 | Backend  | Python 3.12, Flask + gunicorn (WSGI, chat/bootstrap API), a second `uvicorn`/Starlette (ASGI) process for the MCP server |
 | AI       | Gemini (primary) → Ollama (local-only dev fallback) |
-| Tool sourcing | Gemini-generated Python (`exec()`), or real tools from vetted MCP servers via the official `mcp` SDK |
+| Tool sourcing | Gemini-generated Python (`exec()`), or real tools from vetted MCP servers via the official `mcp` SDK (stdio for the reference servers, Streamable HTTP for Tavily's remote search server) |
 | Hosting  | systemd + nginx on a droplet (`agent.carkus.com`); no container orchestration, no CI — deployed by tarball over SSH |
 
 An AWS SAM/Lambda path (`template.yaml`, `backend/src/handler.py`) still
@@ -106,8 +108,8 @@ AIAgent/
 │   │   ├── llm_client.py        # Gemini → Ollama cascade
 │   │   ├── embeddings.py        # Embeddings for bootstrap RAG grounding (Gemini or Ollama)
 │   │   ├── bootstrap_memory.py  # File-store of past purpose → config pairs, powers few-shot retrieval
-│   │   ├── mcp_registry.py      # Directory of vetted MCP servers bootstrap can pick a real tool from
-│   │   ├── mcp_client.py        # Sync wrapper around the official MCP SDK's stdio client
+│   │   ├── mcp_registry.py      # Directory of vetted MCP servers bootstrap can pick a real tool from (time, fetch, Tavily web search)
+│   │   ├── mcp_client.py        # Sync wrapper around the official MCP SDK — stdio or Streamable HTTP per server
 │   │   ├── agent_registry.py    # File-store of published agents — backs mcp_server.py's tool list
 │   │   ├── tools.py             # exec()'s Gemini-generated tool implementations; primitive tools (fetch_page, search_jobs)
 │   │   ├── rate_limit.py        # Per-IP rate limiting
@@ -200,6 +202,7 @@ Run from the repo root; requires SSH access to the droplet.
 |--------------------|------------------|-------------------------------------------------------|
 | `GEMINI_API_KEY`   | Backend env      | Gemini API key — primary provider for bootstrap, chat, and embeddings |
 | `OLLAMA_MODEL`     | Backend env (dev) | Local Ollama model name, used only when running `server.py` locally with a local-only agent |
+| `TAVILY_API_KEY`   | Backend env      | Enables the vetted `search` MCP server (Tavily's official remote server) for general web search — omitted entirely from the bootstrap catalog when unset, so nothing else needs to be toggled once it's added |
 | `MCP_API_KEY`      | Backend env (prod) | Per-consumer API key gating `/mcp` independently of the site's shared login |
 | `MCP_PORT`         | Backend env (dev) | Port for `mcp_server.py`'s dev server (default `4892`) |
 | `VITE_API_URL`     | Frontend build   | Base URL of the deployed API (defaults to `http://localhost:3000` if unset) |

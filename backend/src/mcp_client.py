@@ -1,26 +1,35 @@
 """
-Sync wrapper around the official `mcp` Python SDK's stdio client, so the rest
-of this codebase (Flask, bootstrap.py, agent_stream.py — all synchronous) can
-talk to a vetted MCP server (mcp_registry.py) without becoming async itself.
+Sync wrapper around the official `mcp` Python SDK, so the rest of this
+codebase (Flask, bootstrap.py, agent_stream.py — all synchronous) can talk to
+a vetted MCP server (mcp_registry.py) without becoming async itself.
 
-Each call spawns the server as a subprocess over stdio, does the MCP
-handshake, and tears it down — simple and correct rather than maximally
-fast, matching the "first scaffold, deliberately kept small" scope this
-mirrors from orchestrator.py. Tool calls are already LLM/network-latency
-bound, so a server's ~1s stdio startup is not the bottleneck. list_tools()
-results ARE cached per server for the life of the process, since a reference
-server's tool catalog doesn't change at runtime — this avoids re-spawning a
+Two transports, picked per-server by `_session_cm` based on
+mcp_registry.py's "transport" field:
+
+- "stdio" — spawns the server as a subprocess, does the MCP handshake, and
+  tears it down per call — simple and correct rather than maximally fast,
+  matching the "first scaffold, deliberately kept small" scope this mirrors
+  from orchestrator.py. Tool calls are already LLM/network-latency bound, so
+  a server's ~1s stdio startup is not the bottleneck.
+- "http" — opens a Streamable HTTP session to a remote MCP server (e.g.
+  Tavily's own hosted server) instead of spawning anything locally.
+
+Both yield the same (read, write, ...) stream tuple shape from the SDK, so
+everything past `_session_cm` is transport-agnostic. list_tools() results ARE
+cached per server for the life of the process, since a reference server's
+tool catalog doesn't change at runtime — this avoids re-spawning/re-hitting a
 server on every single bootstrap call just to re-read the same schema.
 
 Every public function degrades to "this server/tool isn't available" rather
-than raising: an uninstalled or crashing vetted server should shrink the
-catalog bootstrap sees, not break bootstrap or the agent loop.
+than raising: an uninstalled, unreachable, or crashing vetted server should
+shrink the catalog bootstrap sees, not break bootstrap or the agent loop.
 """
 import asyncio
 import logging
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamable_http_client
 
 from mcp_registry import MCP_SERVERS
 
@@ -29,9 +38,15 @@ logger = logging.getLogger(__name__)
 _catalog_cache: dict[str, list[dict]] = {}
 
 
-def _server_params(server_id: str) -> StdioServerParameters:
+def _session_cm(server_id: str):
+    """The right async context manager for this server's transport — callers
+    just do `async with _session_cm(server_id) as streams:` and use
+    streams[0]/streams[1] as (read, write), ignoring any extra items (the
+    HTTP transport's session-id callback)."""
     spec = MCP_SERVERS[server_id]
-    return StdioServerParameters(command=spec["command"], args=spec["args"])
+    if spec.get("transport") == "http":
+        return streamable_http_client(spec["url"])
+    return stdio_client(StdioServerParameters(command=spec["command"], args=spec["args"]))
 
 
 def _run(coro):
@@ -42,8 +57,8 @@ def _run(coro):
 
 
 async def _list_tools_async(server_id: str) -> list[dict]:
-    async with stdio_client(_server_params(server_id)) as (read, write):
-        async with ClientSession(read, write) as session:
+    async with _session_cm(server_id) as streams:
+        async with ClientSession(streams[0], streams[1]) as session:
             await session.initialize()
             result = await session.list_tools()
             return [
@@ -58,8 +73,8 @@ async def _list_tools_async(server_id: str) -> list[dict]:
 
 
 async def _call_tool_async(server_id: str, tool_name: str, inputs: dict):
-    async with stdio_client(_server_params(server_id)) as (read, write):
-        async with ClientSession(read, write) as session:
+    async with _session_cm(server_id) as streams:
+        async with ClientSession(streams[0], streams[1]) as session:
             await session.initialize()
             result = await session.call_tool(tool_name, inputs)
             return _unpack_result(result)

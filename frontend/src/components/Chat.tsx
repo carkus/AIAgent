@@ -18,7 +18,7 @@ import { formatDate, getDateFormat } from '../dateFormat'
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/splash_logo.png'
 
-type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'newAgent' | 'attach' | 'imagePlaceholder' | 'send' | 'location' | 'clock'
+type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'copyChat' | 'copiedChat' | 'newAgent' | 'attach' | 'imagePlaceholder' | 'send' | 'location' | 'clock'
 
 // Lenient on purpose (trailing whitespace after the fence marker, CRLF,
 // casing, trailing blank lines before the closing fence) — the earlier,
@@ -106,6 +106,25 @@ function ToolbarIcon({ name }: { name: ToolbarIconName }) {
       return (
         <svg {...common} className={styles.spinnerIcon}>
           <path d="M12 3.5a8.5 8.5 0 1 1-8.5 8.5" />
+        </svg>
+      )
+    // Whole-conversation "copy as HTML" toolbar button — a clipboard glyph
+    // (distinct from CopyButton.tsx's own per-block plain-text icon, which
+    // is a text label, not an SVG) so this reads as a header-toolbar action
+    // alongside save/roster/export rather than an inline code-block control.
+    case 'copyChat':
+      return (
+        <svg {...common}>
+          <rect x="8" y="7" width="10.5" height="13.5" rx="1.3" />
+          <path d="M8 9.5H6.5A1.3 1.3 0 0 0 5.2 10.8V19a1.3 1.3 0 0 0 1.3 1.3H14a1.3 1.3 0 0 0 1.3-1.3v-1.2" />
+          <path d="M10.5 4h4.5a1 1 0 0 1 1 1v2h-6.5V5a1 1 0 0 1 1-1Z" />
+        </svg>
+      )
+    case 'copiedChat':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9.25" />
+          <path d="M7.5 12.5 10.3 15.3 16.5 9" />
         </svg>
       )
     case 'newAgent':
@@ -237,6 +256,13 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages ?? [])
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
+  // What the backend says it's currently doing while `thinking` is true
+  // (agent_stream.py's 'status' events) — shown in place of a bare "Working"
+  // spinner so a multi-step turn (retries, tool-result review, the
+  // self-eval pass) doesn't look stalled. Cleared whenever a tool_start
+  // arrives (the tool card itself becomes the "what's happening" signal)
+  // and whenever the turn ends.
+  const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [now, setNow] = useState(() => new Date())
   const [error, setError] = useState<string | null>(null)
@@ -254,6 +280,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   const [addingToRoster, setAddingToRoster] = useState(false)
   const [rosterFeedback, setRosterFeedback] = useState<string | null>(null)
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [pdfPreview, setPdfPreview] = useState<{ blobUrl: string; filename: string; doc: ReturnType<typeof buildChatPdf> } | null>(null)
   // Rendered markdown DOM per assistant message index, so PDF export can
@@ -421,6 +448,83 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     setPdfPreview(null)
   }
 
+  // Builds a self-contained HTML document of the whole visible transcript —
+  // "Copy chat" pastes real formatting (headings/bold/lists/links/tables)
+  // into rich-text targets (email, Docs, Word) instead of raw markdown
+  // source. Assistant turns reuse react-markdown's own rendered DOM via
+  // markdownRefs (same technique the PDF export already uses to avoid
+  // re-parsing markdown a second time) so the copied HTML matches exactly
+  // what's on screen; a message with no rendered ref yet (still streaming)
+  // falls back to its plain text. Tool-call/plan details are intentionally
+  // left out — this is a copy of the conversation's text, not its full
+  // internal trace (that's what PDF/JSON export are for).
+  function buildChatHtmlAndText(): { html: string; text: string } {
+    const escapeHtml = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const escapeToParagraphs = (s: string) =>
+      s
+        .split(/\n{2,}/)
+        .map(para => `<p style="margin:0 0 0.6em;">${escapeHtml(para).replace(/\n/g, '<br>')}</p>`)
+        .join('')
+
+    const blocks: string[] = []
+    const textLines: string[] = []
+    messages.forEach((msg, i) => {
+      const shownText = msg.displayContent ?? msg.content
+      if (!shownText) return
+      const isUser = msg.role === 'user'
+      const label = isUser ? 'You' : `Agent ${agentName}`
+      const bodyHtml = !isUser && markdownRefs.current.get(i)
+        ? markdownRefs.current.get(i)!.innerHTML
+        : escapeToParagraphs(shownText)
+      blocks.push(
+        `<div style="margin:0 0 1.1em;">` +
+        `<p style="margin:0 0 0.3em;font-weight:600;color:${isUser ? '#053750' : '#1f6f73'};">${escapeHtml(label)}</p>` +
+        `<div>${bodyHtml}</div>` +
+        `</div>`
+      )
+      textLines.push(`${label}:\n${shownText}\n`)
+    })
+
+    const html =
+      `<div style="font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:720px;">` +
+      `<h2 style="margin:0 0 0.8em;color:#053750;">Agent ${escapeHtml(agentName)} — Chat Transcript</h2>` +
+      blocks.join('') +
+      `</div>`
+    const text = `Agent ${agentName} — Chat Transcript\n\n${textLines.join('\n')}`
+    return { html, text }
+  }
+
+  async function handleCopyChat() {
+    if (messages.length === 0) return
+    const { html, text } = buildChatHtmlAndText()
+    try {
+      if (typeof ClipboardItem !== 'undefined') {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([text], { type: 'text/plain' }),
+          }),
+        ])
+      } else {
+        await navigator.clipboard.writeText(text)
+      }
+      setCopyFeedback('Copied ✓')
+    } catch {
+      // Clipboard API unavailable/denied — fall back to a plain-text write
+      // before giving up entirely, so this still works in more restrictive
+      // browser contexts even without HTML formatting.
+      try {
+        await navigator.clipboard.writeText(text)
+        setCopyFeedback('Copied ✓')
+      } catch {
+        setCopyFeedback('Copy failed')
+      }
+    } finally {
+      window.setTimeout(() => setCopyFeedback(null), 2000)
+    }
+  }
+
   useEffect(() => {
     if (!thinking) { setElapsed(0); return }
     const t = setInterval(() => setElapsed(s => s + 1), 1000)
@@ -508,6 +612,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     const withUser = [...currentMessages, userMsg]
     setMessages([...withUser, { role: 'assistant', content: '', liveToolCalls: [] }])
     setThinking(true)
+    setStatusMessage(null)
 
     const apiMessages = withUser.map(m => ({ role: m.role, content: m.content, image: m.image }))
 
@@ -518,7 +623,12 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             updateLastMessage(msg => ({ ...msg, planDiagram: event.diagram, planSummary: event.summary ?? undefined }))
             break
 
+          case 'status':
+            setStatusMessage(event.message)
+            break
+
           case 'tool_start':
+            setStatusMessage(null)
             updateLastMessage(msg => ({
               ...msg,
               liveToolCalls: [
@@ -555,12 +665,14 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
               rateLimits: event.rate_limits,
             }))
             setThinking(false)
+            setStatusMessage(null)
             break
 
           case 'error':
             setError(event.message)
             updateLastMessage(msg => ({ ...msg, content: '' }))
             setThinking(false)
+            setStatusMessage(null)
             break
 
           case 'eval_result':
@@ -594,6 +706,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         updateLastMessage(msg => ({ ...msg, content: '' }))
       }
       setThinking(false)
+      setStatusMessage(null)
     }
   }
 
@@ -696,6 +809,16 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             </button>
             <button
               type="button"
+              className={styles.copyBtn}
+              onClick={handleCopyChat}
+              disabled={messages.length === 0}
+              aria-label={copyFeedback ?? 'Copy chat'}
+              title={copyFeedback ?? 'Copy the whole conversation as formatted HTML'}
+            >
+              <ToolbarIcon name={copyFeedback === 'Copied ✓' ? 'copiedChat' : 'copyChat'} />
+            </button>
+            <button
+              type="button"
               className={styles.exportBtn}
               onClick={handleExportPdf}
               disabled={messages.length === 0 || exporting}
@@ -748,6 +871,13 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
 
       <div className={styles.container}>
         <div className={styles.mainContent}>
+          {agentConfig.keywords && agentConfig.keywords.length > 0 && (
+            <div className={styles.headerKeywords}>
+              {[...agentConfig.keywords].sort((a, b) => a.localeCompare(b)).map(kw => (
+                <span key={kw} className={styles.headerChip}>{kw}</span>
+              ))}
+            </div>
+          )}
           <div className={styles.toolsBadges}>
         {agentConfig.tools.filter(t => t.name !== 'save_output').map(t => (
           <span key={t.name} className={styles.badge}>{t.name}</span>
@@ -889,7 +1019,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             )}
             {thinking && i === messages.length - 1 && msg.role === 'assistant' && !msg.content && (
               <p className={styles.workingText}>
-                Working{elapsed > 0 ? ` · ${elapsed}s` : ''}
+                {statusMessage ?? 'Working'}{elapsed > 0 ? ` · ${elapsed}s` : ''}
               </p>
             )}
           </div>
