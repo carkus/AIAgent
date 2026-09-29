@@ -236,12 +236,20 @@ export default function MermaidDiagram({ chart, label, caption }: Props) {
   if (error === 'not-mermaid' && label) return null
 
   if (!svg && !error) {
-    // A labeled box (the plan preview) shows nothing at all while the
-    // diagram is still being drawn, rather than an empty/half-finished box
-    // with a heading and no picture. The plain inline-fence usage (no
-    // label) keeps the lightweight loading line, since it isn't wrapped in
-    // its own box to begin with.
-    if (label) return null
+    // A labeled box (the plan preview) used to show nothing at all while the
+    // diagram was still being drawn — which read as a silent gap (or, if a
+    // stray render hiccup briefly threw before settling, could be mistaken
+    // for the box having failed rather than just still working). A quiet
+    // "Pending updates…" line under the label makes clear it's still in
+    // flight, not broken or empty on purpose.
+    if (label) {
+      return (
+        <div className={styles.planDiagram}>
+          <span className={styles.planDiagramLabel}>{label}</span>
+          <p className={styles.mermaidLoading}>Pending updates…</p>
+        </div>
+      )
+    }
     return <p className={styles.mermaidLoading}>Rendering diagram…</p>
   }
 

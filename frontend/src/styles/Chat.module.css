@@ -15,7 +15,7 @@
   justify-content: space-between;
   gap: 0.5rem 0.75rem;
   padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid rgba(31, 111, 115, 0.25);
+  border-bottom: 1px solid rgba(40, 75, 106, 0.25);
   flex-shrink: 0;
   position: relative;
 }
@@ -71,13 +71,15 @@
   text-transform: uppercase;
   /* Header/footer chrome is deliberately NOT wired to the chat content's
      var(--color-*) palette — it keeps its own fixed look, independent of
-     index.css's shared text/accent variables used below. */
-  color: #053750;
+     index.css's shared text/accent variables used below. Matches Setup's
+     .title (the agent name heading there), so "Agent {name}" reads the
+     same color on both screens. */
+  color: #002a62;
   margin-right: 0.75rem;
 }
 
 /* Same pill treatment as .modelBadge down in the toolbar (teal accent, thin
-   #cfe3ea border, width: fit-content) instead of plain muted block text, so
+   #d2dde7 border, width: fit-content) instead of plain muted block text, so
    these two meta lines read as part of the same badge language as the rest
    of the app's chrome. */
 .locationBadge {
@@ -86,7 +88,7 @@
   gap: 0.25rem;
   color: #3f7ea0;
   background: transparent;
-  border: 1px solid #cfe3ea;
+  border: 1px solid #d2dde7;
   border-radius: 5px;
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -103,7 +105,7 @@
   gap: 0.25rem;
   color: #3f7ea0;
   background: transparent;
-  border: 1px solid #cfe3ea;
+  border: 1px solid #d2dde7;
   border-radius: 5px;
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -131,7 +133,7 @@
   margin: 0.15rem 0 0.3rem;
   cursor: help;
   width: fit-content;
-  border-bottom: 1px dotted rgba(31, 111, 115, 0.4);
+  border-bottom: 1px dotted rgba(40, 75, 106, 0.4);
 }
 
 .headerPurpose {
@@ -146,7 +148,7 @@
   align-items: center;
   color: #3f7ea0;
   background: transparent;
-  border: 1px solid #cfe3ea;
+  border: 1px solid #d2dde7;
   border-radius: 5px;
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -237,24 +239,24 @@
    one) so these actually win over the shared base/hover/active rules above
    instead of being silently shadowed by them. */
 .headerActions .resetBtn {
-  background: var(--color-menu-bg);
+  background: var(--color-accent);
   color: #ffffff;
 }
 
 .headerActions .resetBtn:hover:not(:disabled) {
-  background: var(--color-menu-bg-hover);
+  background: var(--color-accent-hover);
   color: #ffffff;
   transform: translateY(-1px);
 }
 
 .headerActions .resetBtn:active:not(:disabled) {
-  background: var(--color-menu-bg-active);
+  background: var(--color-accent-hover);
   color: #ffffff;
   transform: translateY(0);
 }
 
 .exportBtn:hover:not(:disabled) {
-  background: #d3e8e6;
+  background: #d5dee6;
 }
 
 .exportBtn:disabled {
@@ -263,7 +265,7 @@
 }
 
 .copyBtn:hover:not(:disabled) {
-  background: #d3e8e6;
+  background: #d5dee6;
 }
 
 .copyBtn:disabled {
@@ -272,7 +274,7 @@
 }
 
 .saveBtn:hover:not(:disabled) {
-  background: #d3e8e6;
+  background: #d5dee6;
 }
 
 .saveBtn:disabled {
@@ -281,7 +283,7 @@
 }
 
 .rosterBtn:hover:not(:disabled) {
-  background: #d3e8e6;
+  background: #d5dee6;
 }
 
 .rosterBtn:disabled {
@@ -320,14 +322,14 @@
 }
 
 .rosterInput:focus {
-  border-color: #053750;
-  box-shadow: 0 0 0 2px rgba(31, 111, 115, 0.15);
+  border-color: #0d2c48;
+  box-shadow: 0 0 0 2px rgba(40, 75, 106, 0.15);
 }
 
 .rosterConfirmBtn {
-  background: #053750;
-  border: 1px solid #053750;
-  border-radius: 6px;
+  background: #0d2c48;
+  border: 1px solid #0d2c48;
+  border-radius: var(--radius-control);
   color: #ffffff;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
@@ -351,9 +353,9 @@
 
 .rosterCancelBtn {
   background: #f7f5f0;
-  border: 1px solid #053750;
-  border-radius: 6px;
-  color: #053750;
+  border: 1px solid #0d2c48;
+  border-radius: var(--radius-control);
+  color: #0d2c48;
   cursor: pointer;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: var(--font-size-sm);
@@ -370,7 +372,7 @@
 }
 
 .rosterFeedback {
-  color: #053750;
+  color: #0d2c48;
   font-family: 'Inter', 'Space Grotesk', sans-serif;
   font-size: var(--font-size-sm);
   letter-spacing: 0.02em;
@@ -397,16 +399,16 @@
   flex-wrap: wrap;
   gap: 0.4rem;
   padding: 0.5rem 1.25rem;
-  border-bottom: 1px solid rgba(31, 111, 115, 0.25);
+  border-bottom: 1px solid rgba(40, 75, 106, 0.25);
   flex-shrink: 0;
 }
 
 .headerChip {
   align-items: center;
   background: #e6f2f1;
-  border: 1px solid #bcdbd8;
-  border-radius: 5px;
-  color: #1f6f73;
+  border: 1px solid #bfccd8;
+  border-radius: var(--radius-control);
+  color: #284b6a;
   display: inline-flex;
   font-size: 0.75rem;
   gap: 0.3rem;
@@ -417,7 +419,7 @@
   align-items: center;
   background: transparent;
   border: none;
-  color: #6b9895;
+  color: #708393;
   cursor: pointer;
   display: inline-flex;
   font-size: 0.85rem;
@@ -427,27 +429,65 @@
 }
 
 .headerChipX:hover {
-  color: #1f6f73;
+  color: #284b6a;
 }
 
 .headerChipInput {
   background: #e6f2f1;
-  border: 1px solid #bcdbd8;
-  border-radius: 5px;
+  border: 1px solid #bfccd8;
+  border-radius: var(--radius-control);
   box-sizing: border-box;
-  color: #1f6f73;
+  color: #284b6a;
   font-size: 0.75rem;
   padding: 0.15rem 0.5rem;
   width: 110px;
 }
 
 .headerChipInput:focus {
-  border-color: #1f6f73;
+  border-color: #284b6a;
   outline: none;
 }
 
 .headerChipInput::placeholder {
-  color: #6b9895;
+  color: #708393;
+}
+
+/* Same row chrome as .headerKeywords just above it — a thumbnail strip of
+   every image the agent has produced/found this chat (see Chat.tsx's
+   extractImageAssets), growing as each new one streams in. Hidden entirely
+   when empty rather than showing a bare strip with nothing in it. */
+.headerAssets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.5rem 1.25rem;
+  border-bottom: 1px solid rgba(40, 75, 106, 0.25);
+  flex-shrink: 0;
+}
+
+.assetThumbBtn {
+  display: block;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  background: none;
+  border: 1px solid #bfccd8;
+  border-radius: var(--radius-control);
+  cursor: zoom-in;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+}
+
+.assetThumbBtn:hover {
+  border-color: #284b6a;
+}
+
+.assetThumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .toolsBadges {
@@ -455,13 +495,13 @@
   flex-wrap: wrap;
   gap: 0.4rem;
   padding: 0.5rem 1.25rem;
-  border-bottom: 1px solid rgba(31, 111, 115, 0.25);
+  border-bottom: 1px solid rgba(40, 75, 106, 0.25);
   flex-shrink: 0;
 }
 
 .badge {
   background: #eef1f0;
-  border: 1px solid rgba(31, 111, 115, 0.3);
+  border: 1px solid rgba(40, 75, 106, 0.3);
   border-radius: 4px;
   color: var(--color-accent);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
@@ -472,6 +512,7 @@
 .messageList {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   /* A left-border rule inset from the top/bottom edges rather than a plain
      `border-left` (which would run flush edge-to-edge with no margin).
      background-attachment's default value ("scroll") ties the image to the
@@ -517,12 +558,12 @@
 .userBubble {
   position: relative;
   align-self: flex-end;
-  /* Bound to the same --color-menu-bg tokens as the toolbar's solid-fill
-     buttons (New agent/Send) above, rather than its own separately-hardcoded
-     navy — the user's own words and the app's primary action color are now
-     literally the same source of truth, so they move together. */
+  /* Uses the app's --color-menu-bg navy independently of the primary
+     buttons above (those standardized on --color-accent) — the user's own
+     message keeps its own distinct steel-blue rather than following the
+     button color. */
   background: linear-gradient(135deg, var(--color-menu-bg) 0%, var(--color-menu-bg-active) 100%);
-  border: 1px solid rgba(31, 111, 115, 0.3);
+  border: 1px solid rgba(40, 75, 106, 0.3);
   border-radius: 999px 999px 6px 999px;
   max-width: 70%;
   margin-top: 40px;
@@ -591,7 +632,7 @@
 }
 
 .markdown h2 {
-  background: rgba(31, 111, 115, 0.08);
+  background: rgba(40, 75, 106, 0.08);
   border-left: 3px solid var(--color-accent);
   border-radius: 0 5px 5px 0;
   color: var(--color-accent);
@@ -665,7 +706,7 @@
   left: 0.7rem;
   top: 0.7rem;
   background: #e6f2f1;
-  border: 1px solid #bcdbd8;
+  border: 1px solid #bfccd8;
   border-radius: 4px;
   color: #05384b;
   font-size: var(--font-size-base);
@@ -686,8 +727,8 @@
    teal text, not a solid fill, to match the "emphasize border and colour,
    not a bold block" treatment already used for the dossier's badges. */
 .extendIdeaButton {
-  background: rgba(31, 111, 115, 0.08);
-  border: 1px solid rgba(31, 111, 115, 0.35);
+  background: rgba(40, 75, 106, 0.08);
+  border: 1px solid rgba(40, 75, 106, 0.35);
   border-radius: 999px;
   color: var(--color-accent);
   cursor: pointer;
@@ -700,7 +741,7 @@
 }
 
 .extendIdeaButton:hover:not(:disabled) {
-  background: rgba(31, 111, 115, 0.16);
+  background: rgba(40, 75, 106, 0.16);
 }
 
 .extendIdeaButton:disabled {
@@ -743,7 +784,7 @@
 
 .codeBlockHeader {
   align-items: center;
-  background: #cfe3ea;
+  background: #d2dde7;
   display: flex;
   gap: 0.5rem;
   padding: 0.3rem 0.5rem 0.3rem 0.75rem;
@@ -779,7 +820,7 @@
 }
 
 .codeBlockLang {
-  color: #053750;
+  color: #0d2c48;
   font-family: 'Share Tech Mono', monospace;
   font-size: var(--chat-footer-size);
   font-weight: 600;
@@ -795,7 +836,7 @@
 }
 
 .codeBlockHeader:hover .codeBlockToggle {
-  color: #053750;
+  color: #0d2c48;
 }
 
 .codeBlockPre {
@@ -1127,14 +1168,14 @@
 }
 
 .inputRow:focus-within {
-  box-shadow: 0 0 0 3px rgba(31, 111, 115, 0.13);
+  box-shadow: 0 0 0 3px rgba(40, 75, 106, 0.13);
 }
 
 .input {
   background: #ffffff;
   border: none;
   border-radius: 999px;
-  color: #053750;
+  color: #0d2c48;
   flex: 1;
   /* Without this, a plain <input>'s default min-width: auto keeps it from
      shrinking below its intrinsic content width, so on a narrow viewport the
@@ -1284,7 +1325,7 @@
    fixed and shared with .recommissionBtn/.stopBtn/.killBtn so all four
    composer-row buttons line up regardless of their own padding/font. */
 .sendBtn {
-  background: var(--color-menu-bg);
+  background: var(--color-accent);
   border: none;
   border-radius: 999px;
   color: #ffffff;
@@ -1316,12 +1357,12 @@
 }
 
 .sendBtn:hover:not(:disabled) {
-  background: var(--color-menu-bg-hover);
+  background: var(--color-accent-hover);
   transform: translateY(-1px);
 }
 
 .sendBtn:active:not(:disabled) {
-  background: var(--color-menu-bg-active);
+  background: var(--color-accent-hover);
   transform: translateY(0);
 }
 

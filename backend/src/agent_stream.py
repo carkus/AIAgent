@@ -1000,6 +1000,23 @@ an actual attempt genuinely came up empty.
     provider = agent_config.get("provider")
     model = agent_config.get("ollama_model")
 
+    # Whether this turn's LLM call will actually be able to reach a
+    # vision-capable provider — mirrors llm_client.create_chat_completion's
+    # own routing (forced-provider-or-LLM_PROVIDER-env, then whether Gemini is
+    # even configured) rather than trusting agent_config's `provider` field in
+    # isolation. `provider` is `None`/unset for the default cascade, which
+    # used to be treated as "will reach Gemini" unconditionally — but if
+    # GEMINI_API_KEY isn't set, create_chat_completion skips Gemini and the
+    # cascade goes straight to Ollama, so an image built as a Gemini-style
+    # multimodal content block was silently being sent to a non-vision Ollama
+    # model instead, which can't parse it and just hallucinates a "can't see
+    # images" reply — confirmed live in this exact dev environment (env.json
+    # has GEMINI_API_KEY unset).
+    forced_provider = (provider or os.environ.get("LLM_PROVIDER", "")).strip().lower()
+    vision_capable = forced_provider == "gemini" or (
+        forced_provider != "ollama" and bool(os.environ.get("GEMINI_API_KEY"))
+    )
+
     # Build initial message list: system prompt first, then conversation history
     current_messages: list[dict] = [{"role": "system", "content": system_prompt}]
     for m in messages:
@@ -1007,15 +1024,22 @@ an actual attempt genuinely came up empty.
         if not image:
             current_messages.append({"role": m["role"], "content": m["content"]})
             continue
-        if provider == "ollama":
-            # Local Ollama models in this cascade aren't vision-capable — drop
-            # the image rather than send a content shape it can't handle, but
-            # say so, so the agent doesn't just silently ignore the attachment.
+        if not vision_capable:
+            # Whatever provider this turn will actually run on can't see
+            # images (local Ollama, or the cascade has no configured Gemini
+            # key to reach) — drop the image rather than send a content shape
+            # it can't handle, but say so, so the agent doesn't just silently
+            # ignore the attachment.
             note = (
                 "[The user attached an image, but this agent is running "
                 "on a local Ollama model, which can't see images. Ask them to "
                 "describe what's in the image in words, or switch the agent to the "
                 "Gemini provider to analyze it directly.]"
+                if forced_provider == "ollama" else
+                "[The user attached an image, but no vision-capable provider is "
+                "currently configured (Gemini isn't set up), so this reply is "
+                "running on a text-only model that can't see it. Ask them to "
+                "describe what's in the image in words.]"
             )
             content = f"{m['content']}\n\n{note}" if m["content"] else note
             current_messages.append({"role": m["role"], "content": content})

@@ -117,8 +117,6 @@ export default function SettingsModal({
         </div>
 
         <div className={styles.body}>
-          <p className={styles.letterhead}>Agent Configuration File</p>
-
           <section className={styles.section}>
             <span className={styles.sectionLabel}>Location</span>
             <div className={styles.locationRow}>

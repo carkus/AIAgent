@@ -2,13 +2,17 @@
   box-sizing: border-box;
 }
 
-/* Theme colors — the app's fixed palette (no live user-facing picker; that
-   was tried and removed). Components opt in by using var(--color-*) instead
-   of a literal hex, which is what keeps the palette centralized in this one
-   place. Not every one-off color in the app (status chips, error red, etc.)
-   was migrated — just the handful that actually carry the app's overall
-   look (background, text, borders, the two accent colors used throughout
-   for links/buttons/highlights). */
+/* Theme colors — the app's default palette. These are the fallback values;
+   src/theme.ts overrides a subset of them as inline styles on :root at
+   startup and from the standalone ThemePicker popup (Setup's palette icon;
+   persisted to localStorage), so treat the values below as defaults, not
+   fixed constants. Components opt in by using var(--color-*) instead of a
+   literal hex, which is what makes them pickable at all. Not every one-off
+   color in the app (status chips, error red, etc.) was migrated — just the
+   handful that actually carry the app's overall look (background, text,
+   borders, the two accent colors used throughout for links/buttons/
+   highlights, and the manila-folder dossier palette) — see theme.ts's
+   THEME_TOKENS for the exact editable set. */
 :root {
   --color-bg: #fbfaf8;
   --color-surface: #fffefd;
@@ -19,19 +23,37 @@
   --color-text: #1f5373;
   --color-muted: #6b7785;
   --color-border: #ddd9cd;
-  --color-accent: #053750;
-  --color-accent-hover: #164a4e;
+  --color-accent: #014792;
+  --color-accent-hover: #012955;
   --color-accent-secondary: #3f7ea0;
 
   /* The app's "menu" accent — the darker, navy-leaning steel-blue used as a
      solid fill by the toolbar's one primary-action button (New agent/Send)
      in Chat.module.css. The user's own chat bubble background is bound to
      this same token (not just a matching hex) so the two update together. */
-  --color-menu-bg: #356b8b;
-  --color-menu-bg-hover: #2c5975;
-  --color-menu-bg-active: #234a61;
-  --color-menu-bg-tint: rgba(53, 107, 139, 0.1);
-  --color-menu-bg-tint-strong: rgba(53, 107, 139, 0.16);
+  --color-menu-bg: #3963ab;
+  --color-menu-bg-hover: #315594;
+  --color-menu-bg-active: #27467c;
+  --color-menu-bg-tint: rgba(57, 99, 171, 0.1);
+  --color-menu-bg-tint-strong: rgba(57, 99, 171, 0.16);
+
+  /* Manila-folder "dossier" palette — shared by SettingsModal, CharacterGenerator,
+     AgentStableModal and FeedbackReportModal's modal chrome, plus Setup's own
+     saved-searches folder (the "-setup-" variants below). All derived from
+     --color-dossier by theme.ts's deriveRelative() when the picker changes. */
+  --color-dossier: #ede4cd;
+  --color-dossier-border: #cfbf94;
+  --color-dossier-text: #6b5a32;
+  --color-dossier-muted: #8a7a52;
+  --color-dossier-shadow-light: #f5eeda;
+  --color-dossier-shadow-mid: #e2d6b3;
+  --color-dossier-text-a35: rgba(107, 90, 50, 0.35);
+  --color-dossier-text-a10: rgba(107, 90, 50, 0.1);
+  --color-dossier-text-a08: rgba(107, 90, 50, 0.08);
+  --color-dossier-setup-bg: #f1ebd9;
+  --color-dossier-setup-border: #ddd9cd;
+  --color-dossier-setup-shadow-light: #faf8f0;
+  --color-dossier-setup-shadow-mid: #e2dfd5;
 
   /* Site-wide type scale — five sizes, full stop. Every component's
      font-size should read one of these instead of a one-off literal;
@@ -43,6 +65,13 @@
   --font-size-base: 1rem;
   --font-size-lg: 1.25rem;
   --font-size-xl: 1.75rem;
+
+  /* Single shared corner radius for every small pill/chip/button-style
+     control (trait/behaviour pills, saved-profile badges, the Focus chip
+     and its input, and the small action buttons alongside them). One
+     variable instead of each class hardcoding its own px value, so this
+     whole family can't drift out of sync with itself again. */
+  --radius-control: 999px;
 }
 
 html, body {
@@ -62,13 +91,13 @@ html, body {
   height: 100%;
 }
 
-/* App-wide scrollbar — thin, light-track, teal thumb to match the overall
-   cream/navy/teal aesthetic (see Setup/Chat/ToolActivity styles). Applies
+/* App-wide scrollbar — thin, light-track, blue thumb to match the overall
+   cream/navy/blue aesthetic (see Setup/Chat/ToolActivity styles). Applies
    to every scrollable element (saved-chats list, chat log, tool activity,
    PDF preview, etc.) rather than being redefined per-component. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(31, 111, 115, 0.35) rgba(0, 0, 0, 0.06);
+  scrollbar-color: rgba(40, 75, 106, 0.35) rgba(0, 0, 0, 0.06);
 }
 
 *::-webkit-scrollbar {
@@ -81,10 +110,10 @@ html, body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(31, 111, 115, 0.35);
+  background: rgba(40, 75, 106, 0.35);
   border-radius: 999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(31, 111, 115, 0.6);
+  background: rgba(40, 75, 106, 0.6);
 }

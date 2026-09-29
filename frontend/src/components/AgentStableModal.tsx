@@ -89,8 +89,8 @@ export default function AgentStableModal({ isOpen, onClose, onHire }: Props) {
       >
         <span className={styles.dossierTab} aria-hidden="true">Stable Roster</span>
         <div className={styles.header}>
-          <span id="agent-stable-title" className={styles.title}>Agent Stable</span>
-          <button ref={closeBtnRef} type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close agent stable">
+          <span id="agent-stable-title" className={styles.title}>Agents</span>
+          <button ref={closeBtnRef} type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close agents">
             ✕
           </button>
         </div>
@@ -109,6 +109,8 @@ export default function AgentStableModal({ isOpen, onClose, onHire }: Props) {
               {agents.map(agent => {
                 const badge = statBadge(agent)
                 const expanded = expandedId === agent.id
+                const persona = agent.agent_config?.persona
+                const behaviors = behaviorLabels(agent.agent_config?.active_toggles)
                 return (
                   <li key={agent.id} className={styles.agentCard}>
                     {/* Not a <button> — the Hire button living inside it would be an
@@ -127,6 +129,16 @@ export default function AgentStableModal({ isOpen, onClose, onHire }: Props) {
                         <span className={styles.agentName}>{agent.name}</span>
                         <span className={styles.agentToolName}>{agent.tool_name}</span>
                         {agent.description && <span className={styles.agentDescription}>{agent.description}</span>}
+                        {(persona?.traits.length || behaviors.length > 0) && (
+                          <span className={styles.traitsPills}>
+                            {persona?.traits.map(trait => (
+                              <span key={trait} className={styles.traitPill}>{trait}</span>
+                            ))}
+                            {behaviors.map(label => (
+                              <span key={label} className={styles.behaviorPill}>{label}</span>
+                            ))}
+                          </span>
+                        )}
                       </span>
                       <span className={badge.flagged ? styles.statBadgeFlagged : styles.statBadge}>
                         {badge.label}

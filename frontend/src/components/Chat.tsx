@@ -1,4 +1,4 @@
-import { isValidElement, useEffect, useRef, useState, type ReactNode } from 'react'
+import { isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { publishAgent, runAgent } from '../api'
@@ -61,6 +61,29 @@ function listItemPlainText(node: ReactNode): string {
     return listItemPlainText((node.props as { children?: ReactNode }).children)
   }
   return ''
+}
+
+// Thumbnail strip of every image the agent has actually produced/found this
+// chat (generate_image/search_image results, embedded by the model as
+// markdown in its own reply) — collected by scanning each assistant
+// message's raw content for markdown image syntax rather than tracking
+// tool results directly, since it's the model's own reply that decides
+// what actually gets shown, same source the img() renderer below reads.
+function extractImageAssets(messages: ChatMessage[]): { url: string; alt: string }[] {
+  const seen = new Set<string>()
+  const assets: { url: string; alt: string }[] = []
+  const re = /!\[([^\]]*)\]\((\S+?)\)/g
+  for (const msg of messages) {
+    if (msg.role !== 'assistant' || !msg.content) continue
+    let match: RegExpExecArray | null
+    while ((match = re.exec(msg.content))) {
+      const [, alt, url] = match
+      if (seen.has(url)) continue
+      seen.add(url)
+      assets.push({ url, alt })
+    }
+  }
+  return assets
 }
 
 // Mono line icons for the header toolbar — same stroke-based style as
@@ -346,6 +369,10 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // enough to change the agent's focus without a re-bootstrap.
   const [focusPool, setFocusPool] = useState<string[]>(agentConfig.keywords ?? [])
   const [focusDraft, setFocusDraft] = useState('')
+
+  // Recomputed whenever messages changes, so a new image shows up in the
+  // strip as soon as the reply that carries it finishes streaming in.
+  const assets = useMemo(() => extractImageAssets(messages), [messages])
 
   function addFocus() {
     const value = focusDraft.trim()
@@ -973,6 +1000,22 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
               />
             )}
           </div>
+          {assets.length > 0 && (
+            <div className={styles.headerAssets}>
+              {assets.map((a, ai) => (
+                <button
+                  key={a.url + ai}
+                  type="button"
+                  className={styles.assetThumbBtn}
+                  onClick={() => setViewerImage(a.url)}
+                  title={a.alt || 'Generated image'}
+                  aria-label={a.alt || 'View generated image'}
+                >
+                  <img src={a.url} alt={a.alt} className={styles.assetThumb} loading="lazy" />
+                </button>
+              ))}
+            </div>
+          )}
           <div className={styles.toolsBadges}>
         {agentConfig.tools.filter(t => t.name !== 'save_output').map(t => (
           <span key={t.name} className={styles.badge}>{t.name}</span>

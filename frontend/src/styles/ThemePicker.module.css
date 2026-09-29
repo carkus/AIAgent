@@ -1,0 +1,118 @@
+/* No .overlay/backdrop element on purpose — see ThemePicker.tsx's comment.
+   This is a plain fixed-position card floating above the page, positioned
+   under Setup's icon row (settingsIconBtn et al. sit at top: 1.1rem). */
+.panel {
+  position: fixed;
+  top: 4.7rem;
+  right: 1.1rem;
+  z-index: 100;
+  width: 390px;
+  /* Fixed, not var(--color-surface) — this panel is where the user is
+     actively dragging the "Card/surface background" swatch, so it can't
+     read that variable itself without the picker's own background jumping
+     around mid-drag along with everything else it's previewing. */
+  background: #fffefd;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(22, 40, 55, 0.22);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-base);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.closeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  background: #fffefd;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.closeBtn:hover {
+  background: rgba(40, 75, 106, 0.08);
+  color: var(--color-text);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem 0.75rem;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--font-size-xs);
+  color: var(--color-text);
+}
+
+.swatch {
+  flex-shrink: 0;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+}
+
+/* Native color-input chrome varies a lot per browser; strip its default
+   inset border/padding so the swatch reads as a flat color chip matching
+   the rest of this panel's controls instead of a browser-default widget. */
+.swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+
+.resetBtn {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-muted);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  padding: 0.4rem 0.8rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.resetBtn:hover:not(:disabled) {
+  border-color: var(--color-accent-secondary);
+  color: var(--color-accent-secondary);
+}
+
+.resetBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

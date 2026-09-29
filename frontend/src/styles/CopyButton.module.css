@@ -3,7 +3,7 @@
    since the button is reused from both. */
 .copyButton {
   background: transparent;
-  border: 1px solid #cfe3ea;
+  border: 1px solid #d2dde7;
   border-radius: 4px;
   color: #3f7ea0;
   cursor: pointer;
@@ -17,8 +17,8 @@
 }
 
 .copyButton:hover {
-  background: #cfe3ea;
-  color: #053750;
+  background: #d2dde7;
+  color: #0d2c48;
 }
 
 .copied {

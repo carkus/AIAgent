@@ -10,6 +10,7 @@ import { formatDate, getDateFormat, type DateFormatId } from '../dateFormat'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/agentone_logo_transparent.png'
 import SettingsModal from './SettingsModal'
+import ThemePicker from './ThemePicker'
 import AgentStableModal from './AgentStableModal'
 import CharacterGenerator from './CharacterGenerator'
 import HelpTip from './HelpTip'
@@ -155,7 +156,7 @@ function SectionHeader({ label, expanded, onToggle, help, right }: {
       onClick={onToggle}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
     >
-      <span className={styles.fieldLabel}><span aria-hidden="true">◆</span> {label}</span>
+      <span className={styles.fieldLabel}><span className={styles.sectionBulb} aria-hidden="true" /> {label}</span>
       <span className={styles.fieldLabelRight}>
         {right}
         <HelpTip text={help} label={`${label} help`} />
@@ -268,7 +269,15 @@ interface Props {
 }
 
 export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat, activeAgentConfig }: Props) {
-  const [agentType, setAgentType] = useState<AgentTemplateId>('general')
+  // Persisted across reloads/new-agent resets, same localStorage idiom as
+  // provider/dateFormat above — otherwise the type picker silently reverted
+  // to "general" every time, discarding the user's last choice.
+  const [agentType, setAgentType] = useState<AgentTemplateId>(
+    () => (localStorage.getItem('aiagent_agent_type') as AgentTemplateId) || 'general'
+  )
+  useEffect(() => {
+    localStorage.setItem('aiagent_agent_type', agentType)
+  }, [agentType])
   const [keywords, setKeywords] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [location, setLocation] = useState('Melbourne, Australia')
@@ -440,6 +449,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
   const [locationDetecting, setLocationDetecting] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [themePickerOpen, setThemePickerOpen] = useState(false)
   const [stableModalOpen, setStableModalOpen] = useState(false)
   const [characterGenOpen, setCharacterGenOpen] = useState(false)
   // The setup form and the dossier are both too tall to show fully at once
@@ -716,6 +726,40 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         }
       }
     }
+  }
+
+  // In-place rename of a saved focus tag — same "no partial-update API"
+  // constraint as deleteSavedKeyword above, so it reuses that exact
+  // strip-then-recreate dance per affected entry, just substituting the new
+  // text instead of dropping it. Also renames the tag in the live current-
+  // focus chips if it's active there, so an edited tag doesn't leave a
+  // stale duplicate behind.
+  const [editingSavedKeyword, setEditingSavedKeyword] = useState<string | null>(null)
+  const [editSavedKeywordDraft, setEditSavedKeywordDraft] = useState('')
+
+  async function renameSavedKeyword(oldKw: string, rawNewKw: string) {
+    const newKw = rawNewKw.trim()
+    setEditingSavedKeyword(null)
+    setEditSavedKeywordDraft('')
+    if (!newKw || newKw.toLowerCase() === oldKw.toLowerCase()) return
+    if (savedKeywordPool.some(pooled => pooled.toLowerCase() === newKw.toLowerCase())) return
+    const lower = oldKw.toLowerCase()
+    const affected = saved.filter(s => s.keywords.some(k => k.toLowerCase() === lower))
+    if (affected.length === 0) return
+    setSaved(prev => prev.map(s => s.keywords.some(k => k.toLowerCase() === lower)
+      ? { ...s, keywords: s.keywords.map(k => k.toLowerCase() === lower ? newKw : k) }
+      : s))
+    for (const entry of affected) {
+      deleteSavedSearch(entry.id).catch(() => {})
+      const renamed = entry.keywords.map(k => k.toLowerCase() === lower ? newKw : k)
+      try {
+        const fresh = await createSavedSearch(renamed.join(', '), renamed, entry.agentType ?? 'research')
+        setSaved(prev => [fresh, ...prev.filter(s => s.id !== entry.id)])
+      } catch {
+        // Best effort — same as deleteSavedKeyword, local state already reflects the rename.
+      }
+    }
+    setKeywords(prev => prev.map(k => k.toLowerCase() === lower ? newKw : k))
   }
 
   function removeKeyword(kw: string) {
@@ -1055,39 +1099,41 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   return (
     <div className={styles.container}>
       <div className={styles.card}>
-        <button
-          type="button"
-          className={styles.settingsIconBtn}
-          onClick={() => setSettingsOpen(true)}
-          disabled={bootstrapping}
-          aria-haspopup="dialog"
-          aria-label="Settings"
-          title="Settings"
-        >
-          ⚙
-        </button>
-        <button
-          type="button"
-          className={styles.stableIconBtn}
-          onClick={() => setStableModalOpen(true)}
-          disabled={bootstrapping}
-          aria-haspopup="dialog"
-          aria-label="Agent stable"
-          title="Agent stable — published agents and their track record"
-        >
-          <svg width="27" height="27" viewBox="0 0 64 64" fill="none" aria-hidden="true">
-            <path
-              d="M 21.777344 7 L 19.222656 14.666016 C 15.389656 14.666016 14.111328 21.694016 14.111328 26.166016 L 14.111328 27.251953 C 14.045259 27.999479 14 28.749012 14 29.5 L 14 33.845703 C 13.383 34.764703 12.5 36.438 12.5 38.5 C 12.5 40.993 13.396594 42.971547 15.308594 44.685547 C 18.617594 53.087547 28.502469 58.507547 28.605469 58.560547 L 29.458984 59 L 34.541016 59 L 35.396484 58.558594 C 37.261484 57.593594 45.226875 52.174328 48.171875 44.736328 C 50.322875 42.989328 51.5 40.794 51.5 38.5 C 51.5 36.409 50.615687 34.686687 50.054688 33.804688 L 50 29.5 C 50 28.749012 49.954741 27.999479 49.888672 27.251953 L 49.888672 26.166016 C 49.888672 12.111016 42.221344 7 21.777344 7 z M 21.777344 20.816406 C 21.777344 20.816406 26.25 22.095703 32 22.095703 C 37.75 22.095703 43.5 20.816406 43.5 20.816406 C 45.018325 22.334731 45.679597 25.635756 45.96875 28.685547 C 45.980691 28.981447 46 29.331927 46 29.525391 L 46.064453 34.466797 L 46.089844 35.171875 L 46.515625 35.705078 C 46.771625 36.026078 47.501953 37.231 47.501953 38.5 C 47.501953 40.113 45.980359 41.402672 45.318359 41.888672 L 44.822266 42.251953 L 44.617188 42.828125 C 42.323187 49.269125 34.876312 54.318 33.570312 55 L 30.429688 55 C 28.652688 54.076 21.103766 49.061125 18.884766 42.828125 L 18.697266 42.302734 L 18.263672 41.947266 C 16.978672 40.902266 16.5 39.969 16.5 38.5 C 16.5 37.057 17.501922 35.822484 17.544922 35.771484 L 18 35.216797 L 18 30.681641 C 18.310227 27.367343 19.201234 23.024418 21.777344 20.816406 z"
-              fill="currentColor"
-            />
-          </svg>
-        </button>
-        <HelpTip
-          className={styles.panelHelpTip}
-          size="lg"
-          label="What is this screen?"
-          text="This card designs your agent before it exists. Pick an agent type, add focus areas for it to work on, and optionally tune its behavior and personality — the Brief below updates live to show what it's agreed to do. Hit Commission to bootstrap it and start chatting."
-        />
+        <div className={styles.topIconRow}>
+          <button
+            type="button"
+            className={styles.topIconBtn}
+            onClick={() => setThemePickerOpen(true)}
+            disabled={bootstrapping}
+            aria-haspopup="dialog"
+            aria-label="Theme colors"
+            title="Theme colors"
+          >
+            ◐
+          </button>
+          <button
+            type="button"
+            className={styles.topIconBtn}
+            onClick={() => setStableModalOpen(true)}
+            disabled={bootstrapping}
+            aria-haspopup="dialog"
+            aria-label="Agents"
+            title="Agents"
+          >
+            ♞
+          </button>
+          <button
+            type="button"
+            className={styles.topIconBtn}
+            onClick={() => setSettingsOpen(true)}
+            disabled={bootstrapping}
+            aria-haspopup="dialog"
+            aria-label="Settings"
+            title="Settings"
+          >
+            ⚙
+          </button>
+        </div>
         <button
           type="button"
           className={styles.brandLogoBtn}
@@ -1109,7 +1155,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           <div className={styles.agentCardMain}>
             <div className={styles.agentCardInfo}>
               <h1 className={styles.title}>Agent {agentName}</h1>
-              <p className={styles.locationLiner}>📍 {location || 'No location set'}</p>
+              <p className={styles.locationLiner}>{location || 'No location set'}</p>
               <button
                 type="button"
                 className={styles.modelLiner}
@@ -1280,37 +1326,52 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     className={styles.hiddenFileInput}
                     onChange={handlePurposeImageFileChange}
                   />
-                  <button
-                    type="button"
-                    className={styles.attachImageBtn}
-                    onClick={handlePurposeImageAttachClick}
-                    disabled={bootstrapping || attachingPurposeImage}
-                    title="Attach an image for the agent to look at — it'll inform the agent's design the same way a keyword would"
-                    aria-label="Attach an image"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
-                      <path d="M16.5 6.5 8.7 14.3a3 3 0 1 0 4.24 4.24l7.1-7.1a5 5 0 1 0-7.07-7.07L5.5 11.84" />
-                    </svg>
-                    Attach Image
-                  </button>
-                  {(purposeImage || attachingPurposeImage) && (
-                    <div className={styles.purposeImageChip}>
-                      {attachingPurposeImage ? (
-                        <span className={styles.attachmentPlaceholder}>Loading image…</span>
-                      ) : (
-                        <>
-                          <img src={purposeImage!} alt="Attached image" className={styles.attachmentThumb} />
-                          <span>Attached — will inform the agent's design</span>
-                          <button
-                            type="button"
-                            className={styles.attachmentRemove}
-                            onClick={clearPurposeImage}
-                            aria-label="Remove attached image"
-                          >
-                            ✕
-                          </button>
-                        </>
-                      )}
+                  <div className={styles.purposeImageLeft}>
+                    <button
+                      type="button"
+                      className={styles.attachImageBtn}
+                      onClick={handlePurposeImageAttachClick}
+                      disabled={bootstrapping || attachingPurposeImage}
+                      title="Attach an image for the agent to look at — it'll inform the agent's design the same way a keyword would"
+                      aria-label="Attach an image"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                        <path d="M16.5 6.5 8.7 14.3a3 3 0 1 0 4.24 4.24l7.1-7.1a5 5 0 1 0-7.07-7.07L5.5 11.84" />
+                      </svg>
+                      Attach Image
+                    </button>
+                    {(purposeImage || attachingPurposeImage) && (
+                      <div className={styles.purposeImageChip}>
+                        {attachingPurposeImage ? (
+                          <span className={styles.attachmentPlaceholder}>Loading image…</span>
+                        ) : (
+                          <>
+                            <img src={purposeImage!} alt="Attached image" className={styles.attachmentThumb} />
+                            <span>Attached — will inform the agent's design</span>
+                            <button
+                              type="button"
+                              className={styles.attachmentRemove}
+                              onClick={clearPurposeImage}
+                              aria-label="Remove attached image"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {keywords.length > 0 && (
+                    <div className={styles.profileActions}>
+                      <button
+                        type="button"
+                        className={styles.profileSaveBtn}
+                        onClick={saveSearch}
+                        disabled={bootstrapping || !hasUnsavedSpecialties}
+                        title={hasUnsavedSpecialties ? 'Save the focus items above that aren\'t saved yet' : 'All current focus items are already saved'}
+                      >
+                        Save Focus
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1326,19 +1387,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       {draft.length > 0 ? `${50 - draft.length} chars remaining` : ''}
                     </p>
                   )}
-                  <div className={styles.profileActions}>
-                    {keywords.length > 0 && (
-                      <button
-                        type="button"
-                        className={styles.profileSaveBtn}
-                        onClick={saveSearch}
-                        disabled={bootstrapping || !hasUnsavedSpecialties}
-                        title={hasUnsavedSpecialties ? 'Save the focus items above that aren\'t saved yet' : 'All current focus items are already saved'}
-                      >
-                        Save Focus
-                      </button>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
@@ -1584,20 +1632,43 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       const alreadyAdded = keywords.some(k => k.toLowerCase() === kw.toLowerCase())
                       const atCap = !alreadyAdded && keywords.length >= MAX_SPECIALTIES
                       const toggle = () => { if (bootstrapping || atCap) return; if (alreadyAdded) { removeKeyword(kw) } else { addSavedKeyword(kw) } }
+                      const isEditing = editingSavedKeyword === kw
                       return (
                         <div
                           key={kw}
                           className={`${styles.savedKeywordChip} ${alreadyAdded ? styles.savedKeywordChipAdded : ''} ${atCap ? styles.savedKeywordChipDisabled : ''}`}
-                          role="button"
-                          tabIndex={bootstrapping || atCap ? -1 : 0}
-                          onClick={toggle}
-                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } }}
-                          aria-pressed={alreadyAdded}
+                          role={isEditing ? undefined : 'button'}
+                          tabIndex={isEditing || bootstrapping || atCap ? -1 : 0}
+                          onClick={isEditing ? undefined : toggle}
+                          onKeyDown={isEditing ? undefined : (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } })}
+                          aria-pressed={isEditing ? undefined : alreadyAdded}
                           aria-disabled={atCap}
-                          aria-label={alreadyAdded ? `${kw} is in current focus areas — tap to remove` : atCap ? `Cannot add ${kw} — limit of ${MAX_SPECIALTIES} focus areas reached` : `Add saved focus area ${kw} to current focus areas`}
-                          title={alreadyAdded ? 'Tap to remove from current focus areas' : atCap ? `Limit of ${MAX_SPECIALTIES} focus areas reached` : 'Tap to add to current focus areas'}
+                          aria-label={isEditing ? undefined : (alreadyAdded ? `${kw} is in current focus areas — tap to remove` : atCap ? `Cannot add ${kw} — limit of ${MAX_SPECIALTIES} focus areas reached` : `Add saved focus area ${kw} to current focus areas`)}
+                          title={isEditing ? undefined : (alreadyAdded ? 'Tap to remove from current focus areas · double-click to rename' : atCap ? `Limit of ${MAX_SPECIALTIES} focus areas reached` : 'Tap to add to current focus areas · double-click to rename')}
                         >
-                          <span className={styles.savedKeywordLabel}>{kw}</span>
+                          {isEditing ? (
+                            <input
+                              className={styles.savedKeywordLabelEditing}
+                              value={editSavedKeywordDraft}
+                              autoFocus
+                              onFocus={e => e.currentTarget.select()}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => setEditSavedKeywordDraft(e.target.value.slice(0, 50))}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') { e.preventDefault(); renameSavedKeyword(kw, editSavedKeywordDraft) }
+                                if (e.key === 'Escape') { e.preventDefault(); setEditingSavedKeyword(null); setEditSavedKeywordDraft('') }
+                              }}
+                              onBlur={() => renameSavedKeyword(kw, editSavedKeywordDraft)}
+                              maxLength={50}
+                            />
+                          ) : (
+                            <span
+                              className={styles.savedKeywordLabel}
+                              onDoubleClick={ev => { ev.stopPropagation(); setEditingSavedKeyword(kw); setEditSavedKeywordDraft(kw) }}
+                            >
+                              {kw}
+                            </span>
+                          )}
                           <button
                             type="button"
                             className={styles.savedKeywordDelete}
@@ -1716,7 +1787,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 <span className={styles.savedSectionCaret} aria-hidden="true">
                   {openSavedSections.chats ? '▾' : '▸'}
                 </span>
-                <span className={styles.savedSectionTitle}>Saved Chats</span>
+                <span className={styles.savedSectionTitle}>Saved Jobs</span>
                 <span className={styles.savedSectionCount}>{visibleChats.length}</span>
               </button>
               {openSavedSections.chats && (
@@ -1936,6 +2007,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         dateFormat={dateFormat}
         onDateFormatChange={handleDateFormatChange}
         disabled={bootstrapping}
+      />
+
+      <ThemePicker
+        isOpen={themePickerOpen}
+        onClose={() => setThemePickerOpen(false)}
       />
 
       <AgentStableModal
