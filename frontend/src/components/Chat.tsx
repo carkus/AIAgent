@@ -18,7 +18,7 @@ import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate, getDateFormat } from '../dateFormat'
 import { extractMermaidDiagrams } from '../mermaidExtract'
 import styles from '../styles/Chat.module.css'
-import splashLogo from '../assets/splash_logo.png'
+import splashLogo from '../assets/agentone_logo_transparent.png'
 
 type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'copyChat' | 'copiedChat' | 'newAgent' | 'attach' | 'imagePlaceholder' | 'send' | 'location' | 'clock'
 
