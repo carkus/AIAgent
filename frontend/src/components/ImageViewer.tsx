@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import styles from '../styles/ImageViewer.module.css'
 
 interface Props {
@@ -21,6 +21,13 @@ const ZOOM_STEP = 0.0015
 export default function ImageViewer({ svg, src, onClose }: Props) {
   const [scale, setScale] = useState(1)
   const pageRef = useRef<HTMLDivElement | null>(null)
+  const imageRef = useRef<HTMLDivElement | HTMLImageElement | null>(null)
+  // The element's own rendered "fit to page" size at scale 1 — captured once
+  // it actually has a layout box, then used as the 100% reference every zoom
+  // level resizes from. Resizing the real element (below) instead of only
+  // painting a transform:scale() on top of an unchanged box means .page's
+  // overflow:auto gets a genuine, reliably-scrollable content size.
+  const [baseSize, setBaseSize] = useState<{ w: number; h: number } | null>(null)
 
   // Native listener, not React's onWheel — needed so preventDefault()
   // actually stops .page's own overflow:auto from scrolling underneath
@@ -36,30 +43,89 @@ export default function ImageViewer({ svg, src, onClose }: Props) {
     return () => el.removeEventListener('wheel', handleWheel)
   }, [])
 
+  function measureIfNeeded() {
+    if (baseSize) return
+    const el = imageRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    if (rect.width > 0 && rect.height > 0) setBaseSize({ w: rect.width, h: rect.height })
+  }
+
+  // Re-measure on window resize while at rest (scale 1) so the "100%"
+  // reference tracks the page's own responsive max-width/max-height rather
+  // than freezing at whatever size the modal first opened at.
+  useEffect(() => {
+    function handleResize() {
+      if (scale === 1) setBaseSize(null)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [scale])
+
+  useLayoutEffect(() => {
+    const el = imageRef.current
+    if (!el) return
+    if (!baseSize) {
+      measureIfNeeded()
+      return
+    }
+    // Force the injected <svg> to fill its wrapper div (keeping its own
+    // aspect ratio via viewBox) so resizing the wrapper below genuinely
+    // resizes the diagram, instead of the svg staying pinned to whatever
+    // intrinsic size it rendered at inside .image's old CSS max-width/
+    // max-height:100% cap. Inline style, not the width/height attribute —
+    // the .image svg { width: auto } class rule otherwise wins over an
+    // attribute since CSS always beats a presentation attribute.
+    if (svg) {
+      const svgEl = el.querySelector('svg')
+      if (svgEl) {
+        svgEl.style.width = '100%'
+        svgEl.style.height = '100%'
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [svg, src, baseSize])
+
+  // maxWidth/maxHeight: 'none' overrides .image's CSS max-width/max-height:
+  // 100%-of-page cap, which would otherwise clamp the element straight back
+  // down the moment it's asked to grow past its original fit size.
+  const sizeStyle = baseSize
+    ? { width: baseSize.w * scale, height: baseSize.h * scale, maxWidth: 'none', maxHeight: 'none' }
+    : undefined
+
   return (
     <div className={styles.overlay} onClick={onClose}>
+      {/* Close button and zoom badge are fixed to the viewport, as siblings
+          of .page rather than children inside it — .page scrolls internally
+          when the zoomed image outgrows it, and an absolutely-positioned
+          child of a scrolling container scrolls right along with its
+          content. Fixed positioning outside .page keeps both anchored in
+          place regardless of that internal scroll. */}
+      <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close image viewer">
+        ✕
+      </button>
+      {scale !== 1 && (
+        <span className={styles.zoomBadge} aria-hidden="true">{Math.round(scale * 100)}%</span>
+      )}
       <div className={styles.page} ref={pageRef} onClick={e => e.stopPropagation()}>
-        <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close image viewer">
-          ✕
-        </button>
-        {scale !== 1 && (
-          <span className={styles.zoomBadge} aria-hidden="true">{Math.round(scale * 100)}%</span>
-        )}
         {svg ? (
           <div
+            ref={imageRef as RefObject<HTMLDivElement>}
             className={styles.image}
-            style={{ transform: `scale(${scale})` }}
+            style={sizeStyle}
             onDoubleClick={() => setScale(1)}
             title="Scroll to zoom, double-click to reset"
             dangerouslySetInnerHTML={{ __html: svg }}
           />
         ) : (
           <img
+            ref={imageRef as RefObject<HTMLImageElement>}
             className={styles.image}
-            style={{ transform: `scale(${scale})` }}
+            style={sizeStyle}
             onDoubleClick={() => setScale(1)}
             title="Scroll to zoom, double-click to reset"
             src={src}
+            onLoad={measureIfNeeded}
             alt=""
           />
         )}

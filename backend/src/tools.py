@@ -137,6 +137,17 @@ def fetch_page(url: str) -> dict:
         return {'error': str(exc), 'url': url}
 
 
+# Adzuna's own default (no "distance" param sent at all) doesn't meaningfully
+# bound results to "where" — it falls back to a loose text match that pulls in
+# listings well outside the named place, which is the "results beyond the
+# assigned location" bug this constant fixes. Applied automatically below
+# whenever a location is given but the caller (the model) didn't also think
+# to specify a radius, which is the common case — a job-search prompt asking
+# for "jobs in Melbourne" has no reason to know Adzuna even has a distance
+# param, let alone remember to set it every time.
+_DEFAULT_DISTANCE_KM = 15
+
+
 def search_jobs(what: str, where: str = "", country: str = "au",
                  results_per_page: int = 20, page: int = 1,
                  distance_km: int | None = None) -> dict:
@@ -178,10 +189,13 @@ def search_jobs(what: str, where: str = "", country: str = "au",
     }
     if where:
         params["where"] = where
-    # Adzuna's "distance" param (km) only does anything alongside "where" —
-    # a radius with no center point to measure from is meaningless to their API.
-    if distance_km and where:
-        params["distance"] = distance_km
+        # Adzuna's "distance" param (km) only does anything alongside "where"
+        # — a radius with no center point to measure from is meaningless to
+        # their API — so it's only ever set in this branch. Falls back to
+        # _DEFAULT_DISTANCE_KM rather than leaving it unset whenever the
+        # caller names a location without also specifying a radius, since an
+        # unset distance is effectively unbounded on Adzuna's side.
+        params["distance"] = distance_km if distance_km else _DEFAULT_DISTANCE_KM
 
     try:
         r = requests.get(url, params=params, timeout=15)

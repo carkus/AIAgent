@@ -36,8 +36,11 @@
   padding: 2.5rem;
   box-shadow: 0 24px 64px rgba(28, 40, 51, 0.22);
   display: flex;
-  align-items: center;
-  justify-content: center;
+  /* No align-items/justify-content: center here on purpose — centering an
+     overflowing flex child that way clips off the start edge (top/left)
+     from ever being reachable by scroll in most browsers. .image's own
+     margin: auto centers it when it's smaller than .page, while leaving
+     every edge scrollable once zoom makes it bigger. */
   animation: pageRiseIn 0.18s ease-out;
 }
 
@@ -47,10 +50,21 @@
 }
 
 .image {
-  transform-origin: center center;
+  /* Sized in JS (ImageViewer.tsx) via explicit inline width/height that
+     scale with zoom — a real layout resize, not a transform painted on top
+     of an unchanged box, so .page's overflow:auto gets a genuine scrollable
+     area. max-width/max-height here only apply before that inline size is
+     measured (the very first frame). */
   cursor: zoom-in;
   max-width: 100%;
   max-height: 100%;
+  margin: auto;
+  /* .page is a flex container, and flex items shrink to fit it by default
+     (flex-shrink: 1) — without this, once the zoomed inline width/height
+     would exceed .page's max-width/max-height, the browser shrinks .image
+     right back down to fit instead of letting it overflow, so zooming
+     appeared to just stop working once the pane hit its max size. */
+  flex-shrink: 0;
 }
 
 .image svg {
@@ -62,9 +76,11 @@
 }
 
 .zoomBadge {
-  position: absolute;
-  top: 0.9rem;
-  left: 0.9rem;
+  /* Fixed to the viewport (not .page) so it stays put when .page's own
+     overflow:auto scrolls a zoomed image underneath it. */
+  position: fixed;
+  top: 1.5rem;
+  left: 1.5rem;
   background: #ffffff;
   border: 1px solid var(--color-border);
   border-radius: 999px;
@@ -72,27 +88,29 @@
   color: var(--color-muted);
   font-size: var(--font-size-xs);
   line-height: 1;
-  z-index: 1;
+  z-index: 101;
 }
 
 .closeBtn {
-  position: absolute;
-  top: 0.9rem;
-  right: 0.9rem;
+  /* Fixed to the viewport (not .page) so it stays put when .page's own
+     overflow:auto scrolls a zoomed image underneath it. */
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: #ffffff;
-  border: 1px solid var(--color-border);
+  border: 1px solid #3f7ea0;
   border-radius: 50%;
-  width: 1.6rem;
-  height: 1.6rem;
-  color: var(--color-muted);
+  width: 2.4rem;
+  height: 2.4rem;
+  color: #3f7ea0;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 1.3rem;
   line-height: 1;
   padding: 0;
-  z-index: 1;
+  z-index: 101;
   transition: background-color 0.15s, color 0.15s;
 }
 
