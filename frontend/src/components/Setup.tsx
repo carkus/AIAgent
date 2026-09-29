@@ -341,6 +341,33 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   useEffect(() => {
     if (keywords.length > 0) setCommissionHint(null)
   }, [keywords.length])
+  // Optional image attached alongside Focus — sent as a real image part on
+  // the bootstrap call (server.py/bootstrap.py), the same base64 data URL
+  // shape and FileReader flow as Chat.tsx's composer attachment, so the
+  // model can let what it depicts inform the agent the same way a keyword
+  // does, not just acknowledge it.
+  const [purposeImage, setPurposeImage] = useState<string | null>(null)
+  const [attachingPurposeImage, setAttachingPurposeImage] = useState(false)
+  const purposeImageInputRef = useRef<HTMLInputElement>(null)
+  function handlePurposeImageAttachClick() {
+    purposeImageInputRef.current?.click()
+  }
+  function handlePurposeImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setAttachingPurposeImage(true)
+    const reader = new FileReader()
+    reader.onload = () => {
+      setPurposeImage(typeof reader.result === 'string' ? reader.result : null)
+      setAttachingPurposeImage(false)
+    }
+    reader.onerror = () => setAttachingPurposeImage(false)
+    reader.readAsDataURL(file)
+  }
+  function clearPurposeImage() {
+    setPurposeImage(null)
+  }
   // Saved searches live server-side now (see backend/src/saved_searches.py) —
   // fetch once on mount rather than reading localStorage synchronously.
   useEffect(() => {
@@ -972,6 +999,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         handleProgress,
         agentType,
         controller.signal,
+        purposeImage,
       )
       onDone({
         ...config,
@@ -1244,6 +1272,50 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 </div>
               )}
               {specialtiesOpen && (
+                <div className={styles.purposeImageRow}>
+                  <input
+                    ref={purposeImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className={styles.hiddenFileInput}
+                    onChange={handlePurposeImageFileChange}
+                  />
+                  <button
+                    type="button"
+                    className={styles.attachImageBtn}
+                    onClick={handlePurposeImageAttachClick}
+                    disabled={bootstrapping || attachingPurposeImage}
+                    title="Attach an image for the agent to look at — it'll inform the agent's design the same way a keyword would"
+                    aria-label="Attach an image"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
+                      <path d="M16.5 6.5 8.7 14.3a3 3 0 1 0 4.24 4.24l7.1-7.1a5 5 0 1 0-7.07-7.07L5.5 11.84" />
+                    </svg>
+                    Attach Image
+                  </button>
+                  {(purposeImage || attachingPurposeImage) && (
+                    <div className={styles.purposeImageChip}>
+                      {attachingPurposeImage ? (
+                        <span className={styles.attachmentPlaceholder}>Loading image…</span>
+                      ) : (
+                        <>
+                          <img src={purposeImage!} alt="Attached image" className={styles.attachmentThumb} />
+                          <span>Attached — will inform the agent's design</span>
+                          <button
+                            type="button"
+                            className={styles.attachmentRemove}
+                            onClick={clearPurposeImage}
+                            aria-label="Remove attached image"
+                          >
+                            ✕
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {specialtiesOpen && (
                 <div className={styles.specialtiesActionsRow}>
                   {saveFeedback ? (
                     <p className={`${styles.saveFeedbackText} ${saveFeedback.includes('failed') ? styles.saveFeedbackError : styles.saveFeedbackSuccess}`}>
@@ -1284,6 +1356,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   setDraft('')
                   setActiveToggles([])
                   setSelectedTraits([])
+                  setPurposeImage(null)
                   onNewAgent()
                   inputRef.current?.focus()
                 }}

@@ -558,6 +558,106 @@
   border-radius: 8px;
 }
 
+.hiddenFileInput {
+  display: none;
+}
+
+/* Sits between the Focus chip area and the Save Focus action row — an image
+   attached here rides alongside the purpose text on the one-shot bootstrap
+   call (bootstrap.py's _build_user_content) so the model can let what it
+   depicts inform the agent's persona/tools, the same way a keyword would. */
+.purposeImageRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+/* Same text-pill shape/chrome as .characterGenBtn — a small bordered accent
+   button, not the circular ghost-icon treatment Chat.tsx's composer uses,
+   so it reads as one of this form's own field-level actions. */
+.attachImageBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent-secondary);
+  border-radius: 4px;
+  color: var(--color-accent-secondary);
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.75rem;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.attachImageBtn:hover:not(:disabled) {
+  background: var(--color-accent-secondary);
+  color: #fff;
+}
+
+.attachImageBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Mirrors Chat.module.css's .attachmentChip/.attachmentThumb/.attachmentRemove
+   (same light-cream palette already shared by both screens), just scoped to
+   this row instead of sitting above the composer. */
+.purposeImageChip {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.65rem;
+  background: #f7f5f0;
+  border: 1px solid #ddd9cd;
+  border-radius: 9px;
+  color: #6b7785;
+  font-size: var(--font-size-sm);
+}
+
+.attachmentPlaceholder {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6b7785;
+}
+
+.attachmentThumb {
+  width: 2.2rem;
+  height: 2.2rem;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #ddd9cd;
+}
+
+.attachmentRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: #6b7785;
+  cursor: pointer;
+  font-size: 0.65rem;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.attachmentRemove:hover {
+  color: #b91c1c;
+  border-color: #b91c1c;
+}
+
 .specialtiesActionsRow {
   display: flex;
   align-items: center;

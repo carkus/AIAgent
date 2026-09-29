@@ -52,6 +52,7 @@ Create this as the `aiagent` user, mode 600 — **not** inline `Environment=` li
 ```bash
 sudo -u aiagent tee /var/www/aiagent/.env > /dev/null <<'EOF'
 GEMINI_API_KEY=<real key>
+HF_API_TOKEN=<real huggingface token — free account, no billing>
 ADZUNA_APP_ID=<real id>
 ADZUNA_APP_KEY=<real key>
 RATE_LIMIT_PER_MINUTE=5
@@ -60,6 +61,18 @@ MCP_API_KEY=<random per-consumer key, e.g. `openssl rand -hex 32`>
 EOF
 sudo chmod 600 /var/www/aiagent/.env
 ```
+
+`HF_API_TOKEN` is only for `generate_image` (`backend/src/tools.py`) — its own
+independent Gemini→Hugging Face cascade, unrelated to the chat/bootstrap
+Gemini→Ollama cascade above (line 7's "Production stays Gemini-only" is about
+*that* cascade specifically, because the droplet's Ollama can't fit this app's
+bootstrap-quality model — it says nothing about image generation). Without
+`HF_API_TOKEN`, `generate_image` has no fallback at all in prod if
+`GEMINI_API_KEY` is ever unset or a Gemini call fails — it just returns an
+error. With it, Gemini isn't required for image generation to work: unset
+`GEMINI_API_KEY` entirely and `generate_image` goes straight to the free
+Hugging Face path (rate-limited, not billed) with zero code change, same as
+local dev.
 
 `MCP_API_KEY` is read by `backend/mcp_server.py` (`aiagent-mcp.service`, same
 `EnvironmentFile`) — it's what a programmatic MCP client (e.g. jobfit) sends

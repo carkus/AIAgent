@@ -17,7 +17,7 @@ You are a meta-agent configurator. A user wants a custom AI agent for the follow
 <purpose>
 {purpose}
 </purpose>
-{fewshot}
+{image_note}{fewshot}
 Design and configure this agent. Return a single JSON object with exactly these fields:
 
 {{
@@ -75,6 +75,25 @@ Rules:
 - Search/fetch tools MUST filter results for relevance: only include items where the search keyword appears in the title or description/snippet (case-insensitive). Discard unrelated results returned by the API.
 - Return ONLY valid JSON — no markdown fences, no explanation
 """
+
+
+def _build_user_content(prompt: str, image: str | None, provider: str | None):
+    """Mirrors agent_stream.py's per-turn image handling for the one-shot
+    bootstrap call: a real image part for Gemini's OpenAI-compatible endpoint,
+    or — since the local Ollama fallback model is text-only — a plain-text
+    note folded into the prompt instead of a content shape it can't handle."""
+    if not image:
+        return prompt
+    if provider == "ollama":
+        return prompt + (
+            "\n\n[An image was attached to this purpose, but bootstrap is running "
+            "on a local Ollama model, which can't see images. Design the agent from "
+            "the text of the purpose above alone.]"
+        )
+    return [
+        {"type": "text", "text": prompt},
+        {"type": "image_url", "image_url": {"url": image}},
+    ]
 
 
 def _extract_text(response) -> str:
@@ -490,12 +509,18 @@ def _normalize_persona(config: dict) -> None:
 
 
 def _build_prompt(
-    purpose: str, provider: str | None, is_worker: bool, agent_type: str | None = None
+    purpose: str, provider: str | None, is_worker: bool, agent_type: str | None = None,
+    has_image: bool = False,
 ) -> tuple[str, int]:
     """Grounds the bootstrap prompt in real data (CLAUDE.md RAG priority 5 +
     MCP priority 6): past similar bootstraps as few-shot examples, and the
     real vetted MCP tool catalog. Returns (prompt, fewshot_count) — the count
-    is surfaced as a status event by the streaming variant."""
+    is surfaced as a status event by the streaming variant.
+
+    `has_image` just controls whether the prompt text tells the model an
+    image is attached (`_build_user_content` below is what actually attaches
+    it) — treated like an extra keyword: something to let inform the
+    persona/system_prompt/tools, not merely acknowledge."""
     fewshot_entries = bootstrap_memory.retrieve_similar(purpose, provider, is_worker, agent_type=agent_type)
     mcp_catalog = mcp_client.catalog_summary()
     _has_web_search_mcp = any(c["server_id"] == "search" for c in mcp_catalog)
@@ -598,8 +623,16 @@ def _build_prompt(
             "internet-search tool — there is no search engine available; agents must "
             f"use `fetch_page` with direct URLs{jobsearch_pronoun_suffix}\n"
         )
+    image_note = (
+        "\nAn image was also attached alongside this purpose (sent as a "
+        "separate image part on this same message, not shown here as text) — "
+        "look at it and let what it actually shows inform the persona, "
+        "system_prompt, and tools you design, the same way a keyword would, "
+        "rather than only acknowledging that an image exists.\n"
+    ) if has_image else ""
     prompt = _BOOTSTRAP_PROMPT.format(
         purpose=purpose,
+        image_note=image_note,
         fewshot=_format_fewshot(fewshot_entries),
         mcp_catalog=_format_mcp_catalog(mcp_catalog),
         primitives_block=primitives_block,
@@ -611,17 +644,22 @@ def _build_prompt(
 
 def generate_agent_config(
     purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False,
-    agent_type: str | None = None,
+    agent_type: str | None = None, image: str | None = None,
 ) -> tuple[dict, int]:
     """Returns (config, fewshot_count) — the count is how many past similar
     bootstraps grounded this one (0 if none), surfaced by callers that want
-    to show whether RAG grounding was used (e.g. orchestrator.run_worker)."""
-    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type)
+    to show whether RAG grounding was used (e.g. orchestrator.run_worker).
+
+    `image` (a base64 data URL, same shape as a chat turn's attachment) lets
+    the purpose be illustrated rather than typed out in full — see
+    _build_user_content."""
+    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type, has_image=bool(image))
+    user_content = _build_user_content(prompt, image, provider)
     response = create_chat_completion(
         provider=provider,
         model=model,
         max_tokens=16000,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[{"role": "user", "content": user_content}],
     )
     text = _extract_text(response)
     config, error = _try_parse(text)
@@ -641,7 +679,7 @@ def generate_agent_config(
             model=model,
             max_tokens=16000,
             messages=[
-                {"role": "user", "content": prompt},
+                {"role": "user", "content": user_content},
                 {"role": "assistant", "content": text},
                 {"role": "user", "content": _json_correction_message(error)},
             ],
@@ -745,7 +783,7 @@ def _model_event(meta: dict) -> dict:
 
 def generate_agent_config_stream(
     purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False,
-    agent_type: str | None = None,
+    agent_type: str | None = None, image: str | None = None,
 ):
     """
     Streaming counterpart to generate_agent_config, used only by server.py's
@@ -757,6 +795,9 @@ def generate_agent_config_stream(
     has *something* real to show instead of a static "~10 seconds" message.
     Matters most for local Ollama models, which can take far longer than that.
 
+    `image` — see generate_agent_config's docstring; same base64 data URL
+    shape, same _build_user_content handling.
+
     Event shapes:
       {"type": "status", "message": "..."}
       {"type": "tool",   "name": "..."}
@@ -765,7 +806,8 @@ def generate_agent_config_stream(
     """
     yield {"type": "status", "message": "Thinking about your purpose…"}
 
-    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type)
+    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type, has_image=bool(image))
+    user_content = _build_user_content(prompt, image, provider)
     if fewshot_count:
         yield {"type": "status", "message": f"Found {fewshot_count} similar past agent(s) — reusing what worked…"}
 
@@ -783,7 +825,7 @@ def generate_agent_config_stream(
             max_tokens=16000,
             stream=True,
             _meta=meta,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": user_content}],
         )
         yield _model_event(meta)
         for chunk in stream:
@@ -841,7 +883,7 @@ def generate_agent_config_stream(
                 max_tokens=16000,
                 _meta=correction_meta,
                 messages=[
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": user_content},
                     {"role": "assistant", "content": text},
                     {"role": "user", "content": _json_correction_message(error)},
                 ],

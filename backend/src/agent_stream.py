@@ -225,18 +225,31 @@ def _extract_narrated_delegations(text: str) -> list[dict]:
 # Optional leading "!" also matches markdown IMAGE syntax (![alt](url)) —
 # deliberate, not an oversight: rule 3b's ban on fabricated image URLs is
 # enforced by this exact same verified-URL mechanism, not a separate check.
-_MD_LINK_RE = re.compile(r"(!)?\[([^\]]*)\]\((https?://[^\s)]+)\)")
+#
+# `data:` URIs are also matched here, not just http(s) — generate_image's
+# Hugging Face path (and sometimes its Gemini path) returns a base64
+# `data:image/...;base64,...` URI rather than a hosted URL, and that shape
+# used to fall entirely outside this regex (it only matched http(s)), so a
+# fabricated/garbled data URI the model wrote from scratch sailed straight
+# through to the browser as a broken image instead of being demoted like a
+# fabricated http(s) link already was. See _url_is_verified for how a data
+# URI is checked (exact string match, not scheme/host/path — it has no host).
+_MD_LINK_RE = re.compile(r"(!)?\[([^\]]*)\]\(((?:https?://|data:)[^\s)]+)\)")
 _URL_IN_TEXT_RE = re.compile(r"https?://[^\s\"'\\]+")
+_DATA_URI_IN_TEXT_RE = re.compile(r"data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+")
 
 
 def _collect_verified_urls(tool_calls_log: list[dict], history: list) -> list[str]:
     urls: list[str] = []
     for entry in tool_calls_log:
-        urls.extend(_URL_IN_TEXT_RE.findall(entry.get("result") or ""))
+        result = entry.get("result") or ""
+        urls.extend(_URL_IN_TEXT_RE.findall(result))
+        urls.extend(_DATA_URI_IN_TEXT_RE.findall(result))
     for m in history:
         content = m.get("content")
         if isinstance(content, str):
             urls.extend(_URL_IN_TEXT_RE.findall(content))
+            urls.extend(_DATA_URI_IN_TEXT_RE.findall(content))
     return urls
 
 
@@ -259,7 +272,16 @@ def _url_is_verified(url: str, verified_urls: list[str]) -> bool:
     # Strip trailing punctuation a model tacks onto a copied URL from its own
     # prose (a closing paren/period) before comparing — that shouldn't fail
     # an otherwise-real link.
-    #
+    candidate_raw = url.rstrip(".,;:)")
+
+    # A data: URI has no scheme/host/path to decompose (urlsplit gives it an
+    # empty netloc, which _url_key already treats as invalid) — it's either
+    # the exact base64 payload a generate_image/search_image call returned
+    # this turn, or it's fabricated. No partial-match case is worth
+    # tolerating here the way trailing-slash/query differences are below.
+    if candidate_raw.startswith("data:"):
+        return candidate_raw in verified_urls
+
     # Exact scheme+host+path match only (query/fragment ignored — see
     # _url_key). A prior version accepted a plain substring match in EITHER
     # direction, meant to tolerate the query-string/trailing-slash case
@@ -270,7 +292,7 @@ def _url_is_verified(url: str, verified_urls: list[str]) -> bool:
     # 404s when clicked" shape reported live. Comparing structured
     # scheme/host/path instead of raw substrings keeps the trailing-slash/
     # query tolerance while closing that gap.
-    candidate = _url_key(url.rstrip(".,;:)"))
+    candidate = _url_key(candidate_raw)
     if candidate is None:
         return False
     return any(candidate == _url_key(real) for real in verified_urls)
@@ -766,9 +788,14 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
     _location = (agent_config.get("location") or "").strip()
     _location_note = (
         f"\n\nUser location: {_location}. Assume this location for anything "
-        "location-dependent (local context, \"near me\"/\"nearby\" phrasing, "
-        "search_jobs' `where`, weather or time-of-day framing) without asking "
-        "the user to repeat it.\n"
+        "genuinely location-dependent (local context, \"near me\"/\"nearby\" "
+        "phrasing, search_jobs' `where`, weather or time-of-day framing) "
+        "without asking the user to repeat it. Do NOT work this location into "
+        "a `generate_image`/`search_image` prompt or any other creative, "
+        "generative, or general-knowledge request unless the user explicitly "
+        f"asked for that location in it — e.g. a request for \"clown images\" "
+        f"stays a plain clown image, not \"a clown in {_location}\", "
+        "regardless of this note.\n"
     ) if _location else ""
 
     system_prompt = agent_config["system_prompt"] + _location_note + f"""
@@ -985,9 +1012,9 @@ an actual attempt genuinely came up empty.
             # the image rather than send a content shape it can't handle, but
             # say so, so the agent doesn't just silently ignore the attachment.
             note = (
-                "[The user attached a diagram image, but this agent is running "
+                "[The user attached an image, but this agent is running "
                 "on a local Ollama model, which can't see images. Ask them to "
-                "describe the diagram in words, or switch the agent to the "
+                "describe what's in the image in words, or switch the agent to the "
                 "Gemini provider to analyze it directly.]"
             )
             content = f"{m['content']}\n\n{note}" if m["content"] else note
@@ -995,12 +1022,13 @@ an actual attempt genuinely came up empty.
             continue
         # OpenAI-compatible multimodal content (Gemini's endpoint accepts this
         # transparently — see llm_client.py) — one text block plus one image
-        # block. A default critique prompt covers the case where the user
-        # attached an image with no message of their own.
+        # block. A default prompt covers the case where the user attached an
+        # image with no message of their own.
         text = m["content"] or (
-            "Critique this diagram's structure — dead-end branches, redundant "
-            "boxes, unclear or missing labels, unnecessary complexity — then "
-            "offer to rebuild it as a cleaner mermaid diagram."
+            "Describe what's in this image, then help with whatever it's "
+            "for — e.g. if it's a diagram, offer to rebuild it as a cleaner "
+            "mermaid diagram; if it's something else, ask what the user "
+            "wants done with it."
         )
         current_messages.append({
             "role": m["role"],

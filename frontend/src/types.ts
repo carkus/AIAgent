@@ -88,9 +88,9 @@ export interface ToolCall {
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
-  // Base64 data URL of a user-attached diagram image, sent alongside content
+  // Base64 data URL of a user-attached image, sent alongside content
   // for the backend to fold into a multimodal request (agent_stream.py).
-  // Optional/undefined on every message that isn't a diagram upload.
+  // Optional/undefined on every message that isn't an image upload.
   image?: string;
 }
 
@@ -203,7 +203,7 @@ export interface SavedChatMessage {
   // setup purpose). Undefined on every ordinary typed message.
   displayContent?: string;
   // Same base64 data URL as Message.image — undefined on every saved chat
-  // predating the diagram-upload feature, or on any turn with no attachment.
+  // predating the image-upload feature, or on any turn with no attachment.
   image?: string;
   toolCalls?: ToolCall[];
   planDiagram?: string;

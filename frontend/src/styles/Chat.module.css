@@ -1251,7 +1251,7 @@
   border-color: #b91c1c;
 }
 
-/* A user-uploaded diagram, rendered inside the user bubble above any text —
+/* A user-uploaded image, rendered inside the user bubble above any text —
    click enlarges via the shared ImageViewer overlay. */
 .messageImageBtn {
   display: block;

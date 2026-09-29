@@ -208,7 +208,7 @@ interface ChatMessage {
   // agent's own original setup purpose instead of that boilerplate.
   // Undefined on every ordinary typed message, where content IS the display.
   displayContent?: string
-  // Base64 data URL of a diagram image attached to this turn (composer's
+  // Base64 data URL of an image attached to this turn (composer's
   // paperclip button). Undefined on every message that isn't an upload.
   image?: string
   toolCalls?: ToolCall[]
@@ -323,7 +323,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // check the length of.
   const autoSentRef = useRef(Boolean(chatId))
   const abortRef = useRef<AbortController | null>(null)
-  // Composer's attached-diagram state. `attachingImage` covers the brief
+  // Composer's attached-image state. `attachingImage` covers the brief
   // window while FileReader is still converting the picked file to a data
   // URL — the attachment chip shows the imagePlaceholder glyph then, so the
   // slot never reads as empty/broken before the real image is filled in.
@@ -990,9 +990,9 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                 type="button"
                 className={styles.messageImageBtn}
                 onClick={() => setViewerImage(msg.image!)}
-                aria-label="Enlarge attached diagram"
+                aria-label="Enlarge attached image"
               >
-                <img src={msg.image} alt="Attached diagram" className={styles.messageImage} />
+                <img src={msg.image} alt="Attached image" className={styles.messageImage} />
               </button>
             )}
             {msg.planDiagram && (
@@ -1161,8 +1161,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             </span>
           ) : (
             <>
-              <img src={attachedImage!} alt="Attached diagram" className={styles.attachmentThumb} />
-              <span>Diagram attached — the agent will critique it on send</span>
+              <img src={attachedImage!} alt="Attached image" className={styles.attachmentThumb} />
+              <span>Image attached — the agent will look at it when you send</span>
               <button type="button" className={styles.attachmentRemove} onClick={clearAttachedImage} aria-label="Remove attached image">
                 ✕
               </button>
@@ -1191,8 +1191,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           className={styles.attachBtn}
           onClick={handleAttachClick}
           disabled={thinking || attachingImage}
-          title="Attach a diagram image for the agent to critique"
-          aria-label="Attach a diagram image"
+          title="Attach an image for the agent to look at"
+          aria-label="Attach an image"
         >
           <ToolbarIcon name="attach" />
         </button>

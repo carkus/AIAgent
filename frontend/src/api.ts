@@ -15,6 +15,7 @@ export async function bootstrap(
   onProgress?: (event: BootstrapStreamEvent) => void,
   agentType?: AgentTemplateId,
   signal?: AbortSignal,
+  image?: string | null,
 ): Promise<AgentConfig> {
   const res = await fetch(`${API_URL}/bootstrap`, {
     method: 'POST',
@@ -24,6 +25,7 @@ export async function bootstrap(
       provider: provider ?? undefined,
       ollama_model: ollamaModel ?? undefined,
       agentType: agentType ?? undefined,
+      image: image ?? undefined,
     }),
     signal,
   });

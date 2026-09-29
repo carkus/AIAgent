@@ -95,7 +95,7 @@ expecting it to reach production.
 
 ## Model and API Defaults
 
-- Provider cascade (`llm_client.py`): **Gemini** (`gemini-3.6-flash`) → **Ollama** (`qwen2.5` default, local-only). Production is Gemini-only — no Ollama on the droplet for this app (see Deployment).
+- Provider cascade (`llm_client.py`): **Gemini** (`gemini-3.6-flash`) → **Ollama** (`qwen2.5` default, local-only). Production is Gemini-only for this chat/bootstrap cascade specifically — no Ollama on the droplet for this app (see Deployment). This does **not** apply to image generation, which has its own separate Gemini(optional)→Hugging Face cascade in `tools.py` — see that file and Deployment's `HF_API_TOKEN` note.
 - Per-agent `provider`/`ollama_model` choice made once on the Setup screen threads through both bootstrap and every agent-loop turn (`LlmProvider` in `types.ts`)
 - Bootstrap call uses a single user message; agent loop maintains full message history
 - Tool content blocks are passed back as `tool_result` in the next user turn
@@ -497,7 +497,7 @@ and rationale: [`DEPLOY.md`](./DEPLOY.md).
 - Backend runs as `gunicorn server:app` under the `aiagent` systemd unit (`deploy/aiagent.service`), single worker process + 4 threads (rate-limit counters are process-local — don't raise `--workers`)
 - The MCP server (`backend/mcp_server.py`) runs as a **separate** `uvicorn mcp_server:app` process under its own `aiagent-mcp` systemd unit (`deploy/aiagent-mcp.service`), port `8788` — a structurally distinct ASGI process from gunicorn's WSGI one, not another route on it (see Backend Patterns' "AIAgent as an MCP server")
 - nginx (`deploy/nginx-aiagent.conf`) serves the built frontend and reverse-proxies `/bootstrap`, `/agent`, `/models`, `/file/`, `/agents` to gunicorn on `127.0.0.1:8787`, and `/mcp` to uvicorn on `127.0.0.1:8788`; one shared HTTP Basic Auth login gates the whole app (frontend + both APIs)
-- Production is **Gemini-only** — the droplet's existing Ollama instance is sized for a different app's tiny fallback model and can't fit this app's bootstrap-quality model
+- Production is **Gemini-only for chat/bootstrap** — the droplet's existing Ollama instance is sized for a different app's tiny fallback model and can't fit this app's bootstrap-quality model. Image generation is unaffected: `HF_API_TOKEN` in the same `.env` gives it a free, non-Gemini fallback (see `DEPLOY.md`), so Gemini isn't required for that feature to work in prod.
 - Secrets live in `/var/www/aiagent/.env` (`EnvironmentFile=`, mode 600), not inline in the unit file
 
 Ship a code change with:
