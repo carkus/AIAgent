@@ -34,6 +34,10 @@ GEMINI_MODEL = "gemini-3.6-flash"
 # bootstrap-grounding RAG (CLAUDE.md priority 5). Kept as a separate constant
 # from GEMINI_MODEL since it's a different model family (embedding, not chat).
 GEMINI_EMBED_MODEL = "gemini-embedding-2-preview"
+# Also served from the OpenAI-compat surface via chat.completions.create(...,
+# modalities=["text", "image"]) — used by tools.py's generate_image primitive.
+# Image generation is Gemini-only; there is no Ollama equivalent to cascade to.
+GEMINI_IMAGE_MODEL = "gemini-3.6-flash-image"
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:7b")
 # Ollama's own runtime default (4096, confirmed live via /api/ps) is easily

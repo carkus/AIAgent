@@ -5,9 +5,11 @@ import { fetchFile } from '../api'
 import type { ToolCall } from '../types'
 import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate as formatDateShared, getDateFormat } from '../dateFormat'
+import { extractMermaidDiagrams } from '../mermaidExtract'
 import styles from '../styles/ToolActivity.module.css'
 import CopyButton from './CopyButton'
 import JsonTree from './JsonTree'
+import MermaidDiagram from './MermaidDiagram'
 
 interface Props {
   toolCalls: ToolCall[]
@@ -421,6 +423,12 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
   const toolsUsed = (data.tools_used as string[] | undefined) ?? []
   const toolSources = (data.tool_sources as string[] | undefined) ?? []
   const fewshotCount = (data.fewshot_count as number | undefined) ?? 0
+  // A worker gets the same "prefer a diagram" system-prompt rules as the
+  // main agent (CLAUDE.md's output-style addendum), but until now its
+  // response rendered through plain ReactMarkdown with no fence-extraction
+  // step — a ```mermaid fence just showed as raw code text instead of an
+  // actual diagram, unlike the main agent's own reply in Chat.tsx.
+  const { text: responseText, diagrams } = response ? extractMermaidDiagrams(response) : { text: '', diagrams: [] }
 
   return (
     <div className={styles.workerCard}>
@@ -442,12 +450,19 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
         )}
       </button>
       {task && <p className={styles.workerTask}>Prompted: {task}</p>}
-      {!open && response && (
-        <p className={styles.workerSummary}>{summarizeText(response)}</p>
+      {!open && responseText && (
+        <p className={styles.workerSummary}>{summarizeText(responseText)}</p>
       )}
       {open && (
         <>
-          {response && (
+          {diagrams.length > 0 && (
+            <div className={styles.extractedDiagrams}>
+              {diagrams.map((chart, di) => (
+                <MermaidDiagram key={di} chart={chart} />
+              ))}
+            </div>
+          )}
+          {responseText && (
             <div className={styles.workerResponse}>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -465,7 +480,7 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
                   },
                 }}
               >
-                {normalizeInlineOrderedLists(response)}
+                {normalizeInlineOrderedLists(responseText)}
               </ReactMarkdown>
             </div>
           )}

@@ -218,6 +218,28 @@ def check_chat_response(
         provider=provider, model=model, agent_id=agent_id,
     ))
 
+    # agent_stream.py's own `_is_raw_json_dump` (same "whole reply parses as
+    # JSON" test) already retries this up to twice before the reply reaches
+    # here — this records whether a raw tool-output dump (confirmed live: a
+    # Tavily search result shown to the user verbatim) still slipped through
+    # after retries were exhausted, so it's visible in the self-check history
+    # rather than silently accepted as a normal reply.
+    stripped_text = final_text.strip() if final_text else ""
+    raw_dump = False
+    if stripped_text and stripped_text[0] in "{[":
+        try:
+            raw_dump = isinstance(json.loads(stripped_text), (dict, list))
+        except json.JSONDecodeError:
+            raw_dump = False
+    if non_empty:
+        results.append(_result(
+            "raw_output_not_pasted", "chat_response", None, not raw_dump,
+            "reply is not a raw tool-output dump" if not raw_dump
+            else "reply is entirely raw JSON — looks like an unprocessed tool result, not a written answer",
+            "deterministic", severity="info" if not raw_dump else "warning",
+            provider=provider, model=model, agent_id=agent_id,
+        ))
+
     if non_empty:
         tool_names = ", ".join(sorted({tc.get("tool", "?") for tc in tool_calls_log})) or "none"
         verdict = _judge(

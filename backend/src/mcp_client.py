@@ -146,6 +146,20 @@ def _unpack_result(result) -> object:
     return parts
 
 
+def _describe_exception(e: BaseException) -> str:
+    """anyio's TaskGroup (used by both transports' async context managers)
+    wraps whatever actually failed in an ExceptionGroup, so a bare str(e) on
+    the outer exception is just the uninformative "unhandled errors in a
+    TaskGroup (1 sub-exception)" — the real cause (a connection reset, a 401
+    from Tavily, a DNS failure) is one level down in `.exceptions` and was
+    previously discarded entirely. Recurses since a TaskGroup can itself
+    raise a TaskGroup (nested cancel scopes)."""
+    if isinstance(e, BaseExceptionGroup):
+        inner = [_describe_exception(sub) for sub in e.exceptions]
+        return "; ".join(inner) if inner else str(e)
+    return f"{type(e).__name__}: {e}"
+
+
 def list_tools(server_id: str) -> list[dict]:
     """Real tool schemas from a running vetted server — cached after first
     success. Returns [] if the server isn't installed/reachable, logged but
@@ -159,7 +173,10 @@ def list_tools(server_id: str) -> list[dict]:
         _catalog_cache[server_id] = tools
         return tools
     except Exception as e:
-        logger.warning("MCP server '%s' unavailable, omitting from catalog: %s", server_id, e)
+        logger.warning(
+            "MCP server '%s' unavailable, omitting from catalog: %s",
+            server_id, _describe_exception(e), exc_info=True,
+        )
         return []
 
 
@@ -178,4 +195,8 @@ def call_tool(server_id: str, tool_name: str, inputs: dict) -> dict:
     try:
         return _run(_call_tool_async(server_id, tool_name, inputs))
     except Exception as e:
-        return {"error": f"MCP call to {server_id}.{tool_name} failed: {e}"}
+        description = _describe_exception(e)
+        logger.warning(
+            "MCP call to %s.%s failed: %s", server_id, tool_name, description, exc_info=True,
+        )
+        return {"error": f"MCP call to {server_id}.{tool_name} failed: {description}"}

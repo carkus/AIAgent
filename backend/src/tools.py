@@ -1,6 +1,11 @@
+import logging
 import os
 import traceback
 import builtins
+
+import llm_client
+
+logger = logging.getLogger(__name__)
 
 # Generated tool implementations get the raw `requests` module (see
 # execute_tool below) and the bootstrap prompt doesn't mandate a timeout on
@@ -268,6 +273,44 @@ def search_image(query: str) -> dict:
             "attribution": "Wikipedia",
         }
     except Exception as exc:
+        return {"error": str(exc)}
+
+
+def generate_image(prompt: str) -> dict:
+    """
+    Built-in primitive: create a brand-new image from a text description via
+    Gemini's image-generation model — the complement to search_image, which
+    finds a real *existing* photo rather than creating one. Gemini-only, no
+    Ollama fallback (image generation has no local equivalent in this
+    project's cascade), so this fails outright rather than silently
+    degrading if GEMINI_API_KEY isn't set.
+
+    Reuses the same OpenAI-compatible client llm_client.py already uses for
+    chat and embeddings (llm_client._gemini_client) rather than adding a
+    separate SDK dependency — Gemini's OpenAI-compat surface supports image
+    output on chat.completions.create via modalities=["text", "image"].
+
+    Returns {"image_url": <data: URI>, "prompt": prompt} on success —
+    embeddable directly in markdown with no file-storage step — or
+    {"error": ...} (never raises) on failure.
+    """
+    if not os.environ.get("GEMINI_API_KEY"):
+        return {"error": "Image generation requires GEMINI_API_KEY, which is not configured."}
+
+    try:
+        response = llm_client._gemini_client.chat.completions.create(
+            model=llm_client.GEMINI_IMAGE_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            modalities=["text", "image"],
+            timeout=llm_client.GEMINI_TIMEOUT_SECONDS,
+        )
+        images = getattr(response.choices[0].message, "images", None) or []
+        if not images:
+            return {"error": "Gemini did not return an image for this prompt."}
+        image_url = images[0]["image_url"]["url"]
+        return {"image_url": image_url, "prompt": prompt}
+    except Exception as exc:
+        logger.warning("generate_image failed: %s", exc)
         return {"error": str(exc)}
 
 

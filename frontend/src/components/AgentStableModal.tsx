@@ -35,6 +35,11 @@ export default function AgentStableModal({ isOpen, onClose, onHire }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [evalLogs, setEvalLogs] = useState<Record<string, EvalResultItem[]>>({})
   const [loadingLog, setLoadingLog] = useState<string | null>(null)
+  // Per-agent collapse state for the Self-checks list inside an expanded row —
+  // previously hardcoded to always-expanded (collapsed={false}, onToggleCollapse
+  // a no-op) so FeedbackStatusBar's own chevron looked clickable but did nothing.
+  // Defaults to expanded (matches the old always-shown behaviour) until toggled.
+  const [checksCollapsed, setChecksCollapsed] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (!isOpen) return
@@ -51,6 +56,7 @@ export default function AgentStableModal({ isOpen, onClose, onHire }: Props) {
     let cancelled = false
     setExpandedId(null)
     setEvalLogs({})
+    setChecksCollapsed({})
     listPublishedAgents().then(a => { if (!cancelled) setAgents(a) })
     return () => { cancelled = true }
   }, [isOpen])
@@ -176,8 +182,10 @@ export default function AgentStableModal({ isOpen, onClose, onHire }: Props) {
                         ) : (
                           <FeedbackStatusBar
                             results={evalLogs[agent.id]}
-                            collapsed={false}
-                            onToggleCollapse={() => {}}
+                            collapsed={checksCollapsed[agent.id] ?? false}
+                            onToggleCollapse={() =>
+                              setChecksCollapsed(prev => ({ ...prev, [agent.id]: !(prev[agent.id] ?? false) }))
+                            }
                           />
                         )}
                       </div>

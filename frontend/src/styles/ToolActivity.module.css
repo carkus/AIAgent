@@ -695,11 +695,18 @@
   margin: 0 0 0.5rem;
 }
 
+/* Wraps diagrams pulled out of a worker's reply text (extractMermaidDiagrams,
+   shared with Chat.module.css's own .extractedDiagrams for the main reply). */
+.extractedDiagrams {
+  display: flow-root;
+  margin-bottom: 0.75rem;
+}
+
 /* Same treatment as Chat.module.css's .researchImage — a worker's own
    search_image result should read the same way as the main agent's. */
 .researchImage {
   display: block;
-  max-width: 100%;
+  width: 100%;
   height: auto;
   border-radius: 8px;
   filter: grayscale(1);

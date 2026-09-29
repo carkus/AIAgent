@@ -16,29 +16,11 @@ import type { AgentConfig, EvalResultItem, SavedChat, SavedChatMessage, StreamEv
 import { describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
 import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate, getDateFormat } from '../dateFormat'
+import { extractMermaidDiagrams } from '../mermaidExtract'
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/splash_logo.png'
 
 type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'copyChat' | 'copiedChat' | 'newAgent' | 'attach' | 'imagePlaceholder' | 'send' | 'location' | 'clock'
-
-// Lenient on purpose (trailing whitespace after the fence marker, CRLF,
-// casing, trailing blank lines before the closing fence) — the earlier,
-// strict ```mermaid\n version silently failed to match real model output
-// whose fence didn't line up exactly, which left every diagram unrendered
-// instead of just falling back to a plain code block.
-const MERMAID_FENCE_RE = /```mermaid[ \t]*\r?\n([\s\S]*?)\r?\n?```/gi
-
-// Pulls every ```mermaid fence out of an assistant reply's prose so it can be
-// rendered as its own dedicated block (same treatment planDiagram already
-// gets) instead of sitting inline mid-paragraph inside the flowing markdown.
-function extractMermaidDiagrams(content: string): { text: string; diagrams: string[] } {
-  const diagrams: string[] = []
-  const text = content.replace(MERMAID_FENCE_RE, (_match, chart: string) => {
-    diagrams.push(chart.trim())
-    return ''
-  })
-  return { text, diagrams }
-}
 
 // Safety net for agent_stream.py's rule 4b ("never paste raw tool output into
 // your reply") in case a model ignores it anyway — a whole paragraph that's
@@ -939,17 +921,6 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         )}
         {messages.map((msg, i) => (
           <div key={i} className={msg.role === 'user' ? styles.userBubble : styles.assistantBubble}>
-            {!(thinking && i === messages.length - 1) && (
-              <button
-                type="button"
-                className={styles.messageDelete}
-                onClick={() => setMessages(prev => prev.filter((_, mi) => mi !== i))}
-                aria-label="Remove this message from the chat"
-                title="Remove from chat"
-              >
-                ✕
-              </button>
-            )}
             {msg.image && (
               <button
                 type="button"

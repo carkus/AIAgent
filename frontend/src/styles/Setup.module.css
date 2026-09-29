@@ -1700,8 +1700,8 @@
 .savedDelete {
   /* Same circular chrome as .savedKeywordDelete/.chipX, keeping the danger
      red text instead of their teal since this one deletes for good. Hover
-     shifts border/text color only (no background fill), matching
-     Chat.module.css's .messageDelete convention. */
+     shifts border/text color only (no background fill), matching the rest
+     of this app's circular close/remove-button convention. */
   display: inline-flex;
   align-items: center;
   justify-content: center;

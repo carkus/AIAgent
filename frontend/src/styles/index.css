@@ -23,6 +23,16 @@
   --color-accent-hover: #164a4e;
   --color-accent-secondary: #3f7ea0;
 
+  /* The app's "menu" accent — the darker, navy-leaning steel-blue used as a
+     solid fill by the toolbar's one primary-action button (New agent/Send)
+     in Chat.module.css. The user's own chat bubble background is bound to
+     this same token (not just a matching hex) so the two update together. */
+  --color-menu-bg: #356b8b;
+  --color-menu-bg-hover: #2c5975;
+  --color-menu-bg-active: #234a61;
+  --color-menu-bg-tint: rgba(53, 107, 139, 0.1);
+  --color-menu-bg-tint-strong: rgba(53, 107, 139, 0.16);
+
   /* Site-wide type scale — five sizes, full stop. Every component's
      font-size should read one of these instead of a one-off literal;
      that's what let ~40 slightly-different rem values (each picked

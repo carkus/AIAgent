@@ -7,7 +7,7 @@ import time
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 from llm_client import create_chat_completion, OLLAMA_NUM_CTX
-from tools import execute_tool, fetch_page, search_jobs, search_image
+from tools import execute_tool, fetch_page, search_jobs, search_image, generate_image
 import eval_checks
 import eval_log
 import mcp_client
@@ -89,6 +89,28 @@ _DEGENERATE_REPLIES = {
 
 def _is_degenerate_reply(text: str) -> bool:
     return text.strip().strip("\"'").lower() in _DEGENERATE_REPLIES
+
+
+def _is_raw_json_dump(text: str) -> bool:
+    """Rule 4b in the system prompt tells the model never to paste a tool's
+    raw output as its reply, but that's prompt-following only — confirmed
+    live against Tavily's search MCP tool (`{"query": ..., "results": [...],
+    "raw_content": ..., ...}`) coming back verbatim as a weaker local model's
+    entire final answer. The existing short-reply nudge below doesn't catch
+    this: a real search result is easily >400 chars, so it looks "long
+    enough" by that check alone. Detects the case where the ENTIRE reply
+    parses as JSON with nothing else around it — genuine prose that merely
+    mentions or includes a short JSON example fails this (a real sentence
+    around it breaks whole-string parsing), so this only fires on an
+    unprocessed dump, not a legitimate answer that happens to show a snippet."""
+    stripped = text.strip()
+    if not stripped or stripped[0] not in "{[":
+        return False
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(parsed, (dict, list))
 
 
 # Confirmed against a real turn (gemini-3.6-flash, no fence at all this
@@ -554,6 +576,27 @@ _PRIMITIVE_TOOLS = [
                 "required": ["query"],
             },
         },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_image",
+            "description": (
+                "Generate a brand-new image from a text description using Gemini's "
+                "image-generation model — for creating imagery that doesn't exist as a "
+                "real photo to find (use `search_image` for that instead). Use sparingly, "
+                "only when a generated image would genuinely help — your written analysis "
+                "is always the primary output, a generated image is supplementary polish "
+                "on top of it, never a substitute for discussing the finding in prose."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "A clear, concrete description of the image to generate."}
+                },
+                "required": ["prompt"],
+            },
+        },
     }
 ]
 
@@ -700,10 +743,29 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
     # its "mandatory output" was job titles/salaries/companies — priming it
     # to frame unrelated answers as job-search results. Gated the same way
     # rule 2 below already was.
-    _tool_list_desc = "fetch_page, search_jobs, search_image, delegate_to_worker" if is_job_search_agent else "fetch_page, search_image, delegate_to_worker"
+    _tool_list_desc = "fetch_page, search_jobs, search_image, generate_image, delegate_to_worker" if is_job_search_agent else "fetch_page, search_image, generate_image, delegate_to_worker"
     _findings_desc = "listing counts, job titles, salary ranges, company names" if is_job_search_agent else "key facts, figures, names, and comparisons"
 
-    system_prompt = agent_config["system_prompt"] + f"""
+    # Setup's location field (default "Melbourne, Australia", auto-detected via
+    # browser geolocation) is already baked into the bootstrap purpose text for
+    # a freshly-commissioned agent, but that's only a one-time hint buried in
+    # whatever wording the model chose for system_prompt — it doesn't survive
+    # as a fact the model can rely on later. This matters most for a *published*
+    # agent called over MCP (mcp_server.py's call_tool -> _run_once): the caller
+    # sends only a bare `message` string with zero location context of its own,
+    # so without this the agent has no way to know where the user is at all.
+    # Re-stating it explicitly, every turn, from agent_config itself (not the
+    # generated prose) means it's never lost regardless of how bootstrap worded
+    # the original purpose, and it's the same one field for live chat and MCP.
+    _location = (agent_config.get("location") or "").strip()
+    _location_note = (
+        f"\n\nUser location: {_location}. Assume this location for anything "
+        "location-dependent (local context, \"near me\"/\"nearby\" phrasing, "
+        "search_jobs' `where`, weather or time-of-day framing) without asking "
+        "the user to repeat it.\n"
+    ) if _location else ""
+
+    system_prompt = agent_config["system_prompt"] + _location_note + f"""
 
 ---
 CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
@@ -747,6 +809,16 @@ an actual attempt genuinely came up empty.
    `search_image` reflexively on every message; use it only when a visual
    would add real value to what you're already reporting.
 
+3c. `generate_image` CREATES a brand-new image — use it only when the user
+   wants something imagined/illustrated/designed that no real photo could
+   satisfy (a concept, a mockup, a scene that doesn't exist). For anything
+   that actually exists in the world (a place, a species, a real product),
+   use `search_image` instead — do not generate a picture of a real thing
+   when a real photo of it can be found. Same rules as `search_image`:
+   embed only the literal `image_url` a `generate_image` call actually
+   returned this turn, never fabricate one; on error, say so briefly and
+   move on; don't call it reflexively, only when it would genuinely help.
+
 4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — {_findings_desc}. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
 
 4b. NEVER paste a tool's raw output into your reply — no raw JSON, no API
@@ -787,6 +859,19 @@ an actual attempt genuinely came up empty.
    diagram silently doesn't render at all. Put the unit in the title or
    your discussion text instead (e.g. title `"Population (millions)"`
    with bare values `5.2`).
+
+5b. If the user directly asks you to turn, format, or visualize a JSON
+   response (their own pasted data, or a tool result from earlier this
+   conversation) AS A DIAGRAM, that is a direct request, not the optional
+   case in rule 5 above — you MUST produce a real ```mermaid fenced diagram,
+   not just describe the data in prose or explain how one could format it.
+   Read the actual JSON, pick the closest fit (`flowchart`/`graph` for
+   nested objects/relationships, `pie`/`xychart-beta` for a numeric
+   breakdown, `mindmap` for a grouped list of keys), and build it from the
+   real keys/values you were given — never a placeholder or generic example
+   structure. Still write a short line of prose alongside it (rule 5's "a
+   diagram is a bonus, never a replacement" applies to what ELSE you say,
+   not to skipping the diagram itself when one was explicitly asked for).
 
 6. BEFORE doing anything else this turn, if the task needs more than one step
    (multiple tool calls, delegated workers, or several distinct pieces of
@@ -1132,6 +1217,8 @@ an actual attempt genuinely came up empty.
                     })
                     continue
 
+                raw_json_dump = bool(tool_calls_log) and _is_raw_json_dump(final_text)
+
                 if (
                     nudge_retries < 2
                     and finish_reason == "stop"
@@ -1139,6 +1226,7 @@ an actual attempt genuinely came up empty.
                         (tool_calls_log and len(final_text.strip()) < 400)
                         or described_not_called
                         or outright_decline
+                        or raw_json_dump
                     )
                 ):
                     nudge_retries += 1
@@ -1157,6 +1245,11 @@ an actual attempt genuinely came up empty.
                             "of describing or narrating it in text. If no tool call is actually "
                             "needed, present your complete findings in full detail instead."
                         ) if described_not_called else (
+                            "You pasted a tool's raw JSON output as your entire reply instead of "
+                            "reading it and writing an actual answer. Do not include any curly "
+                            "braces or quoted field names — read the real values out of it and "
+                            "explain what they mean in your own plain-language sentences."
+                        ) if raw_json_dump else (
                             "Present your complete findings now in full detail. "
                             "Show the actual data, results, and analysis from your searches."
                         ),
@@ -1281,7 +1374,7 @@ an actual attempt genuinely came up empty.
 
                 tool_def = tool_def_map.get(tool_name)
                 source = "mcp" if tool_def and tool_def.get("source") == "mcp" else (
-                    "primitive" if tool_name in ("fetch_page", "search_jobs", "search_image", "delegate_to_worker") else "generated"
+                    "primitive" if tool_name in ("fetch_page", "search_jobs", "search_image", "generate_image", "delegate_to_worker") else "generated"
                 )
                 yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs, "source": source, "call_index": idx}
 
@@ -1337,6 +1430,8 @@ an actual attempt genuinely came up empty.
                     )
                 elif tool_name == "search_image":
                     result = search_image(tool_inputs.get("query", ""))
+                elif tool_name == "generate_image":
+                    result = generate_image(tool_inputs.get("prompt", ""))
                 elif tool_name in _SEARCH_TOOL_NAMES:
                     result = {
                         "error": (

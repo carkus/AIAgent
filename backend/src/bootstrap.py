@@ -1,3 +1,4 @@
+import ast
 import json
 import logging
 import re
@@ -51,7 +52,7 @@ Execution environment for tool implementations:
 - Tool inputs are available as: `inputs` (dict), `input_data` (alias for `inputs`), or directly by name (e.g. if the tool has a `keyword` param, you can write `keyword` directly)
 
 {primitives_block}
-IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write `search_jobs(...)`, `fetch_page(...)`, or `search_image(...)` inside an `implementation` string. The same rule applies to every tool name in the "Vetted MCP tools" list below (e.g. `tavily_search`) — those are NOT Python functions either, in any implementation string. There is also no local HTTP service that runs or proxies these tools for you — never write `requests.get(...)`/`requests.post(...)` against `127.0.0.1`, `localhost`, or any local port to "call" a primitive or vetted MCP tool; nothing listens there and the request will simply fail. If a tool needs a primitive's or a vetted MCP tool's capability, don't generate a Python implementation for it at all — add the primitive by name to the system_prompt's instructions, or add the MCP tool using the exact `"source": "mcp"` object shape shown below, never a generated `implementation` that calls it like a function or proxies to it over HTTP.
+IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write `search_jobs(...)`, `fetch_page(...)`, `search_image(...)`, or `generate_image(...)` inside an `implementation` string. The same rule applies to every tool name in the "Vetted MCP tools" list below (e.g. `tavily_search`) — those are NOT Python functions either, in any implementation string. There is also no local HTTP service that runs or proxies these tools for you — never write `requests.get(...)`/`requests.post(...)` against `127.0.0.1`, `localhost`, or any local port to "call" a primitive or vetted MCP tool; nothing listens there and the request will simply fail. If a tool needs a primitive's or a vetted MCP tool's capability, don't generate a Python implementation for it at all — add the primitive by name to the system_prompt's instructions, or add the MCP tool using the exact `"source": "mcp"` object shape shown below, never a generated `implementation` that calls it like a function or proxies to it over HTTP.
 
 Vetted MCP tools (real, independently-maintained servers — prefer these over writing your own implementation when one already covers the need):
 {mcp_catalog}
@@ -66,8 +67,10 @@ Rules:
 - Tool implementations must be self-contained Python snippets
 - Do NOT generate a fetch_url, fetch_page, scrape, or HTTP-request tool — use the built-in `fetch_page` primitive instead
 - Do NOT generate an image-search or fetch-image tool — use the built-in `search_image` primitive instead
+- Do NOT generate an image-generation or image-creation tool — use the built-in `generate_image` primitive instead
 {jobsearch_rule}{search_rule}
-- Always include a `save_output` tool that writes a final result using os.path.join(TEMP_DIR, filename); the tool must set result = {{"status": "saved", "filename": filename, "path": os.path.join(TEMP_DIR, filename)}}
+- Always include a `save_output` tool that writes a final result using os.path.join(TEMP_DIR, filename); the tool must set result = {{'status': 'saved', 'filename': filename, 'path': os.path.join(TEMP_DIR, filename)}}
+- Inside every `implementation` string, write Python string/dict literals with SINGLE quotes only (e.g. {{'status': 'saved'}}, not {{"status": "saved"}}). The `implementation` value itself is a double-quoted JSON string — an unescaped double quote inside your Python code ends that JSON string early and breaks the whole response. Single-quoting your Python avoids this entirely; it is not optional style, it is what keeps your own JSON valid.
 - The system_prompt you generate MUST instruct the agent that after all tool calls are done it must present the actual findings (listings, data, analysis) in its reply — not list tool names, not say "search complete"
 - Search/fetch tools MUST filter results for relevance: only include items where the search keyword appears in the title or description/snippet (case-insensitive). Discard unrelated results returned by the API.
 - Return ONLY valid JSON — no markdown fences, no explanation
@@ -127,6 +130,46 @@ def _try_parse(text: str) -> tuple[dict | None, json.JSONDecodeError | None]:
         return None, e
 
 
+# Substrings of json.JSONDecodeError.msg produced when a string value
+# contains a raw, unescaped `"` — the classic case is a generated
+# `implementation` embedding a Python dict/string literal in double quotes
+# (e.g. `result = {"status": "saved", ...}`) with no backslash-escaping, so
+# json.loads reads the string as ending at that inner quote and then trips
+# over whatever follows. A blind regex "repair" for this was tried and
+# rejected: it can't reliably tell a real closing quote from an embedded
+# `"key": "value"`-shaped fragment (both look identical to a local scan), so
+# a wrong guess could silently splice an unrelated field's content into
+# `implementation` with no compile-check to catch it (system_prompt isn't
+# Python). Steering the model's own correction retry to fix it properly is
+# safer than guessing at already-corrupted text.
+_QUOTE_COLLISION_ERRORS = (
+    "Expecting ',' delimiter",
+    "Expecting property name enclosed in double quotes",
+    "Unterminated string",
+)
+
+
+def _json_correction_message(error: json.JSONDecodeError) -> str:
+    base = (
+        "That was not valid JSON "
+        f"(error at char {error.pos}: {error.msg}). "
+        "Return ONLY the corrected, complete, valid JSON object — "
+        "no markdown fences, no explanation, no truncation."
+    )
+    if any(marker in error.msg for marker in _QUOTE_COLLISION_ERRORS):
+        base += (
+            " This error shape usually means a string value (most likely a tool's "
+            "`implementation`) contains a raw, unescaped double-quote character — "
+            "e.g. it wrote a Python dict/string literal with double quotes, like "
+            "{\"status\": \"saved\"}, inside a JSON string that is itself "
+            "double-quoted. Fix this by rewriting every Python string/dict literal "
+            "inside every `implementation` value using single quotes only (e.g. "
+            "{'status': 'saved'}), so no unescaped double quote remains anywhere "
+            "inside a JSON string value."
+        )
+    return base
+
+
 def _tool_syntax_errors(config: dict) -> list[tuple[str, SyntaxError]]:
     """Bootstrap only guarantees the config is valid JSON — the `implementation`
     field is just a string as far as JSON is concerned, so a model can hand
@@ -173,7 +216,19 @@ def _forbidden_call_errors(config: dict, forbidden_names: set[str]) -> list[tupl
     same "catch the bug at bootstrap time, not first live call" safety net
     _tool_syntax_errors provides for outright syntax errors, extended to
     this specific, deterministically-detectable mistake instead of trusting
-    the prompt alone."""
+    the prompt alone.
+
+    Also catches the attribute-qualified variant of the same mistake — live
+    traffic surfaced a generated implementation calling `tools.search_image(...)`,
+    imagining the primitive lives as a method on some pre-injected `tools`
+    module (presumably pattern-matching this project's own tools.py, visible
+    to the model via bootstrap-grounding few-shot examples). No module named
+    `tools` — or anything else — is injected into the exec() sandbox, so this
+    fails with `NameError: name 'tools' is not defined` at the same point a
+    bare `search_image(...)` call would fail with a NameError on the name
+    itself. The regex now matches the forbidden name whether called bare or
+    as `<anything>.name(...)`, since both resolve to the same "not a real
+    symbol in this sandbox" bug."""
     errors: list[tuple[str, _UndefinedCallError]] = []
     for tool in config.get("tools", []):
         if not isinstance(tool, dict) or tool.get("source") == "mcp":
@@ -182,11 +237,12 @@ def _forbidden_call_errors(config: dict, forbidden_names: set[str]) -> list[tupl
         if not isinstance(impl, str):
             continue
         for name in forbidden_names:
-            if re.search(rf'\b{re.escape(name)}\s*\(', impl):
+            if re.search(rf'(?:\b\w+\.)?\b{re.escape(name)}\s*\(', impl):
                 errors.append((
                     tool.get("name", "<unnamed>"),
                     _UndefinedCallError(
-                        f"implementation calls `{name}(...)` as if it were a Python "
+                        f"implementation calls `{name}(...)` (bare or as an attribute, "
+                        f"e.g. `tools.{name}(...)`) as if it were a pre-injected Python "
                         "function, but that name is a primitive/vetted-MCP tool, not "
                         "something defined inside a generated implementation string"
                     ),
@@ -225,6 +281,111 @@ def _local_endpoint_errors(config: dict) -> list[tuple[str, _UndefinedCallError]
                     "there is no local tool-invocation service for generated code to "
                     "call; call a real external API directly, or for a primitive/"
                     "vetted-MCP capability don't write an implementation at all"
+                ),
+            ))
+    return errors
+
+
+# Mirrors tools.py's execute_tool() namespace exactly — keep in sync with
+# that function if the sandbox's injected names or allowed builtins change.
+_SANDBOX_BUILTIN_NAMES = frozenset({
+    "print", "len", "range", "enumerate", "zip", "map", "filter",
+    "sorted", "reversed", "list", "dict", "set", "tuple", "str",
+    "int", "float", "bool", "type", "isinstance", "hasattr", "getattr",
+    "min", "max", "sum", "abs", "round", "repr", "format",
+    "any", "all", "next", "iter", "hash", "id",
+    "open", "__import__", "dir", "vars", "globals", "locals", "callable",
+    "Exception", "ValueError", "KeyError", "TypeError", "IOError",
+    "StopIteration", "RuntimeError", "IndexError", "AttributeError",
+})
+_SANDBOX_INJECTED_NAMES = frozenset({
+    "inputs", "input_data", "input", "requests", "json", "os", "re", "math",
+    "datetime", "collections", "urllib", "TEMP_DIR", "search_jobs",
+    "fetch_page", "result",
+})
+
+
+def _locally_bound_names(tree: ast.AST) -> set[str]:
+    """Every name the implementation defines for itself — via def/class,
+    import, assignment (including walrus/for/with/comprehension targets,
+    all of which the Python AST already represents as a Name in Store
+    context), function parameters, or an except-as/global/nonlocal clause.
+    Anything in this set is legitimately callable even though it isn't part
+    of the sandbox itself."""
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Import):
+            names.update((a.asname or a.name).split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            names.update(a.asname or a.name for a in node.names)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            names.add(node.id)
+        elif isinstance(node, ast.arg):
+            names.add(node.arg)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            names.update(node.names)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            names.add(node.name)
+    return names
+
+
+def _undefined_call_errors(
+    config: dict, already_flagged_names: "set[str] | frozenset[str]" = frozenset()
+) -> list[tuple[str, _UndefinedCallError]]:
+    """A generalization of _forbidden_call_errors: rather than checking
+    against a fixed, known list of primitive/MCP names, this statically
+    parses each implementation and flags ANY bare `name(...)` call where
+    `name` is neither something the sandbox actually injects
+    (_SANDBOX_INJECTED_NAMES/_SANDBOX_BUILTIN_NAMES), one of the tool's own
+    declared input properties, nor something the implementation defines for
+    itself (_locally_bound_names). Live traffic surfaced a model calling
+    `tas_search(...)` — not `search_jobs`, `fetch_page`, or any real vetted
+    MCP tool name, just an invented helper that was never defined anywhere —
+    which no fixed forbidden-name list could have anticipated. This is a
+    guaranteed NameError the moment tools.py execs it, exactly like the bugs
+    _forbidden_call_errors catches, so it feeds the same one-retry/then-drop
+    flow. `already_flagged_names` lets callers skip names
+    _forbidden_call_errors already reported with a more specific message,
+    so the same bug doesn't produce two overlapping error entries for one
+    tool."""
+    errors: list[tuple[str, _UndefinedCallError]] = []
+    for tool in config.get("tools", []):
+        if not isinstance(tool, dict) or tool.get("source") == "mcp":
+            continue
+        impl = tool.get("implementation")
+        if not isinstance(impl, str):
+            continue
+        try:
+            tree = ast.parse(impl)
+        except SyntaxError:
+            continue  # _tool_syntax_errors already reports this
+        schema = tool.get("input_schema")
+        props = schema.get("properties") if isinstance(schema, dict) else None
+        input_names = set(props.keys()) if isinstance(props, dict) else set()
+        known = (
+            _SANDBOX_BUILTIN_NAMES | _SANDBOX_INJECTED_NAMES | input_names
+            | already_flagged_names | _locally_bound_names(tree)
+        )
+        flagged: set[str] = set()
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+                continue
+            name = node.func.id
+            if name in known or name in flagged:
+                continue
+            flagged.add(name)
+            errors.append((
+                tool.get("name", "<unnamed>"),
+                _UndefinedCallError(
+                    f"implementation calls `{name}(...)`, but that name is never "
+                    "defined anywhere in the implementation (no def/import/"
+                    "assignment) and is not one of the values the sandbox actually "
+                    "provides (inputs, requests, json, os, re, math, datetime, "
+                    "collections, urllib, TEMP_DIR, search_jobs, fetch_page, or the "
+                    "tool's own declared input properties) — this is a guaranteed "
+                    "NameError the first time the tool runs"
                 ),
             ))
     return errors
@@ -353,9 +514,21 @@ def _build_prompt(
         "genuinely help) and to embed the real `image_url` it gets back as a markdown "
         "image, never to fabricate one.\n"
     )
+    _image_gen_primitive = (
+        "- `generate_image` — creates a brand-new image from a text description "
+        "using Gemini's image-generation model, for when no real photo exists to "
+        "find (use `search_image` for that instead). Takes `prompt` (string, a "
+        "clear description of the image to generate). Returns {image_url} on "
+        "success (a data: URI — embed it directly, no download/storage step "
+        "needed) or {error} on failure. An agent's own written analysis is "
+        "always the primary output; instruct the agent to call it sparingly "
+        "(only when generating a new image is genuinely the right way to help) "
+        "and to embed the real `image_url` it gets back as a markdown image, "
+        "never to fabricate one.\n"
+    )
     if agent_type == "job_search":
         primitives_block = (
-            "Three primitive tools are pre-built and always available to the agent — "
+            "Four primitive tools are pre-built and always available to the agent — "
             "do NOT include any of them in the tools array you generate:\n\n"
             "- `fetch_page` — takes a `url` (string), returns "
             "{status_code, url, content, char_count, truncated, listing_count} where "
@@ -368,7 +541,8 @@ def _build_prompt(
             "Returns {status_code, total_count, returned, mean_salary, listings: "
             "[{title, company, location, salary_min, salary_max, redirect_url, description, "
             "created, contract_type, category}]}.\n"
-            f"{_image_primitive}\n"
+            f"{_image_primitive}"
+            f"{_image_gen_primitive}\n"
             "Instruct the agent to call these directly rather than reinventing them."
         )
         jobsearch_rule = (
@@ -381,13 +555,14 @@ def _build_prompt(
         jobsearch_pronoun_suffix = " (or `search_jobs` for job data)"
     else:
         primitives_block = (
-            "Two primitive tools are pre-built and always available to the agent — "
-            "do NOT include either in the tools array you generate:\n\n"
+            "Three primitive tools are pre-built and always available to the agent — "
+            "do NOT include any of them in the tools array you generate:\n\n"
             "- `fetch_page` — takes a `url` (string), returns "
             "{status_code, url, content, char_count, truncated, listing_count} where "
             "`content` is clean text with all HTML, scripts, and SVG stripped. Use for "
             "company pages, news, or any general URL.\n"
-            f"{_image_primitive}\n"
+            f"{_image_primitive}"
+            f"{_image_gen_primitive}\n"
             "Instruct the agent to call these directly rather than reinventing them. This "
             "agent has no job-search tool — do not instruct it to search job listings or "
             "salary data; that capability is reserved for job-search agents only."
@@ -463,12 +638,7 @@ def generate_agent_config(
             messages=[
                 {"role": "user", "content": prompt},
                 {"role": "assistant", "content": text},
-                {"role": "user", "content": (
-                    "That was not valid JSON "
-                    f"(error at char {error.pos}: {error.msg}). "
-                    "Return ONLY the corrected, complete, valid JSON object — "
-                    "no markdown fences, no explanation, no truncation."
-                )},
+                {"role": "user", "content": _json_correction_message(error)},
             ],
         )
         text = _extract_text(correction_response)
@@ -496,10 +666,15 @@ def generate_agent_config(
     # and valid-but-doomed Python that instead POSTs/GETs a hallucinated
     # 127.0.0.1/localhost "tool service" (guaranteed connection-refused — see
     # _local_endpoint_errors).
-    forbidden_names = {"search_jobs", "fetch_page", "search_image"} | {
+    forbidden_names = {"search_jobs", "fetch_page", "search_image", "generate_image"} | {
         c["tool_name"] for c in mcp_client.catalog_summary()
     }
-    tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names) + _local_endpoint_errors(config)
+    tool_errors = (
+        _tool_syntax_errors(config)
+        + _forbidden_call_errors(config, forbidden_names)
+        + _undefined_call_errors(config, forbidden_names)
+        + _local_endpoint_errors(config)
+    )
     if tool_errors:
         correction_response = create_chat_completion(
             provider=provider,
@@ -520,7 +695,12 @@ def generate_agent_config(
         retried_config, retry_error = _try_parse(text)
         if retried_config is not None:
             config = retried_config
-            tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names) + _local_endpoint_errors(config)
+            tool_errors = (
+                _tool_syntax_errors(config)
+                + _forbidden_call_errors(config, forbidden_names)
+                + _undefined_call_errors(config, forbidden_names)
+                + _local_endpoint_errors(config)
+            )
 
     if tool_errors:
         broken = {name for name, _ in tool_errors}
@@ -658,12 +838,7 @@ def generate_agent_config_stream(
                 messages=[
                     {"role": "user", "content": prompt},
                     {"role": "assistant", "content": text},
-                    {"role": "user", "content": (
-                        "That was not valid JSON "
-                        f"(error at char {error.pos}: {error.msg}). "
-                        "Return ONLY the corrected, complete, valid JSON object — "
-                        "no markdown fences, no explanation, no truncation."
-                    )},
+                    {"role": "user", "content": _json_correction_message(error)},
                 ],
             )
             yield _model_event(correction_meta)
@@ -693,10 +868,15 @@ def generate_agent_config_stream(
     # vetted-MCP tool name as a bare function (valid Python, guaranteed
     # NameError at execution time), and _local_endpoint_errors for the same
     # bug via a hallucinated 127.0.0.1/localhost HTTP call instead.
-    forbidden_names = {"search_jobs", "fetch_page", "search_image"} | {
+    forbidden_names = {"search_jobs", "fetch_page", "search_image", "generate_image"} | {
         c["tool_name"] for c in mcp_client.catalog_summary()
     }
-    tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names) + _local_endpoint_errors(config)
+    tool_errors = (
+        _tool_syntax_errors(config)
+        + _forbidden_call_errors(config, forbidden_names)
+        + _undefined_call_errors(config, forbidden_names)
+        + _local_endpoint_errors(config)
+    )
     if tool_errors:
         yield {"type": "status", "message": "Fixing broken tool code…"}
         tool_fix_meta: dict = {}
@@ -722,7 +902,12 @@ def generate_agent_config_stream(
             retried_config, _ = _try_parse(text)
             if retried_config is not None:
                 config = retried_config
-                tool_errors = _tool_syntax_errors(config) + _forbidden_call_errors(config, forbidden_names) + _local_endpoint_errors(config)
+                tool_errors = (
+                    _tool_syntax_errors(config)
+                    + _forbidden_call_errors(config, forbidden_names)
+                    + _undefined_call_errors(config, forbidden_names)
+                    + _local_endpoint_errors(config)
+                )
         except Exception as e:
             yield _model_event(tool_fix_meta)
             yield {"type": "error", "message": f"Tool-code correction retry failed: {e}"}

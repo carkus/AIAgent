@@ -193,19 +193,25 @@
   background: transparent;
   border: none;
   border-radius: 50%;
-  color: #3f7ea0;
+  /* Darker than the app's usual #3f7ea0 secondary accent, blended toward
+     the splash logo's navy wordmark (#16324a) — this toolbar reads as the
+     app's primary menu of actions, so it carries more of that navy tone
+     than the lighter steel-blue used for badges/borders elsewhere. Sourced
+     from --color-menu-bg (index.css) so every menu-blue surface in the app,
+     including the user's own chat bubble below, stays bound to one value. */
+  color: var(--color-menu-bg);
   cursor: pointer;
   transition: background-color 0.12s, color 0.12s, opacity 0.12s, transform 0.12s;
 }
 
 .headerActions button:hover:not(:disabled) {
-  background: rgba(63, 126, 160, 0.1);
+  background: var(--color-menu-bg-tint);
   color: #05384b;
   transform: translateY(-1px);
 }
 
 .headerActions button:active:not(:disabled) {
-  background: rgba(63, 126, 160, 0.16);
+  background: var(--color-menu-bg-tint-strong);
   color: #05384b;
   transform: translateY(0);
 }
@@ -231,18 +237,18 @@
    one) so these actually win over the shared base/hover/active rules above
    instead of being silently shadowed by them. */
 .headerActions .resetBtn {
-  background: #3f7ea0;
+  background: var(--color-menu-bg);
   color: #ffffff;
 }
 
 .headerActions .resetBtn:hover:not(:disabled) {
-  background: #326a89;
+  background: var(--color-menu-bg-hover);
   color: #ffffff;
   transform: translateY(-1px);
 }
 
 .headerActions .resetBtn:active:not(:disabled) {
-  background: #285571;
+  background: var(--color-menu-bg-active);
   color: #ffffff;
   transform: translateY(0);
 }
@@ -471,7 +477,11 @@
 .userBubble {
   position: relative;
   align-self: flex-end;
-  background: linear-gradient(135deg, #1c3a52 0%, var(--color-text) 100%);
+  /* Bound to the same --color-menu-bg tokens as the toolbar's solid-fill
+     buttons (New agent/Send) above, rather than its own separately-hardcoded
+     navy — the user's own words and the app's primary action color are now
+     literally the same source of truth, so they move together. */
+  background: linear-gradient(135deg, var(--color-menu-bg) 0%, var(--color-menu-bg-active) 100%);
   border: 1px solid rgba(31, 111, 115, 0.3);
   border-radius: 999px 999px 6px 999px;
   max-width: 70%;
@@ -484,42 +494,6 @@
   align-self: flex-start;
   max-width: 100%;
   width: 100%;
-}
-
-/* Per-message remove button — tucked into the bubble's own top-right
-   corner and hidden until hover/focus so it doesn't clutter a normal read
-   of the conversation, same "reveal on hover" convention as .attachmentRemove
-   uses inline instead of an always-visible icon. */
-.messageDelete {
-  position: absolute;
-  top: -0.35rem;
-  right: -0.35rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.3rem;
-  height: 1.3rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  color: var(--color-muted);
-  cursor: pointer;
-  font-size: 0.7rem;
-  line-height: 1;
-  padding: 0;
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.userBubble:hover .messageDelete,
-.assistantBubble:hover .messageDelete,
-.messageDelete:focus-visible {
-  opacity: 1;
-}
-
-.messageDelete:hover {
-  color: #b91c1c;
-  border-color: #b91c1c;
 }
 
 .bubbleText {
@@ -974,7 +948,7 @@
    content competing with it. */
 .researchImage {
   display: block;
-  max-width: 100%;
+  width: 100%;
   height: auto;
   border-radius: 8px;
   filter: grayscale(1);
@@ -1253,7 +1227,7 @@
    fixed and shared with .recommissionBtn/.stopBtn/.killBtn so all four
    composer-row buttons line up regardless of their own padding/font. */
 .sendBtn {
-  background: #3f7ea0;
+  background: var(--color-menu-bg);
   border: none;
   border-radius: 999px;
   color: #ffffff;
@@ -1285,12 +1259,12 @@
 }
 
 .sendBtn:hover:not(:disabled) {
-  background: #326a89;
+  background: var(--color-menu-bg-hover);
   transform: translateY(-1px);
 }
 
 .sendBtn:active:not(:disabled) {
-  background: #285571;
+  background: var(--color-menu-bg-active);
   transform: translateY(0);
 }
 
