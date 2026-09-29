@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { createContext, useContext, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { fetchFile } from '../api'
@@ -8,8 +8,15 @@ import { formatDate as formatDateShared, getDateFormat } from '../dateFormat'
 import { extractMermaidDiagrams } from '../mermaidExtract'
 import styles from '../styles/ToolActivity.module.css'
 import CopyButton from './CopyButton'
+import ImageViewer from './ImageViewer'
 import JsonTree from './JsonTree'
 import MermaidDiagram from './MermaidDiagram'
+
+// Lets an image result row deep inside RawResult/WorkerResultCard open the
+// shared full-screen viewer without threading a callback prop through every
+// intermediate component (LiveToolRow, KeywordSection, WorkerResultCard,
+// RawResult). Provided once, near the top of ToolActivity's own render.
+const ImageViewerCtx = createContext<(src: string) => void>(() => {})
 
 interface Props {
   toolCalls: ToolCall[]
@@ -208,6 +215,51 @@ function extractSavedFile(raw: string): string | null {
   const obj = data as Record<string, unknown>
   if (obj.status === 'saved' && obj.filename) return obj.filename as string
   return null
+}
+
+interface ImageResult {
+  imageUrl: string
+  prompt?: string
+  provider?: string
+}
+
+// Matches generate_image/search_image's return shape (tools.py) — either a
+// real HTTP(S) URL or a base64 data: URI. This is the only place that knows
+// that shape; RawResult and WorkerResultCard both just call this and render
+// an ImageResultRow when it matches, instead of falling through to a plain
+// key-value pill list where the image itself was invisible.
+function extractImageResult(raw: string): ImageResult | null {
+  const data = parseResult(raw)
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return null
+  const obj = data as Record<string, unknown>
+  if (typeof obj.image_url !== 'string' || !obj.image_url) return null
+  return {
+    imageUrl: obj.image_url,
+    prompt: typeof obj.prompt === 'string' ? obj.prompt : undefined,
+    provider: typeof obj.provider === 'string' ? obj.provider : undefined,
+  }
+}
+
+function ImageResultRow({ image }: { image: ImageResult }) {
+  const openViewer = useContext(ImageViewerCtx)
+  return (
+    <div className={styles.imageResultRow}>
+      <button
+        type="button"
+        className={styles.imageThumbBtn}
+        onClick={() => openViewer(image.imageUrl)}
+      >
+        <img
+          src={image.imageUrl}
+          alt={image.prompt ?? 'Generated image'}
+          loading="lazy"
+          className={styles.imageThumb}
+        />
+        <span className={styles.imageViewBtn}>🔍 View image</span>
+      </button>
+      {image.prompt && <p className={styles.imageResultPrompt}>{image.prompt}</p>}
+    </div>
+  )
 }
 
 // ─── Live view: individual tool pills ─────────────────────────────────────────
@@ -422,7 +474,13 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
   const response = data.response as string
   const toolsUsed = (data.tools_used as string[] | undefined) ?? []
   const toolSources = (data.tool_sources as string[] | undefined) ?? []
+  const toolResults = (data.tool_results as string[] | undefined) ?? []
   const fewshotCount = (data.fewshot_count as number | undefined) ?? 0
+  // A worker's own tool activity isn't streamed live (see orchestrator.py's
+  // run_worker docstring), so an image a worker generated only becomes
+  // visible here, via the worker's own final tool_results — not via any
+  // live tool row the way the main agent's own generate_image call would be.
+  const images = toolResults.map(extractImageResult).filter((img): img is ImageResult => img !== null)
   // A worker gets the same "prefer a diagram" system-prompt rules as the
   // main agent (CLAUDE.md's output-style addendum), but until now its
   // response rendered through plain ReactMarkdown with no fence-extraction
@@ -482,6 +540,11 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
               >
                 {normalizeInlineOrderedLists(responseText)}
               </ReactMarkdown>
+            </div>
+          )}
+          {images.length > 0 && (
+            <div className={styles.workerImages}>
+              {images.map((img, i) => <ImageResultRow key={i} image={img} />)}
             </div>
           )}
           {toolsUsed.length > 0 && (
@@ -712,6 +775,10 @@ function RawResult({ result }: { result: string }) {
   // ── Delegated worker result (delegate_to_worker) ──────────────────────────
   if (isWorkerResult(obj)) return <WorkerResultCard data={obj} />
 
+  // ── generate_image / search_image result ──────────────────────────────────
+  const imageResult = extractImageResult(result)
+  if (imageResult) return <ImageResultRow image={imageResult} />
+
   // ── Search / web-results pattern ──────────────────────────────────────────
   if (Array.isArray(obj.results)) {
     const results = obj.results as Record<string, unknown>[]
@@ -923,36 +990,40 @@ function LiveToolRow({ tc, location }: { tc: ToolCall; location?: string }) {
 
 export default function ToolActivity({ toolCalls, live = false, location }: Props) {
   const [open, setOpen] = useState(true)
+  const [viewerSrc, setViewerSrc] = useState<string | null>(null)
 
   if (toolCalls.length === 0) return null
 
   if (live) {
     return (
-      <div className={styles.container}>
-        <button
-          type="button"
-          className={styles.headingBtn}
-          onClick={() => setOpen(o => !o)}
-          aria-expanded={open}
-        >
-          <span className={styles.headingArrow}>{open ? '▾' : '▸'}</span>
-          <span className={styles.heading}>
-            Running · {toolCalls.length} call{toolCalls.length !== 1 ? 's' : ''}
-            <span className={styles.liveDot} />
-          </span>
-        </button>
-        {open && (
-          <>
-            <AgentsEmployedSummary workers={extractWorkerSummaries(toolCalls)} />
-            {extractCompletedWorkers(toolCalls).map((data, i) => (
-              <WorkerResultCard key={i} data={data} />
-            ))}
-            {toolCalls.filter(tc => tc.tool !== 'delegate_to_worker').map((tc, i) => (
-              <LiveToolRow key={i} tc={tc} location={location} />
-            ))}
-          </>
-        )}
-      </div>
+      <ImageViewerCtx.Provider value={setViewerSrc}>
+        <div className={styles.container}>
+          <button
+            type="button"
+            className={styles.headingBtn}
+            onClick={() => setOpen(o => !o)}
+            aria-expanded={open}
+          >
+            <span className={styles.headingArrow}>{open ? '▾' : '▸'}</span>
+            <span className={styles.heading}>
+              Running · {toolCalls.length} call{toolCalls.length !== 1 ? 's' : ''}
+              <span className={styles.liveDot} />
+            </span>
+          </button>
+          {open && (
+            <>
+              <AgentsEmployedSummary workers={extractWorkerSummaries(toolCalls)} />
+              {extractCompletedWorkers(toolCalls).map((data, i) => (
+                <WorkerResultCard key={i} data={data} />
+              ))}
+              {toolCalls.filter(tc => tc.tool !== 'delegate_to_worker').map((tc, i) => (
+                <LiveToolRow key={i} tc={tc} location={location} />
+              ))}
+            </>
+          )}
+        </div>
+        {viewerSrc && <ImageViewer src={viewerSrc} onClose={() => setViewerSrc(null)} />}
+      </ImageViewerCtx.Provider>
     )
   }
 
@@ -981,39 +1052,42 @@ export default function ToolActivity({ toolCalls, live = false, location }: Prop
   const unsavedOther = other.filter(tc => !extractSavedFile(tc.result) && !isEmptyResult(tc.result) && !isErrorResult(tc.result) && !isBlockedResult(tc.result))
 
   return (
-    <div className={styles.container}>
-      <button
-        type="button"
-        className={styles.headingBtn}
-        onClick={() => setOpen(o => !o)}
-        aria-expanded={open}
-      >
-        <span className={styles.headingArrow}>{open ? '▾' : '▸'}</span>
-        <span className={styles.heading}>
-          Tool activity · {toolCalls.length} call{toolCalls.length !== 1 ? 's' : ''}
-        </span>
-      </button>
+    <ImageViewerCtx.Provider value={setViewerSrc}>
+      <div className={styles.container}>
+        <button
+          type="button"
+          className={styles.headingBtn}
+          onClick={() => setOpen(o => !o)}
+          aria-expanded={open}
+        >
+          <span className={styles.headingArrow}>{open ? '▾' : '▸'}</span>
+          <span className={styles.heading}>
+            Tool activity · {toolCalls.length} call{toolCalls.length !== 1 ? 's' : ''}
+          </span>
+        </button>
 
-      {open && (
-        <>
-          {[...byKeyword.entries()].map(([kw, tcs]) => (
-            <KeywordSection key={kw} keyword={kw} toolCalls={tcs} location={location} />
-          ))}
+        {open && (
+          <>
+            {[...byKeyword.entries()].map(([kw, tcs]) => (
+              <KeywordSection key={kw} keyword={kw} toolCalls={tcs} location={location} />
+            ))}
 
-          <AgentsEmployedSummary workers={extractWorkerSummaries(toolCalls)} />
-          {extractCompletedWorkers(toolCalls).map((data, i) => (
-            <WorkerResultCard key={i} data={data} />
-          ))}
+            <AgentsEmployedSummary workers={extractWorkerSummaries(toolCalls)} />
+            {extractCompletedWorkers(toolCalls).map((data, i) => (
+              <WorkerResultCard key={i} data={data} />
+            ))}
 
-          {savedFromOther.map(filename => (
-            <SavedFileViewer key={filename} filename={filename} />
-          ))}
+            {savedFromOther.map(filename => (
+              <SavedFileViewer key={filename} filename={filename} />
+            ))}
 
-          {unsavedOther.map((tc, i) => (
-            <LiveToolRow key={i} tc={tc} location={location} />
-          ))}
-        </>
-      )}
-    </div>
+            {unsavedOther.map((tc, i) => (
+              <LiveToolRow key={i} tc={tc} location={location} />
+            ))}
+          </>
+        )}
+      </div>
+      {viewerSrc && <ImageViewer src={viewerSrc} onClose={() => setViewerSrc(null)} />}
+    </ImageViewerCtx.Provider>
   )
 }

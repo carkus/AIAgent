@@ -402,12 +402,52 @@
 }
 
 .headerChip {
+  align-items: center;
   background: #e6f2f1;
   border: 1px solid #bcdbd8;
   border-radius: 5px;
   color: #1f6f73;
+  display: inline-flex;
+  font-size: 0.75rem;
+  gap: 0.3rem;
+  padding: 0.15rem 0.4rem 0.15rem 0.5rem;
+}
+
+.headerChipX {
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: #6b9895;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.85rem;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+.headerChipX:hover {
+  color: #1f6f73;
+}
+
+.headerChipInput {
+  background: #e6f2f1;
+  border: 1px solid #bcdbd8;
+  border-radius: 5px;
+  box-sizing: border-box;
+  color: #1f6f73;
   font-size: 0.75rem;
   padding: 0.15rem 0.5rem;
+  width: 110px;
+}
+
+.headerChipInput:focus {
+  border-color: #1f6f73;
+  outline: none;
+}
+
+.headerChipInput::placeholder {
+  color: #6b9895;
 }
 
 .toolsBadges {
@@ -950,13 +990,26 @@
    images): grayscale + rounded corners so they read as reference material
    alongside the agent's own written analysis, not as decorative color
    content competing with it. */
+.researchImageBtn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: zoom-in;
+  padding: 0;
+  margin: 0.6rem 0 0.9rem;
+}
+
 .researchImage {
   display: block;
   width: 100%;
   height: auto;
   border-radius: 8px;
-  filter: grayscale(1);
-  margin: 0.6rem 0 0.9rem;
+  /* Unlike .messageImage/.mermaidDiagram svg, deliberately full color — this
+     is the agent's own generated/found illustration, not the app's
+     dot-matrix chat-chrome aesthetic, and desaturating a photo/generated
+     image loses information a diagram doesn't have to begin with. */
+  margin: 0;
 }
 
 .markdown table {

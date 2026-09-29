@@ -36,7 +36,9 @@ GEMINI_MODEL = "gemini-3.6-flash"
 GEMINI_EMBED_MODEL = "gemini-embedding-2-preview"
 # Also served from the OpenAI-compat surface via chat.completions.create(...,
 # modalities=["text", "image"]) — used by tools.py's generate_image primitive.
-# Image generation is Gemini-only; there is no Ollama equivalent to cascade to.
+# No Ollama equivalent exists to cascade to; tools.py falls back to Hugging
+# Face's free-tier Inference API (HF_API_TOKEN) instead when this isn't
+# configured or fails.
 GEMINI_IMAGE_MODEL = "gemini-3.6-flash-image"
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:7b")

@@ -745,6 +745,56 @@
   margin: 0;
 }
 
+.workerImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0 0 0.6rem;
+}
+
+.imageResultRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-width: 220px;
+}
+
+.imageThumbBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: block;
+  padding: 0;
+  position: relative;
+  text-align: left;
+}
+
+.imageThumb {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(31, 111, 115, 0.2);
+}
+
+.imageViewBtn {
+  background: rgba(22, 50, 74, 0.75);
+  border-radius: 5px;
+  color: #ffffff;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  position: absolute;
+  right: 0.4rem;
+  bottom: 0.4rem;
+}
+
+.imageResultPrompt {
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+  margin: 0;
+}
+
 .jobCard {
   border-left: 2px solid var(--color-border);
   margin-bottom: 0.65rem;

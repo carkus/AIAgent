@@ -582,12 +582,14 @@ _PRIMITIVE_TOOLS = [
         "function": {
             "name": "generate_image",
             "description": (
-                "Generate a brand-new image from a text description using Gemini's "
-                "image-generation model — for creating imagery that doesn't exist as a "
-                "real photo to find (use `search_image` for that instead). Use sparingly, "
-                "only when a generated image would genuinely help — your written analysis "
-                "is always the primary output, a generated image is supplementary polish "
-                "on top of it, never a substitute for discussing the finding in prose."
+                "Generate a brand-new image from a text description — for creating "
+                "imagery that doesn't exist as a real photo to find (use `search_image` "
+                "for that instead). Tries Gemini's image model first, then automatically "
+                "falls back to Hugging Face's free-tier Inference API if Gemini isn't "
+                "configured or fails. Use sparingly, only when a generated image would genuinely help — "
+                "your written analysis is always the primary output, a generated image is "
+                "supplementary polish on top of it, never a substitute for discussing the "
+                "finding in prose."
             ),
             "parameters": {
                 "type": "object",
@@ -678,19 +680,23 @@ def _delegation_rule_body(keywords: list[str], max_delegations: int) -> str:
    This agent's configured specialty pool is: {pool}. Whatever task the
    user just gave you, run it across EVERY specialty in that pool, not
    only ones the message happens to name — the pool itself is the set of
-   keywords/topics to search, regardless of how the request is worded.
-   Delegate ONE worker per specialty, and fold BOTH pieces into that
-   worker's `task`: the specialty itself AND whatever the user actually
-   asked for (e.g. task = "<specialty>: <the user's request>") — never
-   delegate on the bare specialty name alone, and never drop what the
-   user said in favor of just the keyword. Exception: if the user's
-   message clearly narrows things to only one or a few specialties from
-   the pool, delegate for just those; if the request has nothing to do
-   with the pool at all, handle it yourself instead. Call every
-   delegate_to_worker you need before writing your own findings. Limit:
-   {max_delegations} per turn — if the pool has more entries
-   than that, delegate as many as the limit allows and handle the rest
-   yourself with your own tools."""
+   specialties to work on, regardless of how the request is worded. A
+   specialty is not necessarily something to research/search — it may be a
+   creative or generative task (e.g. "clown images" means USE
+   `generate_image`/`search_image`, not a web search for the phrase
+   itself); read each specialty for what it actually asks for, don't
+   default to searching it. Delegate ONE worker per specialty, and fold
+   BOTH pieces into that worker's `task`: the specialty itself AND
+   whatever the user actually asked for (e.g. task = "<specialty>: <the
+   user's request>") — never delegate on the bare specialty name alone,
+   and never drop what the user said in favor of just the keyword.
+   Exception: if the user's message clearly narrows things to only one or
+   a few specialties from the pool, delegate for just those; if the
+   request has nothing to do with the pool at all, handle it yourself
+   instead. Call every delegate_to_worker you need before writing your
+   own findings. Limit: {max_delegations} per turn — if the pool has more
+   entries than that, delegate as many as the limit allows and handle the
+   rest yourself with your own tools."""
     return f"""
    First, identify the distinct tasks the request actually requires. When
    it names multiple distinct keywords, topics, roles, or subjects to

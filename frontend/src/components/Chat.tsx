@@ -245,6 +245,10 @@ function evalTargetLabel(item: EvalResultItem): string {
   }
 }
 
+// Same cap as Setup.tsx's MAX_SPECIALTIES — kept independent (not imported)
+// since Setup's constant isn't exported, but the two should stay in sync.
+const MAX_FOCUS = 5
+
 interface Props {
   agentConfig: AgentConfig
   agentName: string
@@ -334,27 +338,64 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // own eval_results.json is the durable, uncapped log.
   const [evalResults, setEvalResults] = useState<EvalResultItem[]>([])
   const [evalBarCollapsed, setEvalBarCollapsed] = useState(true)
+  // Live, editable copy of the agent's specialty pool. Seeded from
+  // agentConfig.keywords at bootstrap but no longer read from that static
+  // prop afterward — agent_stream.py's _delegation_rule_body rebuilds its
+  // instruction fresh from whatever keywords travel with each /agent
+  // request, so editing this in-chat and sending it on the next turn is
+  // enough to change the agent's focus without a re-bootstrap.
+  const [focusPool, setFocusPool] = useState<string[]>(agentConfig.keywords ?? [])
+  const [focusDraft, setFocusDraft] = useState('')
+
+  function addFocus() {
+    const value = focusDraft.trim()
+    if (!value) return
+    if (focusPool.length >= MAX_FOCUS) return
+    if (focusPool.some(kw => kw.toLowerCase() === value.toLowerCase())) {
+      setFocusDraft('')
+      return
+    }
+    setFocusPool(prev => [...prev, value.slice(0, 50)])
+    setFocusDraft('')
+  }
+
+  function removeFocus(kw: string) {
+    setFocusPool(prev => prev.filter(k => k !== kw))
+  }
+
+  function handleFocusKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      addFocus()
+    } else if (e.key === 'Backspace' && !focusDraft && focusPool.length > 0) {
+      setFocusPool(prev => prev.slice(0, -1))
+    }
+  }
 
   // Auto-send an initial task when the agent has a configured focus
-  // pool. The pool itself (agentConfig.keywords) is now the keyword source
-  // the backend's delegation rule iterates over (see agent_stream.py's
+  // pool. The pool itself (focusPool) is now the keyword source the
+  // backend's delegation rule iterates over (see agent_stream.py's
   // _delegation_rule_body) — this message no longer needs to spell out
   // each keyword itself, just hand over a generic task.
   useEffect(() => {
     if (autoSentRef.current) return
-    const kws = agentConfig.keywords
+    const kws = focusPool
     if (!kws?.length) return
     autoSentRef.current = true
-    const loc = agentConfig.location ? ` in ${agentConfig.location}` : ''
-    // Location is already shown as its own pill in the header (see
-    // .locationBadge below), so the bubble doesn't need to restate it —
-    // just show the actual instruction sent, kept brief.
-    sendMessage(
-      `Run your standard search across your full focus pool${loc}.`,
-      messages,
-      undefined,
-      'Run your standard search across your full focus pool.',
-    )
+    // Deliberately says nothing about "search" or location: a specialty in
+    // the pool might be a creative/image-generation task (e.g. "clown
+    // images") rather than anything to research, and location is already
+    // (a) shown as its own pill in the header and (b) injected into the
+    // system prompt every turn via agent_stream.py's _location_note, which
+    // tells the model to assume it "for anything location-dependent"
+    // without it needing to be restated here. A previous version of this
+    // message baked in "run your standard search ... in <location>", which
+    // — for a non-research specialty with no natural search target — gave
+    // a delegated worker's own bootstrap nothing concrete to latch onto
+    // except the location text, so it searched the location itself instead
+    // of doing anything related to the actual specialty.
+    const text = 'Produce your standard output across your full focus pool.'
+    sendMessage(text, messages, undefined, text)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -362,7 +403,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     return {
       id: chatIdRef.current,
       agentName,
-      agentConfig,
+      agentConfig: { ...agentConfig, keywords: focusPool },
       messages: messages.map(({ role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits }) => ({
         role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits,
       })),
@@ -439,7 +480,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       const traitPool = PERSONALITY_TRAITS[agentConfig.template ?? 'research'] ?? PERSONALITY_TRAITS.research
       const context: PdfAgentContext = {
         purpose: agentConfig.purpose,
-        keywords: agentConfig.keywords,
+        keywords: focusPool,
         location: agentConfig.location,
         model: describeModel(agentConfig.provider, agentConfig.ollama_model),
         persona: agentConfig.persona,
@@ -641,9 +682,13 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     setModelInfo(null)
 
     const apiMessages = withUser.map(m => ({ role: m.role, content: m.content, image: m.image }))
+    // Send the live, possibly-edited focus pool rather than the static
+    // bootstrap-time prop — agent_stream.py rebuilds its delegation
+    // instruction from this field fresh on every request.
+    const liveAgentConfig = { ...agentConfig, keywords: focusPool }
 
     try {
-      await runAgent(apiMessages, agentConfig, (event: StreamEvent) => {
+      await runAgent(apiMessages, liveAgentConfig, (event: StreamEvent) => {
         switch (event.type) {
           case 'plan':
             updateLastMessage(msg => ({ ...msg, planDiagram: event.diagram, planSummary: event.summary ?? undefined }))
@@ -902,13 +947,32 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
 
       <div className={styles.container}>
         <div className={styles.mainContent}>
-          {agentConfig.keywords && agentConfig.keywords.length > 0 && (
-            <div className={styles.headerKeywords}>
-              {[...agentConfig.keywords].sort((a, b) => a.localeCompare(b)).map(kw => (
-                <span key={kw} className={styles.headerChip}>{kw}</span>
-              ))}
-            </div>
-          )}
+          <div className={styles.headerKeywords}>
+            {[...focusPool].sort((a, b) => a.localeCompare(b)).map(kw => (
+              <span key={kw} className={styles.headerChip}>
+                {kw}
+                <button
+                  type="button"
+                  className={styles.headerChipX}
+                  onClick={() => removeFocus(kw)}
+                  aria-label={`Remove ${kw} from focus`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {focusPool.length < MAX_FOCUS && (
+              <input
+                type="text"
+                className={styles.headerChipInput}
+                value={focusDraft}
+                onChange={e => setFocusDraft(e.target.value.slice(0, 50))}
+                onKeyDown={handleFocusKeyDown}
+                onBlur={addFocus}
+                placeholder={focusPool.length === 0 ? 'Add focus…' : '+ add'}
+              />
+            )}
+          </div>
           <div className={styles.toolsBadges}>
         {agentConfig.tools.filter(t => t.name !== 'save_output').map(t => (
           <span key={t.name} className={styles.badge}>{t.name}</span>
@@ -995,13 +1059,20 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                               },
                               img({ src, alt, ...props }) {
                                 return (
-                                  <img
-                                    src={src}
-                                    alt={alt}
-                                    loading="lazy"
-                                    className={styles.researchImage}
-                                    {...props}
-                                  />
+                                  <button
+                                    type="button"
+                                    className={styles.researchImageBtn}
+                                    onClick={() => typeof src === 'string' && setViewerImage(src)}
+                                    aria-label={alt || 'Enlarge image'}
+                                  >
+                                    <img
+                                      src={src}
+                                      alt={alt}
+                                      loading="lazy"
+                                      className={styles.researchImage}
+                                      {...props}
+                                    />
+                                  </button>
                                 )
                               },
                               li({ children, ...props }) {

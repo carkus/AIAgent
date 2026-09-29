@@ -515,16 +515,19 @@ def _build_prompt(
         "image, never to fabricate one.\n"
     )
     _image_gen_primitive = (
-        "- `generate_image` — creates a brand-new image from a text description "
-        "using Gemini's image-generation model, for when no real photo exists to "
-        "find (use `search_image` for that instead). Takes `prompt` (string, a "
-        "clear description of the image to generate). Returns {image_url} on "
-        "success (a data: URI — embed it directly, no download/storage step "
-        "needed) or {error} on failure. An agent's own written analysis is "
-        "always the primary output; instruct the agent to call it sparingly "
-        "(only when generating a new image is genuinely the right way to help) "
-        "and to embed the real `image_url` it gets back as a markdown image, "
-        "never to fabricate one.\n"
+        "- `generate_image` — creates a brand-new image from a text description, "
+        "for when no real photo exists to find (use `search_image` for that "
+        "instead). Takes `prompt` (string, a clear description of the image to "
+        "generate). Tries Gemini's image model first, then automatically falls "
+        "back to Hugging Face's free-tier Inference API if Gemini isn't "
+        "configured or fails — so it's available even with no GEMINI_API_KEY "
+        "set, as long as HF_API_TOKEN is configured. Returns {image_url, "
+        "provider} on success (embed the url directly, "
+        "no download/storage step needed) or {error} only if both attempts "
+        "fail. An agent's own written analysis is always the primary output; "
+        "instruct the agent to call it sparingly (only when generating a new "
+        "image is genuinely the right way to help) and to embed the real "
+        "`image_url` it gets back as a markdown image, never to fabricate one.\n"
     )
     if agent_type == "job_search":
         primitives_block = (

@@ -75,6 +75,7 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None,
             "response": failure_text,
             "tools_used": [],
             "tool_sources": [],
+            "tool_results": [],
             "fewshot_count": 0,
             "eval_results": eval_results,
         }
@@ -143,6 +144,16 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None,
         "response": final_response,
         "tools_used": [tc["tool"] for tc in tool_calls],
         "tool_sources": [tc.get("source", "generated") for tc in tool_calls],
+        # Parallel to tools_used/tool_sources — the raw JSON result string of
+        # each call. A worker's own tool activity isn't streamed live to the
+        # UI the way the main agent's is (see run_agent_stream's docstring:
+        # "caller sees the worker's *final* result, not its own tool-by-tool
+        # progress"), so without this a generate_image/search_image call a
+        # worker made was only ever visible if the worker's own prose
+        # happened to embed the image_url as markdown — the frontend had no
+        # other way to reach the actual tool result to offer a "view image"
+        # button for it.
+        "tool_results": [tc["result"] for tc in tool_calls],
         "fewshot_count": fewshot_count,
         "eval_results": eval_results,
     }

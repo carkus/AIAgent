@@ -29,25 +29,32 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     label: 'General assistant',
     keywordPlaceholder: 'Type a topic, press Enter…',
     buildPurpose: (keywords, loc) =>
-      `General-purpose assistant covering the following topics: ${keywords.join(', ')}` +
-      `${loc ? ` (relevant to ${loc})` : ''}. ` +
+      `General-purpose assistant covering the following topics: ${keywords.join(', ')}. ` +
       `Scout around each topic and surface leads to better information — ` +
       `what it is, why it matters, and where to look next for the real depth — ` +
       `rather than a deep or narrowly-angled investigation itself. This agent is not a ` +
       `job search tool: never search for job listings, salaries, or job boards, even if a ` +
-      `topic sounds job-related — just point toward better sources on it.`,
+      `topic sounds job-related — just point toward better sources on it.` +
+      `${loc ? ` The user's location is ${loc}. Only bring location into a topic when that ` +
+        `topic is actually location-dependent (e.g. local news, nearby events, regional ` +
+        `context) — do not mention or work the location into a topic that has no natural ` +
+        `geographic angle, such as a creative or generative request (e.g. "clown images" ` +
+        `should not become "clown images in ${loc}").` : ''}`,
   },
   {
     id: 'research',
     label: 'Researcher',
     keywordPlaceholder: 'Buid your agent.',
     buildPurpose: (keywords, loc) =>
-      `Research agent for the following keywords: ${keywords.join(', ')}` +
-      `${loc ? ` in ${loc}` : ''}. ` +
+      `Research agent for the following keywords: ${keywords.join(', ')}. ` +
       `Focus specifically on recent changes and developments in the industry, ` +
       `research or work being done at universities, and new or emerging technology, ` +
       `for each keyword. Analyse patterns and trends within that scope, ` +
-      `and present clear findings for each keyword.`,
+      `and present clear findings for each keyword.` +
+      `${loc ? ` The user's location is ${loc}. Only apply it to a keyword where geography ` +
+        `is actually relevant to the research (e.g. local industry activity, regional ` +
+        `funding, nearby institutions) — don't force it onto a keyword that has no ` +
+        `natural geographic angle.` : ''}`,
   },
   {
     id: 'job_search',

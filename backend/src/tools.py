@@ -290,42 +290,127 @@ def search_image(query: str) -> dict:
         return {"error": str(exc)}
 
 
+# Hugging Face's free-tier serverless Inference API. Needs a free HF token
+# (huggingface.co/settings/tokens, no billing required) but is far more
+# reliable than the alternative actually tried first during setup:
+# pollinations.ai's anonymous/keyless endpoint, which turned out to
+# intermittently demand an x402 crypto micropayment (a real `Payment-Required`
+# response with USDC payment terms in the headers, not a soft rate-limit)
+# even on requests that should've been free — roughly half of a live test
+# burst got the payment wall regardless of retries, backoff, or model choice.
+# A model needing a real (if free) account is the tradeoff for one that
+# doesn't silently start charging.
+#
+# Host is router.huggingface.co, not the old api-inference.huggingface.co —
+# that legacy host no longer resolves at all (HF migrated serverless
+# inference behind a unified "Inference Providers" router). Model choice
+# also isn't free-form: most well-known checkpoints (FLUX.1-schnell,
+# FLUX.1-dev, SDXL, SD 1.5/2.1) now 410/400 as "deprecated"/"not supported
+# by provider hf-inference" — live-queried via
+# https://huggingface.co/api/models?pipeline_tag=text-to-image&inference_provider=hf-inference
+# during setup, which currently returns exactly one working model.
+_HF_IMAGE_MODEL = "stabilityai/stable-diffusion-3-medium-diffusers"
+_HF_ROUTER_BASE_URL = "https://router.huggingface.co/hf-inference/models"
+_HF_MAX_ATTEMPTS = 2
+
+
+def _generate_image_huggingface(prompt: str) -> dict:
+    """
+    Free fallback for generate_image via Hugging Face's Inference API. No
+    local model equivalent exists (unlike chat's Ollama cascade), so this is
+    the closest thing — a cheap/free cloud path when Gemini isn't configured
+    or fails.
+
+    Returns raw image bytes on success; base64-encoded into a data: URI
+    (matching the contract Gemini's own path already returns) rather than
+    routed through a file-storage step this project doesn't have.
+
+    A cold model returns 503 with an `estimated_time` (seconds until it's
+    loaded) instead of an image — retried once after that wait rather than
+    surfacing "not ready yet" as a hard failure, same one-retry shape used
+    elsewhere in this project for a not-yet-valid response.
+    """
+    token = os.environ.get("HF_API_TOKEN")
+    if not token:
+        return {"error": "Image generation fallback requires HF_API_TOKEN, which is not configured."}
+
+    import base64
+    import time
+
+    import requests
+
+    url = f"{_HF_ROUTER_BASE_URL}/{_HF_IMAGE_MODEL}"
+    headers = {"Authorization": f"Bearer {token}"}
+    last_error = None
+    for attempt in range(_HF_MAX_ATTEMPTS):
+        try:
+            r = requests.post(url, headers=headers, json={"inputs": prompt}, timeout=60)
+        except Exception as exc:
+            return {"error": str(exc)}
+
+        content_type = r.headers.get("content-type", "")
+        if r.ok and content_type.startswith("image/"):
+            mime = content_type.split(";")[0]
+            b64 = base64.b64encode(r.content).decode("ascii")
+            return {"image_url": f"data:{mime};base64,{b64}", "prompt": prompt, "provider": "huggingface"}
+
+        try:
+            body = r.json()
+        except ValueError:
+            body = {}
+        last_error = body.get("error") or f"Hugging Face returned status {r.status_code}"
+        if r.status_code == 503 and attempt < _HF_MAX_ATTEMPTS - 1:
+            time.sleep(min(body.get("estimated_time") or 10, 20))
+            continue
+        break
+    return {"error": last_error}
+
+
 def generate_image(prompt: str) -> dict:
     """
-    Built-in primitive: create a brand-new image from a text description via
-    Gemini's image-generation model — the complement to search_image, which
-    finds a real *existing* photo rather than creating one. Gemini-only, no
-    Ollama fallback (image generation has no local equivalent in this
-    project's cascade), so this fails outright rather than silently
-    degrading if GEMINI_API_KEY isn't set.
+    Built-in primitive: create a brand-new image from a text description —
+    the complement to search_image, which finds a real *existing* photo
+    rather than creating one.
+
+    Cascade: Gemini's image-generation model first (higher quality, requires
+    GEMINI_API_KEY), falling back to Hugging Face's free-tier Inference API
+    (requires HF_API_TOKEN, a free account — see _generate_image_huggingface
+    for why pollinations.ai's keyless option was tried and rejected first)
+    whenever Gemini isn't configured or the call fails — same
+    priority-order-with-logged-fallback shape as llm_client.py's
+    Gemini-to-Ollama chat cascade, closing what used to be a hard dead end
+    ("Image generation is Gemini-only; there is no Ollama equivalent") with
+    a free cloud fallback instead of a local one.
 
     Reuses the same OpenAI-compatible client llm_client.py already uses for
     chat and embeddings (llm_client._gemini_client) rather than adding a
     separate SDK dependency — Gemini's OpenAI-compat surface supports image
     output on chat.completions.create via modalities=["text", "image"].
 
-    Returns {"image_url": <data: URI>, "prompt": prompt} on success —
-    embeddable directly in markdown with no file-storage step — or
-    {"error": ...} (never raises) on failure.
+    Returns {"image_url": ..., "prompt": prompt, "provider": "gemini" |
+    "huggingface"} on success — embeddable directly in markdown with no
+    file-storage step — or {"error": ...} (never raises) only if both the
+    Gemini attempt (when configured) and the Hugging Face fallback fail (or
+    neither is configured).
     """
-    if not os.environ.get("GEMINI_API_KEY"):
-        return {"error": "Image generation requires GEMINI_API_KEY, which is not configured."}
+    if os.environ.get("GEMINI_API_KEY"):
+        try:
+            response = llm_client._gemini_client.chat.completions.create(
+                model=llm_client.GEMINI_IMAGE_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                modalities=["text", "image"],
+                timeout=llm_client.GEMINI_TIMEOUT_SECONDS,
+            )
+            images = getattr(response.choices[0].message, "images", None) or []
+            if images:
+                return {"image_url": images[0]["image_url"]["url"], "prompt": prompt, "provider": "gemini"}
+            logger.warning("generate_image: Gemini returned no image, falling back to Hugging Face")
+        except Exception as exc:
+            logger.warning("generate_image: Gemini failed (%s), falling back to Hugging Face", exc)
+    else:
+        logger.info("generate_image: GEMINI_API_KEY not set, using Hugging Face")
 
-    try:
-        response = llm_client._gemini_client.chat.completions.create(
-            model=llm_client.GEMINI_IMAGE_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            modalities=["text", "image"],
-            timeout=llm_client.GEMINI_TIMEOUT_SECONDS,
-        )
-        images = getattr(response.choices[0].message, "images", None) or []
-        if not images:
-            return {"error": "Gemini did not return an image for this prompt."}
-        image_url = images[0]["image_url"]["url"]
-        return {"image_url": image_url, "prompt": prompt}
-    except Exception as exc:
-        logger.warning("generate_image failed: %s", exc)
-        return {"error": str(exc)}
+    return _generate_image_huggingface(prompt)
 
 
 class _AttrDict(dict):
