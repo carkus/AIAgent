@@ -410,6 +410,48 @@ def _undefined_call_errors(
     return errors
 
 
+def _fake_save_output_errors(config: dict) -> list[tuple[str, _UndefinedCallError]]:
+    """The bootstrap prompt mandates a `save_output` tool that writes to disk
+    via open(os.path.join(TEMP_DIR, filename), 'w') before returning
+    {'status': 'saved', 'filename': ..., 'path': ...}. A live report
+    (`waterskier_findings.md` showing "Could not load file.") traced back to
+    a generated `save_output` implementation that built and returned that
+    success dict directly, with no open()/write() call anywhere — so the
+    tool reported success with a filename/path that GET /file/<filename>
+    then 404s on, since nothing was ever written to TEMP_DIR.
+
+    This is a distinct bug class from _forbidden_call_errors/
+    _local_endpoint_errors: those are guaranteed to raise at execution time
+    (NameError, connection refused), which is what makes them exec()-able and
+    therefore something a live traffic report would have surfaced as a
+    crash. A fabricated result dict never raises anything — the sandbox
+    happily execs code that skips the write and just returns the dict — so
+    it can only be caught structurally, at bootstrap time, before the fake
+    success is ever trusted. Same one-retry/then-drop treatment as the other
+    checks regardless."""
+    errors: list[tuple[str, _UndefinedCallError]] = []
+    for tool in config.get("tools", []):
+        if not isinstance(tool, dict) or tool.get("source") == "mcp":
+            continue
+        if tool.get("name") != "save_output":
+            continue
+        impl = tool.get("implementation")
+        if not isinstance(impl, str):
+            continue
+        if "open(" not in impl:
+            errors.append((
+                "save_output",
+                _UndefinedCallError(
+                    "implementation never calls open(...) to actually write a file — "
+                    "it must write via open(os.path.join(TEMP_DIR, filename), 'w') "
+                    "before setting result = {'status': 'saved', ...}, otherwise the "
+                    "reported filename/path doesn't exist and GET /file/<filename> "
+                    "will 404"
+                ),
+            ))
+    return errors
+
+
 def _format_mcp_catalog(catalog: list[dict]) -> str:
     """Renders mcp_client.catalog_summary() for the bootstrap prompt. Empty
     catalog (no vetted server reachable in this environment) renders as an
@@ -702,13 +744,15 @@ def generate_agent_config(
     # Second validation pass: valid JSON doesn't mean valid Python inside the
     # `implementation` strings. One correction retry, same shape as the JSON
     # retry above; if it's still broken, drop just the offending tool(s)
-    # rather than failing the whole agent over one bad tool. Bundles three
+    # rather than failing the whole agent over one bad tool. Bundles four
     # error classes: outright syntax errors; valid-but-doomed Python that
     # calls a primitive/vetted-MCP tool name as a bare function (guaranteed
     # NameError the first time tools.py execs it — see _forbidden_call_errors);
-    # and valid-but-doomed Python that instead POSTs/GETs a hallucinated
+    # valid-but-doomed Python that instead POSTs/GETs a hallucinated
     # 127.0.0.1/localhost "tool service" (guaranteed connection-refused — see
-    # _local_endpoint_errors).
+    # _local_endpoint_errors); and a `save_output` tool that fabricates a
+    # {'status': 'saved', ...} result without ever calling open() to actually
+    # write the file (see _fake_save_output_errors).
     forbidden_names = {"search_jobs", "fetch_page", "search_image", "generate_image"} | {
         c["tool_name"] for c in mcp_client.catalog_summary()
     }
@@ -717,6 +761,7 @@ def generate_agent_config(
         + _forbidden_call_errors(config, forbidden_names)
         + _undefined_call_errors(config, forbidden_names)
         + _local_endpoint_errors(config)
+        + _fake_save_output_errors(config)
     )
     if tool_errors:
         correction_response = create_chat_completion(
@@ -743,6 +788,7 @@ def generate_agent_config(
                 + _forbidden_call_errors(config, forbidden_names)
                 + _undefined_call_errors(config, forbidden_names)
                 + _local_endpoint_errors(config)
+                + _fake_save_output_errors(config)
             )
 
     if tool_errors:
@@ -913,8 +959,10 @@ def generate_agent_config_stream(
     # see _tool_syntax_errors for why JSON validity alone isn't enough,
     # _forbidden_call_errors for a generated tool calling a primitive/
     # vetted-MCP tool name as a bare function (valid Python, guaranteed
-    # NameError at execution time), and _local_endpoint_errors for the same
-    # bug via a hallucinated 127.0.0.1/localhost HTTP call instead.
+    # NameError at execution time), _local_endpoint_errors for the same
+    # bug via a hallucinated 127.0.0.1/localhost HTTP call instead, and
+    # _fake_save_output_errors for a save_output tool that fabricates a
+    # success result without ever writing the file.
     forbidden_names = {"search_jobs", "fetch_page", "search_image", "generate_image"} | {
         c["tool_name"] for c in mcp_client.catalog_summary()
     }
@@ -923,6 +971,7 @@ def generate_agent_config_stream(
         + _forbidden_call_errors(config, forbidden_names)
         + _undefined_call_errors(config, forbidden_names)
         + _local_endpoint_errors(config)
+        + _fake_save_output_errors(config)
     )
     if tool_errors:
         yield {"type": "status", "message": "Fixing broken tool code…"}
@@ -954,6 +1003,7 @@ def generate_agent_config_stream(
                     + _forbidden_call_errors(config, forbidden_names)
                     + _undefined_call_errors(config, forbidden_names)
                     + _local_endpoint_errors(config)
+                    + _fake_save_output_errors(config)
                 )
         except Exception as e:
             yield _model_event(tool_fix_meta)
