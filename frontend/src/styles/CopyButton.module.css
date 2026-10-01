@@ -2,9 +2,9 @@
    module (rather than living in Chat.module.css or ToolActivity.module.css)
    since the button is reused from both. */
 .copyButton {
+  composes: btn-base from global;
   background: transparent;
   border: 1px solid #d2dde7;
-  border-radius: 4px;
   color: #3f7ea0;
   cursor: pointer;
   flex-shrink: 0;

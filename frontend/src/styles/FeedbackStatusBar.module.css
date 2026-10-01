@@ -251,8 +251,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.38rem;
+  height: 1.38rem;
   flex-shrink: 0;
   align-self: flex-start;
   margin-top: 0.1rem;
@@ -261,7 +261,7 @@
   border-radius: 999px;
   color: var(--color-muted);
   cursor: pointer;
-  font-size: 0.65rem;
+  font-size: 0.78rem;
   line-height: 1;
   padding: 0;
   transition: color 0.15s, border-color 0.15s;

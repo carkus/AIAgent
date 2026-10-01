@@ -148,9 +148,9 @@
 }
 
 .dismissBtn {
+  composes: btn-base from global;
   background: transparent;
   border: 1px solid var(--color-dossier-border);
-  border-radius: 8px;
   color: var(--color-dossier-text);
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;
@@ -167,9 +167,9 @@
 }
 
 .retryBtn {
+  composes: btn-base from global;
   background: var(--color-accent-secondary);
   border: none;
-  border-radius: 8px;
   color: #fff;
   cursor: pointer;
   font-family: 'Share Tech Mono', monospace;

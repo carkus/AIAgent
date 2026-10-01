@@ -120,14 +120,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.38rem;
+  height: 1.38rem;
   background: var(--color-surface);
   border: 1px solid rgba(112, 131, 147, 0.4);
   border-radius: 999px;
   color: #708393;
   cursor: pointer;
-  font-size: 0.65rem;
+  font-size: 0.78rem;
   line-height: 1;
   padding: 0;
   flex-shrink: 0;
@@ -652,14 +652,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.38rem;
+  height: 1.38rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 999px;
   color: #6b7785;
   cursor: pointer;
-  font-size: 0.65rem;
+  font-size: 0.78rem;
   line-height: 1;
   padding: 0;
   flex-shrink: 0;
@@ -1399,7 +1399,6 @@
 .savedSectionCaret {
   color: #6b7785;
   font-size: var(--font-size-xl);
-  width: 1.6rem;
   flex-shrink: 0;
 }
 
@@ -1412,6 +1411,15 @@
   text-transform: uppercase;
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* Groups count -> help -> caret on the header's right side, same order as
+   the agent creator's .fieldLabelRight — matches SectionHeader's format. */
+.savedSectionRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
 }
 
 .savedSectionCount {
@@ -1546,15 +1554,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.38rem;
+  height: 1.38rem;
   background: var(--color-surface);
   border: 1px solid rgba(112, 131, 147, 0.4);
   border-radius: 999px;
   color: #708393;
   cursor: pointer;
   flex-shrink: 0;
-  font-size: 0.65rem;
+  font-size: 0.78rem;
   font-weight: 400;
   line-height: 1;
   padding: 0;
@@ -1821,15 +1829,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.38rem;
+  height: 1.38rem;
   background: var(--color-surface);
   border: 1px solid rgba(185, 28, 28, 0.35);
   border-radius: 999px;
   color: #b91c1c;
   cursor: pointer;
   flex-shrink: 0;
-  font-size: 0.65rem;
+  font-size: 0.78rem;
   font-weight: 700;
   line-height: 1;
   padding: 0;

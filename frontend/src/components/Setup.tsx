@@ -98,14 +98,6 @@ function BehaviorIcon({ id }: { id: string }) {
           <path d="M16 6h4v4" />
         </svg>
       )
-    case 'formal':
-      return (
-        <svg {...common}>
-          <path d="M4 8l6 4-6 4Z" />
-          <path d="M20 8l-6 4 6 4Z" />
-          <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" />
-        </svg>
-      )
     case 'max-delegation':
       return (
         <svg {...common}>
@@ -156,9 +148,12 @@ function SectionHeader({ label, expanded, onToggle, help, right }: {
       onClick={onToggle}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
     >
-      <span className={styles.fieldLabel}><span className={styles.sectionBulb} aria-hidden="true" /> {label}</span>
-      <span className={styles.fieldLabelRight}>
+      <span className={styles.fieldLabel}>
+        <span className={styles.sectionBulb} aria-hidden="true" />
         {right}
+        {label}
+      </span>
+      <span className={styles.fieldLabelRight}>
         <HelpTip text={help} label={`${label} help`} />
         <span className={styles.fieldLabelCaret} aria-hidden="true">{expanded ? '▾' : '▸'}</span>
       </span>
@@ -194,8 +189,6 @@ function describeBehaviorEffect(toggle: BehaviorToggle, type: AgentTemplateId, k
       return `${toggle.description} Every fact it states about ${subject} gets a source link attached inline.`
     case 'proactive':
       return `${toggle.description} It will flag risks or gaps in ${subject} even when you didn't ask about them directly.`
-    case 'formal':
-      return `${toggle.description} Its reports on ${subject} read in a professional register, no casual asides.`
     case 'max-delegation':
       return kw.length > 1
         ? `${toggle.description} With ${kw.length} focus areas (${subject}), it splits the work across a worker agent per focus area instead of researching all of them itself.`
@@ -1178,8 +1171,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 // only the ids that actually belong to the CURRENT type's
                 // pool, so a stale cross-type id never inflates the badge or
                 // shows a phantom active trait/effect.
-                const activeTraits = (PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research)
-                  .filter(t => selectedTraits.includes(t.id))
+                const traitPool = PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research
+                const activeTraits = traitPool.filter(t => selectedTraits.includes(t.id))
                 return (
                   <>
                     <SectionHeader
@@ -1187,6 +1180,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       expanded={personalityOpen}
                       onToggle={() => setPersonalityOpen(o => !o)}
                       help="Personality traits give the agent a consistent character quirk beyond its raw behavior — e.g. Inquisitive or Meticulous for a researcher. Purely optional flavor that still shapes its generated system prompt, and the pool of traits on offer changes with the agent type below. Active traits are summarized in the Brief below."
+                      right={!personalityOpen && activeTraits.length > 0 && (
+                        <span className={styles.fieldLabelCount}>{activeTraits.length}/{traitPool.length}</span>
+                      )}
                     />
                     {personalityOpen && (
                       <div className={styles.behaviorTogglesRow}>
@@ -1227,7 +1223,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 label="Behavior (Optional)"
                 expanded={specialInstructionsOpen}
                 onToggle={() => setSpecialInstructionsOpen(o => !o)}
-                help="Behavior toggles shape how the agent communicates — concise vs. detailed, skeptical vs. trusting, whether it cites sources, acts proactively, stays formal, or delegates aggressively. Turn on as many as you like; their effects combine. Active toggles are summarized in the Brief below."
+                help="Behavior toggles shape how the agent communicates — concise vs. detailed, skeptical vs. trusting, whether it cites sources, acts proactively, or delegates aggressively. Turn on as many as you like; their effects combine. Active toggles are summarized in the Brief below."
+                right={!specialInstructionsOpen && activeToggles.length > 0 && (
+                  <span className={styles.fieldLabelCount}>{activeToggles.length}/{BEHAVIOR_TOGGLES.length}</span>
+                )}
               />
               {specialInstructionsOpen && (
                 <div className={styles.behaviorIconRow}>
@@ -1610,18 +1609,23 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           <div className={styles.savedSectionsScrollInner}>
           <div className={styles.savedAccordion}>
             <div className={styles.savedSection}>
-              <button
-                type="button"
+              <div
                 className={styles.savedSectionHeader}
+                role="button"
+                tabIndex={0}
                 aria-expanded={openSavedSections.searches}
                 onClick={() => toggleSavedSection('searches')}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSavedSection('searches') } }}
               >
-                <span className={styles.savedSectionCaret} aria-hidden="true">
-                  {openSavedSections.searches ? '▾' : '▸'}
-                </span>
-                <span className={styles.savedSectionTitle}>Saved Focus</span>
                 <span className={styles.savedSectionCount}>{savedKeywordPool.length}</span>
-              </button>
+                <span className={styles.savedSectionTitle}>Saved Focus</span>
+                <span className={styles.savedSectionRight}>
+                  <HelpTip text="Focus keywords you've saved for reuse across agents — tap one later to add it back into the Focus list above without retyping it." label="Saved Focus help" />
+                  <span className={styles.savedSectionCaret} aria-hidden="true">
+                    {openSavedSections.searches ? '▾' : '▸'}
+                  </span>
+                </span>
+              </div>
               {openSavedSections.searches && (
                 <div className={styles.savedSectionBody}>
                   {savedKeywordPool.length === 0 && !addingSavedKeyword && (
@@ -1714,18 +1718,23 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
 
             <div className={styles.savedSection}>
-              <button
-                type="button"
+              <div
                 className={styles.savedSectionHeader}
+                role="button"
+                tabIndex={0}
                 aria-expanded={openSavedSections.drafts}
                 onClick={() => toggleSavedSection('drafts')}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSavedSection('drafts') } }}
               >
-                <span className={styles.savedSectionCaret} aria-hidden="true">
-                  {openSavedSections.drafts ? '▾' : '▸'}
-                </span>
-                <span className={styles.savedSectionTitle}>Saved Agent Profiles</span>
                 <span className={styles.savedSectionCount}>{visibleDrafts.length}</span>
-              </button>
+                <span className={styles.savedSectionTitle}>Saved Agent Profiles</span>
+                <span className={styles.savedSectionRight}>
+                  <HelpTip text="Full agent setups you've saved — type, behavior, personality, and focus together — so you can reload one later instead of rebuilding it from scratch." label="Saved Agent Profiles help" />
+                  <span className={styles.savedSectionCaret} aria-hidden="true">
+                    {openSavedSections.drafts ? '▾' : '▸'}
+                  </span>
+                </span>
+              </div>
               {openSavedSections.drafts && (
                 <div className={styles.savedSectionBody}>
                   {visibleDrafts.length > 0 ? (
@@ -1778,18 +1787,23 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
 
             <div className={styles.savedSection}>
-              <button
-                type="button"
+              <div
                 className={styles.savedSectionHeader}
+                role="button"
+                tabIndex={0}
                 aria-expanded={openSavedSections.chats}
                 onClick={() => toggleSavedSection('chats')}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSavedSection('chats') } }}
               >
-                <span className={styles.savedSectionCaret} aria-hidden="true">
-                  {openSavedSections.chats ? '▾' : '▸'}
-                </span>
-                <span className={styles.savedSectionTitle}>Saved Jobs</span>
                 <span className={styles.savedSectionCount}>{visibleChats.length}</span>
-              </button>
+                <span className={styles.savedSectionTitle}>Saved Jobs</span>
+                <span className={styles.savedSectionRight}>
+                  <HelpTip text="Finished or in-progress conversations you've saved — reload one to pick up right where it left off." label="Saved Jobs help" />
+                  <span className={styles.savedSectionCaret} aria-hidden="true">
+                    {openSavedSections.chats ? '▾' : '▸'}
+                  </span>
+                </span>
+              </div>
               {openSavedSections.chats && (
                 <div className={styles.savedSectionBody}>
                   <input
@@ -1879,18 +1893,23 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
 
             <div className={styles.savedSection}>
-              <button
-                type="button"
+              <div
                 className={styles.savedSectionHeader}
+                role="button"
+                tabIndex={0}
                 aria-expanded={openSavedSections.mcp}
                 onClick={() => toggleSavedSection('mcp')}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSavedSection('mcp') } }}
               >
-                <span className={styles.savedSectionCaret} aria-hidden="true">
-                  {openSavedSections.mcp ? '▾' : '▸'}
-                </span>
-                <span className={styles.savedSectionTitle}>Agent Roster</span>
                 <span className={styles.savedSectionCount}>{publishedAgents.length}</span>
-              </button>
+                <span className={styles.savedSectionTitle}>Agent Roster</span>
+                <span className={styles.savedSectionRight}>
+                  <HelpTip text="Agents you've published as callable MCP tools — reachable by other MCP clients, not just this app's own chat." label="Agent Roster help" />
+                  <span className={styles.savedSectionCaret} aria-hidden="true">
+                    {openSavedSections.mcp ? '▾' : '▸'}
+                  </span>
+                </span>
+              </div>
               {openSavedSections.mcp && (
                 <div className={styles.savedSectionBody}>
                   {publishedAgents.length > 0 ? (

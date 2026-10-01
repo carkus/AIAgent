@@ -115,12 +115,6 @@ export const BEHAVIOR_TOGGLES: BehaviorToggle[] = [
     instruction: "Don't just answer literally — proactively flag risks, gaps, or good next steps you notice along the way, even when not asked.",
   },
   {
-    id: 'formal',
-    label: 'Formal Tone',
-    description: 'Professional register — no slang, contractions, or asides.',
-    instruction: 'Write in a formal, professional register. Avoid slang, contractions, humor, and casual asides.',
-  },
-  {
     id: 'max-delegation',
     label: 'Max Delegation',
     description: 'Splits work across worker agents even for single-topic requests.',

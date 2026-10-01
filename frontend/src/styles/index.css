@@ -74,6 +74,18 @@
   --radius-control: 999px;
 }
 
+/* Base for every clickable button in the app. A CSS Modules class composes
+   this in (`composes: btn-base from global;`) rather than redeclaring
+   border-radius itself, so every button — pill, chip, or large rectangular
+   action button — shares the exact same corner radius from one source
+   instead of each component picking its own px value (which is how
+   personality/behaviour pills and various action buttons drifted out of
+   sync with each other before). Global, not module-scoped, since it's
+   composed into many separate .module.css files. */
+.btn-base {
+  border-radius: var(--radius-control);
+}
+
 html, body {
   margin: 0;
   padding: 0;
