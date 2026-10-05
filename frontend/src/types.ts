@@ -50,6 +50,11 @@ export interface AgentConfig {
   // Absent on configs bootstrapped before this field existed.
   agent_config_id?: string;
   persona?: AgentPersona;
+  // In-character welcome written by the bootstrap call, shown once in a popup
+  // when a freshly bootstrapped agent opens (AgentBriefingModal.tsx). Absent on
+  // older saved chats / malformed bootstraps — the modal falls back to a
+  // templated rundown of the agent's tools.
+  intro?: string;
   keywords?: string[];
   location?: string;
   provider?: LlmProvider;

@@ -106,15 +106,20 @@ html, body {
 /* App-wide scrollbar — thin, light-track, blue thumb to match the overall
    cream/navy/blue aesthetic (see Setup/Chat/ToolActivity styles). Applies
    to every scrollable element (saved-chats list, chat log, tool activity,
-   PDF preview, etc.) rather than being redefined per-component. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(40, 75, 106, 0.35) rgba(0, 0, 0, 0.06);
+   PDF preview, etc.) rather than being redefined per-component.
+   The standard scrollbar-width/-color props are Firefox-only here: in
+   Chrome/Edge 121+, setting either one makes the browser ignore every
+   ::-webkit-scrollbar rule below and draw its own (wider) "thin" bar. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(1, 71, 146, 0.5) rgba(0, 0, 0, 0.06);
+  }
 }
 
 *::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 *::-webkit-scrollbar-track {
@@ -122,10 +127,10 @@ html, body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(40, 75, 106, 0.35);
+  background: rgba(1, 71, 146, 0.5);
   border-radius: 999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(40, 75, 106, 0.6);
+  background: rgba(1, 71, 146, 0.8);
 }

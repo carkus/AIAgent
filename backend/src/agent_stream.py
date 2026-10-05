@@ -175,6 +175,26 @@ _REFUSAL_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Confirmed live complaint ("THE FUCKING KEYWRODS!!!!" — the user had already
+# configured a specialty/keyword pool, and the agent still asked what to do
+# instead of running the task across it): a reply that punts the task back to
+# the user with a clarifying question — no refusal wording (_REFUSAL_RE),
+# no named tool (_mentions_uncalled_tool), no future-intent phrasing
+# (_NARRATION_INTENT_RE) — slips past every existing detector and gets shown
+# as if it were a completed answer. The system prompt's own "never ask for
+# clarification instead of attempting" rule (added for an earlier report of
+# this same failure) is prompt-following only; this is the deterministic
+# safety net for when a model ignores it anyway, same role _is_raw_json_dump
+# plays for the "pastes raw tool output" failure.
+_CLARIFICATION_RE = re.compile(
+    r"\bcould you (?:please )?(?:clarify|provide|specify|share)\b|"
+    r"\bcan you (?:clarify|provide|specify)\b|"
+    r"\bwhat would you like me to\b|"
+    r"\bplease (?:clarify|specify|share|let me know)\b|"
+    r"\b(?:provide|share) (?:more|additional) details\b",
+    re.IGNORECASE,
+)
+
 # Confirmed live: a model can narrate delegate_to_worker as prose — literally
 # "Delegate_to_worker task: \"...\"" — and then just stop, with zero real
 # tool_calls, even after both nudge retries above re-ask it to make the real
@@ -808,6 +828,18 @@ NEVER decline a request outright before actually attempting it with the real too
 with that" with zero tool calls made is almost always wrong — try first, and only say you can't if
 an actual attempt genuinely came up empty.
 
+The same applies to asking the user what task to perform, or for more
+details, before attempting anything — a reply like "could you clarify what
+you'd like me to do?" with zero tool calls made is the same failure as
+declining outright, just phrased as a question instead of a refusal. The
+user's message IS the task. If this agent has a configured specialty pool
+(rule 8 below), that pool is what to run the task across even when the
+message itself is short and doesn't spell out specifics — never treat a
+brief message as too vague to act on when a specialty pool already tells you
+what to work on. Make a real attempt with your tools first; a genuine
+clarifying question only belongs AFTER you've already produced real findings
+(see the final rule below), never as a substitute for making the attempt.
+
 1. DO NOT call `web_search` or any generic search tool. There is no search engine connected. Every call returns 0 results and wastes a turn.
 """ + ("""
 2. For job search, salary research, or job-market questions, USE `search_jobs` — it calls a real
@@ -1257,6 +1289,13 @@ an actual attempt genuinely came up empty.
                     and not described_not_called
                     and bool(_REFUSAL_RE.search(final_text))
                 )
+                asks_for_clarification = (
+                    not tool_calls_log
+                    and not delegation_count
+                    and not described_not_called
+                    and not outright_decline
+                    and bool(_CLARIFICATION_RE.search(final_text))
+                )
                 # A bare schema-key word ("description", "name", ...) leaked
                 # instead of real text is unambiguous — there's no plausible
                 # reading where that's a genuine answer — so it gets its own,
@@ -1292,6 +1331,7 @@ an actual attempt genuinely came up empty.
                         (tool_calls_log and len(final_text.strip()) < 400)
                         or described_not_called
                         or outright_decline
+                        or asks_for_clarification
                         or raw_json_dump
                     )
                 ):
@@ -1306,6 +1346,12 @@ an actual attempt genuinely came up empty.
                             "before concluding you can't help. Only say you genuinely can't if, "
                             "after actually attempting it, you truly have no way to make progress."
                         ) if outright_decline else (
+                            "Asking the user what to do is not a completed answer — the user's "
+                            "message IS the task. If this agent has a configured specialty/keyword "
+                            "pool, that pool is what to run the task across even when the message "
+                            "is short. Make a real attempt with your real tools now and present "
+                            "actual findings instead of asking for clarification."
+                        ) if asks_for_clarification else (
                             "You described taking an action (e.g. calling a tool) but did not "
                             "actually call it — make the real, structured tool call now instead "
                             "of describing or narrating it in text. If no tool call is actually "
@@ -1330,8 +1376,14 @@ an actual attempt genuinely came up empty.
                 # it" symptom reported live against qwen2.5-coder:7b), say so
                 # plainly so the user isn't misled into thinking real research
                 # happened.
-                if (described_not_called or outright_decline) and nudge_retries >= 2:
+                if (described_not_called or outright_decline or asks_for_clarification) and nudge_retries >= 2:
                     final_text = (
+                        "_(Note: the model asked for clarification instead "
+                        "of attempting the task, even after being asked "
+                        "twice to follow through — this reply may not "
+                        "reflect real results. Try rephrasing the request "
+                        "or asking again.)_\n\n" + final_text
+                    ) if asks_for_clarification else (
                         "_(Note: the model described an action instead of "
                         "actually taking it, even after being asked twice to "
                         "follow through — this reply may not reflect real "

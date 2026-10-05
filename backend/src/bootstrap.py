@@ -26,6 +26,7 @@ Design and configure this agent. Return a single JSON object with exactly these 
     "traits": ["<adjective>", "<adjective>", "<adjective>"],
     "rationale": "<one sentence connecting the name/traits to the stated purpose>"
   }},
+  "intro": "<2-4 sentences, first person, in this persona's voice, greeting a user who may be new: what you're here to do for them and how to get started (e.g. what to ask or give you first). Do not state your own name. Plain prose — no markdown, no tool names in snake_case>",
   "system_prompt": "<detailed role and behaviour instructions for the agent>",
   "tools": [
     {{
@@ -550,6 +551,17 @@ def _normalize_persona(config: dict) -> None:
         config.pop("persona", None)
 
 
+def _normalize_intro(config: dict) -> None:
+    """Keep the model-generated `intro` (the in-character welcome shown in a
+    popup when a new agent starts) only if it's a non-empty string — the
+    frontend falls back to a templated rundown when it's missing."""
+    intro = config.get("intro")
+    if isinstance(intro, str) and intro.strip():
+        config["intro"] = intro.strip()
+    else:
+        config.pop("intro", None)
+
+
 def _build_prompt(
     purpose: str, provider: str | None, is_worker: bool, agent_type: str | None = None,
     has_image: bool = False,
@@ -800,6 +812,7 @@ def generate_agent_config(
 
     _resolve_mcp_tools(config)
     _normalize_persona(config)
+    _normalize_intro(config)
     config["purpose"] = purpose
     # Carried in AgentConfig so every subsequent /agent turn in this session
     # reuses the same provider/model choice made on the Setup screen.
@@ -1021,6 +1034,7 @@ def generate_agent_config_stream(
 
     _resolve_mcp_tools(config)
     _normalize_persona(config)
+    _normalize_intro(config)
     config["purpose"] = purpose
     config["provider"] = provider
     config["ollama_model"] = model

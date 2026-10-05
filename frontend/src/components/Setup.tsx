@@ -8,7 +8,7 @@ import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback, formatModel
 import { buildAgentBrief, joinNatural } from '../agentBrief'
 import { formatDate, getDateFormat, type DateFormatId } from '../dateFormat'
 import styles from '../styles/Setup.module.css'
-import splashLogo from '../assets/agentone_logo_transparent.png'
+import splashLogo from '../assets/favicon.png'
 import SettingsModal from './SettingsModal'
 import ThemePicker from './ThemePicker'
 import AgentStableModal from './AgentStableModal'

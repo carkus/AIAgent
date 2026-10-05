@@ -1,0 +1,219 @@
+/* Node-to-node reasoning graph (GraphView.tsx) — same light cream/navy/teal
+   palette as the rest of the app (see root CLAUDE.md's "Branding — Agent
+   One" section), not React Flow's own default dark theme. */
+
+.container {
+  width: 100%;
+  height: 260px;
+  border: 1px solid #e2dfd5;
+  border-radius: 10px;
+  background: #fbfaf7;
+  margin: 0.5rem 0;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.container:active {
+  cursor: grabbing;
+}
+
+.empty {
+  color: #6b7785;
+  font-style: italic;
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+}
+
+.node {
+  width: 320px;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #ddd9cd;
+  box-shadow: 0 1px 3px rgba(22, 50, 74, 0.08);
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+}
+
+.node:hover {
+  border-color: #1f6f73;
+  box-shadow: 0 2px 6px rgba(22, 50, 74, 0.14);
+}
+
+.nodeHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.nodeIcon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.nodeTitle {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: #16324a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.nodeSubtitle {
+  margin: 0.4rem 0 0;
+  font-size: 0.92rem;
+  color: #6b7785;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.nodeEval {
+  margin: 0.45rem 0 0;
+  display: flex;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.evalPass { color: #2f7a3d; }
+.evalFail { color: #b91c1c; }
+
+.node_plan { border-color: #3f7ea0; }
+.node_status { border-color: #cfe3ea; }
+.node_tool { border-color: #1f6f73; }
+.node_done { border-color: #2f7a3d; background: #f3faf4; }
+.node_error { border-color: #b91c1c; background: #fee2e2; }
+
+.nodePending {
+  border-style: dashed;
+}
+
+.liveDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1f6f73;
+  margin-left: auto;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.handle {
+  width: 6px;
+  height: 6px;
+  background: #cfe3ea;
+  border: none;
+}
+
+.edge :global(.react-flow__edge-path) {
+  stroke: #cfe3ea;
+  stroke-width: 1.5;
+}
+
+:global(.react-flow__edge.animated) :global(.react-flow__edge-path) {
+  stroke: #1f6f73;
+}
+
+:global(.react-flow__attribution) {
+  display: none;
+}
+
+/* Full-detail overlay for one tapped node — same frosted-overlay/centered-
+   page convention as ImageViewer.module.css's .overlay/.page. */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 2rem;
+}
+
+.modalPanel {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e2dfd5;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 640px;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 1.75rem;
+  box-shadow: 0 24px 64px rgba(22, 50, 74, 0.22);
+  font-family: 'Inter', sans-serif;
+}
+
+.modalCloseBtn {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  border: 1px solid #ddd9cd;
+  background: #fbfaf7;
+  color: #16324a;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.modalCloseBtn:hover {
+  background: #f3faf4;
+  border-color: #1f6f73;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #16324a;
+  margin: 0 1.8rem 1rem 0;
+}
+
+.modalLabel {
+  margin: 1rem 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7785;
+}
+
+.modalText {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #33475a;
+  white-space: pre-wrap;
+}
+
+.modalPre {
+  margin: 0;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #33475a;
+  background: #fbfaf7;
+  border: 1px solid #e2dfd5;
+  border-radius: 8px;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

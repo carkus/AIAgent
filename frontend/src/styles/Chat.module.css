@@ -509,6 +509,24 @@
   padding: 0.1rem 0.4rem;
 }
 
+.viewToggleBtn {
+  composes: btn-base from global;
+  background: #ffffff;
+  border: 1px solid #ddd9cd;
+  color: #1f6f73;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  margin-bottom: 0.35rem;
+}
+
+.viewToggleBtn:hover {
+  background: #f3faf4;
+  border-color: #1f6f73;
+}
+
 .messageList {
   flex: 1;
   overflow-y: auto;

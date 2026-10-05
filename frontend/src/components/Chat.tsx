@@ -6,6 +6,8 @@ import { saveChat, setLastOpenedPointer } from '../chatStorage'
 import { buildChatPdf, type PdfAgentContext, type PdfMessage } from '../chatPdf'
 import { BEHAVIOR_TOGGLES, PERSONALITY_TRAITS } from '../agentTypes'
 import ToolActivity from './ToolActivity'
+import GraphView from './GraphView'
+import { appendTimelineNode, nextSeq, type TimelineNode } from '../graphTimeline'
 import MermaidDiagram from './MermaidDiagram'
 import JsonTree from './JsonTree'
 import CodeBlock from './CodeBlock'
@@ -17,8 +19,9 @@ import { describeModel, describeModelFallback, formatModelInfo, type ModelInfo }
 import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate, getDateFormat } from '../dateFormat'
 import { extractMermaidDiagrams } from '../mermaidExtract'
+import AgentBriefingModal, { briefingHidden } from './AgentBriefingModal'
 import styles from '../styles/Chat.module.css'
-import splashLogo from '../assets/agentone_logo_transparent.png'
+import splashLogo from '../assets/favicon.png'
 
 type ToolbarIconName = 'save' | 'saved' | 'roster' | 'export' | 'exporting' | 'copyChat' | 'copiedChat' | 'newAgent' | 'attach' | 'imagePlaceholder' | 'send' | 'location' | 'clock'
 
@@ -236,6 +239,12 @@ interface ChatMessage {
   image?: string
   toolCalls?: ToolCall[]
   liveToolCalls?: LiveToolCall[]
+  // Ordered trace of this turn's plan/status/tool/done events, for the
+  // toggleable "Graph view" (GraphView.tsx) — accumulated alongside, not
+  // instead of, liveToolCalls/toolCalls above. Undefined on a message
+  // reloaded from a saved chat (SavedChatMessage carries no trace), in
+  // which case GraphView just shows its own "no trace recorded" fallback.
+  timeline?: TimelineNode[]
   // The agent's own step-by-step plan for this turn (agent_stream.py's
   // ```mermaid-plan fence) — distinct from the tool-call trace and from any
   // ```mermaid diagram embedded in `content` itself. Rendered at the top of
@@ -289,6 +298,9 @@ interface Props {
 export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, initialMessages, chatId }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages ?? [])
   const [input, setInput] = useState('')
+  // Fresh agent: mission briefing. Resumed chat (initialMessages): an
+  // in-character "Previously…" recap of the story so far.
+  const [showBriefing, setShowBriefing] = useState(() => !briefingHidden())
   const [thinking, setThinking] = useState(false)
   // What the backend says it's currently doing while `thinking` is true
   // (agent_stream.py's 'status' events) — shown in place of a bare "Working"
@@ -361,6 +373,18 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // own eval_results.json is the durable, uncapped log.
   const [evalResults, setEvalResults] = useState<EvalResultItem[]>([])
   const [evalBarCollapsed, setEvalBarCollapsed] = useState(true)
+  // Per-message "Graph view" toggle (default off — the existing ToolActivity
+  // log stays the default view per the confirmed scope). Keyed by message
+  // index, which is stable for the lifetime of one chat session's array.
+  const [graphViewMessages, setGraphViewMessages] = useState<Set<number>>(new Set())
+  function toggleGraphView(i: number) {
+    setGraphViewMessages(prev => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i)
+      else next.add(i)
+      return next
+    })
+  }
   // Live, editable copy of the agent's specialty pool. Seeded from
   // agentConfig.keywords at bootstrap but no longer read from that static
   // prop afterward — agent_stream.py's _delegation_rule_body rebuilds its
@@ -718,12 +742,24 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       await runAgent(apiMessages, liveAgentConfig, (event: StreamEvent) => {
         switch (event.type) {
           case 'plan':
-            updateLastMessage(msg => ({ ...msg, planDiagram: event.diagram, planSummary: event.summary ?? undefined }))
+            updateLastMessage(msg => ({
+              ...msg,
+              planDiagram: event.diagram,
+              planSummary: event.summary ?? undefined,
+              timeline: appendTimelineNode(msg.timeline ?? [], { id: 'plan', kind: 'plan', seq: nextSeq(), summary: event.summary }),
+            }))
             break
 
           case 'status':
             setStatusMessage(event.message)
             if (event.tokens_so_far) setStatusTokens(event.tokens_so_far)
+            updateLastMessage(msg => {
+              const seq = nextSeq()
+              return {
+                ...msg,
+                timeline: appendTimelineNode(msg.timeline ?? [], { id: `status-${seq}`, kind: 'status', seq, message: event.message }),
+              }
+            })
             break
 
           case 'model':
@@ -738,6 +774,10 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                 ...(msg.liveToolCalls ?? []),
                 { tool: event.tool, inputs: event.inputs, source: event.source, callIndex: event.call_index },
               ],
+              timeline: appendTimelineNode(msg.timeline ?? [], {
+                id: `tool-${event.call_index}`, kind: 'tool', seq: nextSeq(),
+                callIndex: event.call_index, tool: event.tool, inputs: event.inputs, source: event.source,
+              }),
             }))
             break
 
@@ -754,6 +794,10 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                   ? { ...tc, result: event.result, source: tc.source ?? event.source }
                   : tc
               ),
+              timeline: appendTimelineNode(msg.timeline ?? [], {
+                id: `tool-${event.call_index}`, kind: 'tool', seq: nextSeq(),
+                callIndex: event.call_index, tool: event.tool, result: event.result, source: event.source,
+              }),
             }))
             break
 
@@ -766,6 +810,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
               durationSeconds: event.duration_seconds,
               usage: event.usage,
               rateLimits: event.rate_limits,
+              timeline: appendTimelineNode(msg.timeline ?? [], { id: 'done', kind: 'done', seq: nextSeq(), response: event.response }),
             }))
             setThinking(false)
             setStatusMessage(null)
@@ -773,7 +818,11 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
 
           case 'error':
             setError(event.message)
-            updateLastMessage(msg => ({ ...msg, content: '' }))
+            updateLastMessage(msg => ({
+              ...msg,
+              content: '',
+              timeline: appendTimelineNode(msg.timeline ?? [], { id: 'error', kind: 'error', seq: nextSeq(), message: event.message }),
+            }))
             setThinking(false)
             setStatusMessage(null)
             break
@@ -856,6 +905,14 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
 
   return (
     <div className={styles.root}>
+      {showBriefing && (
+        <AgentBriefingModal
+          agentConfig={agentConfig}
+          agentName={agentName}
+          resumedMessages={initialMessages}
+          onClose={() => setShowBriefing(false)}
+        />
+      )}
       <header className={styles.header}>
         <div className={styles.headerIdentity}>
           {/* Goes back to the Setup/search screen — navigation only, unlike
@@ -1042,16 +1099,29 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
               <MermaidDiagram chart={msg.planDiagram} label="Plan" caption={msg.planSummary} />
             )}
             {msg.liveToolCalls && msg.liveToolCalls.length > 0 && (
-              <ToolActivity
-                toolCalls={msg.liveToolCalls.map(tc => ({
-                  tool: tc.tool,
-                  inputs: tc.inputs,
-                  result: tc.result ?? '…',
-                  source: tc.source,
-                }))}
-                live
-                location={agentConfig.location}
-              />
+              <>
+                <button
+                  type="button"
+                  className={styles.viewToggleBtn}
+                  onClick={() => toggleGraphView(i)}
+                >
+                  {graphViewMessages.has(i) ? '📋 Log view' : '🕸️ Graph view'}
+                </button>
+                {graphViewMessages.has(i) ? (
+                  <GraphView timeline={msg.timeline ?? []} live evalResults={evalResults} />
+                ) : (
+                  <ToolActivity
+                    toolCalls={msg.liveToolCalls.map(tc => ({
+                      tool: tc.tool,
+                      inputs: tc.inputs,
+                      result: tc.result ?? '…',
+                      source: tc.source,
+                    }))}
+                    live
+                    location={agentConfig.location}
+                  />
+                )}
+              </>
             )}
             {msg.content && (
               msg.role === 'assistant'
@@ -1148,11 +1218,27 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                 : <p className={styles.bubbleText}>{msg.displayContent ?? msg.content}</p>
             )}
             {msg.toolCalls && (
-              <ToolActivity
-                toolCalls={msg.toolCalls}
-                live={false}
-                location={agentConfig.location}
-              />
+              <>
+                <button
+                  type="button"
+                  className={styles.viewToggleBtn}
+                  onClick={() => toggleGraphView(i)}
+                >
+                  {graphViewMessages.has(i) ? '📋 Log view' : '🕸️ Graph view'}
+                </button>
+                {graphViewMessages.has(i) ? (
+                  <GraphView
+                    timeline={msg.timeline ?? []}
+                    evalResults={i === messages.length - 1 ? evalResults : []}
+                  />
+                ) : (
+                  <ToolActivity
+                    toolCalls={msg.toolCalls}
+                    live={false}
+                    location={agentConfig.location}
+                  />
+                )}
+              </>
             )}
             {msg.durationSeconds !== undefined && (
               <p className={styles.duration}>

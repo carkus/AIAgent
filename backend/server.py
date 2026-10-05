@@ -36,6 +36,7 @@ from flask import Flask, Response, jsonify, request, stream_with_context
 from bootstrap import generate_agent_config_stream
 from agent_stream import run_agent_stream
 from brief import generate_brief
+from recap import generate_recap
 from llm_client import list_ollama_models, GEMINI_MODEL
 import bandit
 import rate_limit
@@ -141,6 +142,33 @@ def brief():
     if result is None:
         return jsonify({"error": "Could not generate a brief"}), 502
     return jsonify(result)
+
+
+@app.route("/recap", methods=["POST", "OPTIONS"])
+def recap():
+    if request.method == "OPTIONS":
+        return "", 204
+    body = request.get_json() or {}
+    messages = body.get("messages") or []
+    agent_config = body.get("agentConfig") or {}
+    if not isinstance(messages, list) or not messages or not isinstance(agent_config, dict):
+        return jsonify({"error": "messages and agentConfig are required"}), 400
+    provider = ((agent_config.get("provider") or "").strip() or None)
+    model = ((agent_config.get("ollama_model") or "").strip() or None)
+    if provider != "ollama":
+        rate_limit_error = rate_limit.check(rate_limit.client_ip(request))
+        if rate_limit_error:
+            return jsonify({"error": rate_limit_error}), 429
+    text = generate_recap(
+        messages=messages,
+        system_prompt=agent_config.get("system_prompt") or "",
+        agent_name=(body.get("agentName") or "").strip(),
+        provider=provider,
+        model=model,
+    )
+    if text is None:
+        return jsonify({"error": "Could not generate a recap"}), 502
+    return jsonify({"text": text})
 
 
 @app.route("/file/<path:filename>", methods=["GET"])

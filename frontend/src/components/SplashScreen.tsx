@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import styles from '../styles/SplashScreen.module.css'
-import splashLogo from '../assets/agentone_logo_transparent.png'
+import splashLogo from '../assets/favicon.png'
 
 const SPLASH_DURATION_MS = 2000
 

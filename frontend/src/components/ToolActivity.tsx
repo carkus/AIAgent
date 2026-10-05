@@ -789,10 +789,17 @@ function RawResult({ result }: { result: string }) {
         </p>
       )
     }
-    const SKIP_RESULT_KV = new Set(['title', 'url', 'snippet'])
+    // 'snippet' covers most search tools; Tavily's own field for the same
+    // thing is 'content' (often a long multi-paragraph excerpt — clamped by
+    // .resultSnippet's line-clamp rather than dumped in full). 'raw_content'
+    // mirrors 'content' and 'id'/'score' are Tavily bookkeeping, not useful
+    // as a kv pill, so all three are skipped outright instead of leaking into
+    // the generic "extra" pills below.
+    const SKIP_RESULT_KV = new Set(['title', 'url', 'snippet', 'content', 'raw_content', 'id', 'score'])
     return (
       <div>
         {results.map((r, i) => {
+          const snippet = (r.snippet ?? r.content) as string | undefined
           const extra = Object.entries(r).filter(([k, v]) =>
             !SKIP_RESULT_KV.has(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
           )
@@ -805,7 +812,7 @@ function RawResult({ result }: { result: string }) {
               ) : (
                 <span className={styles.resultTitle}>{r.title as string}</span>
               )}
-              {Boolean(r.snippet) && <p className={styles.resultSnippet}>{r.snippet as string}</p>}
+              {Boolean(snippet) && <p className={styles.resultSnippet}>{snippet}</p>}
               {extra.length > 0 && (
                 <div className={styles.kvPills}>
                   {extra.map(([k, v]) => {

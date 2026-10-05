@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, StreamEvent } from './types';
+import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, SavedChatMessage, StreamEvent } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -132,6 +132,36 @@ export async function fetchAgentBrief(
     throw new Error(err.error ?? 'Failed to generate brief');
   }
   return res.json();
+}
+
+/**
+ * In-character "Previously…" recap of a resumed saved chat
+ * (backend/src/recap.py), shown in AgentBriefingModal. Throws on any
+ * failure — the caller falls back to the plain mission briefing.
+ */
+export async function fetchChatRecap(
+  messages: SavedChatMessage[],
+  agentConfig: AgentConfig,
+  agentName: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await fetch(`${API_URL}/recap`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    // Images are dropped — the recap only needs the text of the story so far.
+    body: JSON.stringify({
+      messages: messages.map(m => ({ role: m.role, content: m.content, displayContent: m.displayContent })),
+      agentConfig,
+      agentName,
+    }),
+    signal,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? 'Failed to generate recap');
+  }
+  const data = await res.json();
+  return data.text;
 }
 
 /**
