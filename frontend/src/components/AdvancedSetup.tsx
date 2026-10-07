@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { bootstrap, listMcpTools, validateConfig } from '../api'
 import type { ConfigValidationIssue, McpServerInfo } from '../api'
 import type { AgentConfig, AgentSpec, AgentTemplateId, LlmProvider, ToolDefinition } from '../types'
-import { BEHAVIOR_TOGGLES, PERSONALITY_TRAITS, getTemplate } from '../agentTypes'
+import { BEHAVIOR_TOGGLES, MAX_FOCUS_CHARS, PERSONALITY_TRAITS, getTemplate, shortFocus } from '../agentTypes'
 import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback } from '../modelLabel'
 import styles from '../styles/AdvancedSetup.module.css'
 // Basic Setup's pill/chip classes, so Focus, Personality and Behavior look
@@ -392,8 +392,8 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
             <span className={styles.hint}>Topics <LayerTag layer="prompt" /></span>
             <div className={pills.chipArea} onClick={() => focusInputRef.current?.focus()}>
               {keywords.map(kw => (
-                <span key={kw} className={pills.chip}>
-                  {kw}
+                <span key={kw} className={pills.chip} title={kw.length > MAX_FOCUS_CHARS ? kw : undefined}>
+                  {shortFocus(kw)}
                   <button
                     type="button"
                     className={pills.chipX}
@@ -408,7 +408,7 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
                 ref={focusInputRef}
                 className={pills.chipInput}
                 value={draft}
-                onChange={e => setDraft(e.target.value.slice(0, 50))}
+                onChange={e => setDraft(e.target.value.slice(0, MAX_FOCUS_CHARS))}
                 onKeyDown={e => {
                   if (e.key === 'Enter') { e.preventDefault(); addKeyword() }
                   if (e.key === 'Backspace' && !draft && keywords.length > 0) setKeywords(prev => prev.slice(0, -1))
@@ -416,7 +416,7 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
                 onBlur={() => { if (draft.trim()) addKeyword() }}
                 placeholder={keywords.length >= MAX_FOCUS ? `Limit of ${MAX_FOCUS} reached` : (keywords.length === 0 ? 'Type a topic, press Enter…' : '+ Add Focus')}
                 disabled={keywords.length >= MAX_FOCUS}
-                maxLength={50}
+                maxLength={MAX_FOCUS_CHARS}
               />
             </div>
           </section>

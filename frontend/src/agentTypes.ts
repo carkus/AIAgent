@@ -108,6 +108,14 @@ export interface BehaviorToggle {
 // PERSONALITY_TRAITS does below — characterData.ts (the Agent Generator)
 // needs to pick real behavior ids too, and importing from Setup.tsx would
 // be circular (Setup.tsx -> CharacterGenerator.tsx -> characterData.ts).
+// Focus topics are capped at MAX_FOCUS_CHARS when typed; ones saved before the
+// cap may be longer, so displays shorten them (full text stays the value).
+export const MAX_FOCUS_CHARS = 30
+
+export function shortFocus(kw: string): string {
+  return kw.length > MAX_FOCUS_CHARS ? `${kw.slice(0, 28)}...` : kw
+}
+
 export const BEHAVIOR_TOGGLES: BehaviorToggle[] = [
   {
     id: 'concise',

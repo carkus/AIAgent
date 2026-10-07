@@ -3,7 +3,7 @@ import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, delet
 import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
 import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat, setLastOpenedPointer } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
-import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, DEFAULT_AGENT_SPEC, type BehaviorToggle } from '../agentTypes'
+import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, DEFAULT_AGENT_SPEC, MAX_FOCUS_CHARS, shortFocus, type BehaviorToggle } from '../agentTypes'
 import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
 import { buildAgentBrief, joinNatural } from '../agentBrief'
 import { formatDate, getDateFormat, type DateFormatId } from '../dateFormat'
@@ -1273,8 +1273,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               {specialtiesOpen && (
                 <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
                   {keywords.map(kw => (
-                    <span key={kw} className={styles.chip}>
-                      {kw}
+                    <span key={kw} className={styles.chip} title={kw.length > MAX_FOCUS_CHARS ? kw : undefined}>
+                      {shortFocus(kw)}
                       <button
                         type="button"
                         className={styles.chipX}
@@ -1290,12 +1290,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     ref={inputRef}
                     className={styles.chipInput}
                     value={draft}
-                    onChange={e => setDraft(e.target.value.slice(0, 50))}
+                    onChange={e => setDraft(e.target.value.slice(0, MAX_FOCUS_CHARS))}
                     onKeyDown={handleKeyDown}
                     onBlur={() => { if (draft.trim()) addKeyword() }}
                     placeholder={keywords.length >= MAX_SPECIALTIES ? `Limit of ${MAX_SPECIALTIES} reached` : (keywords.length === 0 ? getTemplate(agentType).keywordPlaceholder : '+ Add Focus')}
                     disabled={bootstrapping || keywords.length >= MAX_SPECIALTIES}
-                    maxLength={50}
+                    maxLength={MAX_FOCUS_CHARS}
                   />
                   {keywords.length > 0 && (
                     <span
@@ -1375,7 +1375,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     </p>
                   ) : (
                     <p className={styles.charHint}>
-                      {draft.length > 0 ? `${50 - draft.length} chars remaining` : ''}
+                      {draft.length > 0 ? `${MAX_FOCUS_CHARS - draft.length} chars remaining` : ''}
                     </p>
                   )}
                 </div>
@@ -1607,20 +1607,21 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                               autoFocus
                               onFocus={e => e.currentTarget.select()}
                               onClick={e => e.stopPropagation()}
-                              onChange={e => setEditSavedKeywordDraft(e.target.value.slice(0, 50))}
+                              onChange={e => setEditSavedKeywordDraft(e.target.value.slice(0, MAX_FOCUS_CHARS))}
                               onKeyDown={e => {
                                 if (e.key === 'Enter') { e.preventDefault(); renameSavedKeyword(kw, editSavedKeywordDraft) }
                                 if (e.key === 'Escape') { e.preventDefault(); setEditingSavedKeyword(null); setEditSavedKeywordDraft('') }
                               }}
                               onBlur={() => renameSavedKeyword(kw, editSavedKeywordDraft)}
-                              maxLength={50}
+                              maxLength={MAX_FOCUS_CHARS}
                             />
                           ) : (
                             <span
                               className={styles.savedKeywordLabel}
                               onDoubleClick={ev => { ev.stopPropagation(); setEditingSavedKeyword(kw); setEditSavedKeywordDraft(kw) }}
+                              title={kw.length > MAX_FOCUS_CHARS ? kw : undefined}
                             >
-                              {kw}
+                              {shortFocus(kw)}
                             </span>
                           )}
                           <button
@@ -1641,7 +1642,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         ref={newSavedKeywordRef}
                         className={styles.chipInput}
                         value={newSavedKeywordDraft}
-                        onChange={e => setNewSavedKeywordDraft(e.target.value.slice(0, 50))}
+                        onChange={e => setNewSavedKeywordDraft(e.target.value.slice(0, MAX_FOCUS_CHARS))}
                         onKeyDown={e => {
                           if (e.key === 'Enter') { e.preventDefault(); addNewSavedKeyword() }
                           if (e.key === 'Escape') { setNewSavedKeywordDraft(''); setAddingSavedKeyword(false) }
@@ -1649,7 +1650,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                         onBlur={addNewSavedKeyword}
                         placeholder="New focus area…"
                         autoFocus
-                        maxLength={50}
+                        maxLength={MAX_FOCUS_CHARS}
                       />
                     ) : (
                       <button
