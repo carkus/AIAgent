@@ -1,20 +1,21 @@
 import { isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { renderToStaticMarkup } from 'react-dom/server'
 import remarkGfm from 'remark-gfm'
-import { publishAgent, runAgent } from '../api'
+import { buildRelic, publishAgent, runAgent } from '../api'
 import { saveChat, setLastOpenedPointer } from '../chatStorage'
-import { buildChatPdf, type PdfAgentContext, type PdfMessage } from '../chatPdf'
+import { buildChatPdf, buildReportPdf, type PdfAgentContext, type PdfMessage } from '../chatPdf'
 import { BEHAVIOR_TOGGLES, PERSONALITY_TRAITS } from '../agentTypes'
 import ToolActivity from './ToolActivity'
 import GraphView from './GraphView'
 import { appendTimelineNode, nextSeq, type TimelineNode } from '../graphTimeline'
-import MermaidDiagram from './MermaidDiagram'
+import MermaidDiagram, { renderMermaidSvg } from './MermaidDiagram'
 import JsonTree from './JsonTree'
 import CodeBlock from './CodeBlock'
 import PdfPreviewModal from './PdfPreviewModal'
 import ImageViewer from './ImageViewer'
 import FeedbackStatusBar from './FeedbackStatusBar'
-import type { AgentConfig, EvalResultItem, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
+import type { AgentConfig, EvalResultItem, RelicSuggestion, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import { describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
 import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate, getDateFormat } from '../dateFormat'
@@ -224,6 +225,22 @@ interface LiveToolCall {
   callIndex: number
 }
 
+const RELIC_LABELS: Record<RelicSuggestion['kind'], string> = {
+  csv: 'Spreadsheet (CSV)',
+  diagram: 'Diagram (SVG)',
+  markdown: 'Markdown document',
+  pdf: 'PDF report',
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
@@ -257,6 +274,9 @@ interface ChatMessage {
   durationSeconds?: number
   usage?: { input_tokens: number; output_tokens: number }
   rateLimits?: { tokens_remaining: string | null; tokens_limit: string | null; requests_remaining: string | null; tokens_reset: string | null }
+  // Output relics the agent offered for this answer (done event's
+  // relic_suggestions); each renders as a chip that builds the file on click.
+  relicSuggestions?: RelicSuggestion[]
 }
 
 // Same wording as FeedbackReportModal.tsx's own targetLabel — kept as a
@@ -333,6 +353,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [relicBusy, setRelicBusy] = useState<string | null>(null)
+  const [relicError, setRelicError] = useState<{ key: string; message: string } | null>(null)
   const [pdfPreview, setPdfPreview] = useState<{ blobUrl: string; filename: string; doc: ReturnType<typeof buildChatPdf> } | null>(null)
   // Rendered markdown DOM per assistant message index, so PDF export can
   // walk react-markdown's actual output (link hrefs, list/heading structure)
@@ -423,8 +445,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       id: chatIdRef.current,
       agentName,
       agentConfig: { ...agentConfig, keywords: focusPool },
-      messages: messages.map(({ role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits }) => ({
-        role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits,
+      messages: messages.map(({ role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions }) => ({
+        role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions,
       })),
       savedAt: Date.now(),
     }
@@ -525,6 +547,50 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   function handleDownloadPdf() {
     if (!pdfPreview) return
     pdfPreview.doc.save(pdfPreview.filename)
+  }
+
+  // Builds the relic the user accepted (POST /relic) and downloads it. The
+  // answer alone is thin when workers did the research (rule 7: the main
+  // reply only synthesises), so their responses travel with it.
+  async function handleBuildRelic(index: number, suggestion: RelicSuggestion) {
+    const key = `${index}-${suggestion.kind}`
+    if (relicBusy) return
+    const msg = messages[index]
+    const question = messages.slice(0, index).reverse().find(m => m.role === 'user')?.content ?? ''
+    const workers = (msg.toolCalls ?? [])
+      .filter(tc => tc.tool === 'delegate_to_worker')
+      .map(tc => { try { return JSON.parse(tc.result) as Record<string, unknown> } catch { return null } })
+      .filter((w): w is Record<string, unknown> => !!w && typeof w.response === 'string')
+      .map(w => ({ name: String(w.worker_name ?? 'worker'), task: String(w.task ?? ''), response: String(w.response) }))
+
+    setRelicBusy(key)
+    setRelicError(null)
+    try {
+      const content = await buildRelic(suggestion, question, msg.content, workers, agentConfig, agentName)
+      const safeName = agentName.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'agent'
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+      const base = `${safeName}-${suggestion.kind}-${stamp}`
+      if (suggestion.kind === 'csv') {
+        downloadBlob(new Blob([content], { type: 'text/csv;charset=utf-8' }), `${base}.csv`)
+      } else if (suggestion.kind === 'markdown') {
+        downloadBlob(new Blob([content], { type: 'text/markdown;charset=utf-8' }), `${base}.md`)
+      } else if (suggestion.kind === 'diagram') {
+        const svg = await renderMermaidSvg(content)
+        downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), `${base}.svg`)
+      } else {
+        const el = document.createElement('div')
+        el.innerHTML = renderToStaticMarkup(<ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>)
+        // The report's own `# title` becomes the PDF title rather than a duplicate first heading.
+        const h1 = el.querySelector('h1')
+        const title = h1?.textContent?.trim() || `Agent ${agentName} report`
+        h1?.remove()
+        buildReportPdf(title, el).save(`${base}.pdf`)
+      }
+    } catch (err) {
+      setRelicError({ key, message: err instanceof Error ? err.message : 'Could not build that file' })
+    } finally {
+      setRelicBusy(null)
+    }
   }
 
   function handleClosePdfPreview() {
@@ -778,6 +844,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
               durationSeconds: event.duration_seconds,
               usage: event.usage,
               rateLimits: event.rate_limits,
+              relicSuggestions: event.relic_suggestions?.length ? event.relic_suggestions : undefined,
               timeline: appendTimelineNode(msg.timeline ?? [], { id: 'done', kind: 'done', seq: nextSeq(), response: event.response }),
             }))
             setThinking(false)
@@ -1188,6 +1255,28 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                   />
                 )}
               </>
+            )}
+            {msg.relicSuggestions && (
+              <div>
+                {msg.relicSuggestions.map(s => {
+                  const key = `${i}-${s.kind}`
+                  return (
+                    <button
+                      key={s.kind}
+                      type="button"
+                      className={styles.viewToggleBtn}
+                      title={s.reason}
+                      disabled={relicBusy !== null}
+                      onClick={() => handleBuildRelic(i, s)}
+                    >
+                      {relicBusy === key ? `Building ${RELIC_LABELS[s.kind]}…` : `⬇ ${RELIC_LABELS[s.kind]}`}
+                    </button>
+                  )
+                })}
+                {relicError && relicError.key.startsWith(`${i}-`) && (
+                  <p className={styles.duration}>{relicError.message}</p>
+                )}
+              </div>
             )}
             {msg.durationSeconds !== undefined && (
               <p className={styles.duration}>

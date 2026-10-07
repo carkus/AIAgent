@@ -504,3 +504,22 @@ export function buildChatPdf(title: string, messages: PdfMessage[], context?: Pd
 
   return layout.pdf
 }
+
+/**
+ * A standalone report (Chat.tsx's "pdf" relic): rendered markdown drawn with
+ * the same block layout as the chat export, minus the transcript labels.
+ */
+export function buildReportPdf(title: string, contentEl: HTMLElement): jsPDF {
+  const layout = new PdfLayout()
+
+  layout.pdf.setFont(FONT_BODY, 'bold')
+  layout.pdf.setFontSize(15)
+  layout.pdf.setTextColor(...TEXT_COLOR)
+  layout.cursor.y += 15
+  layout.pdf.text(title, PAGE_MARGIN, layout.cursor.y)
+  layout.meta(`Generated ${formatDate(new Date(), getDateFormat(), true)}`)
+  layout.rule()
+
+  for (const block of extractBlocks(contentEl)) drawBlock(layout, block)
+  return layout.pdf
+}

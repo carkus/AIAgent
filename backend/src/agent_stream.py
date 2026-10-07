@@ -79,6 +79,38 @@ def _extract_plan_diagram(content: str) -> tuple[str | None, str | None, str]:
 
     return None, None, content
 
+
+# Rule 7b below: the agent may close a final answer with a ```relic fence
+# suggesting a better format than a chat message for it (a CSV of a
+# comparison, a standalone diagram, a document, a PDF report). It's only a
+# suggestion — the frontend shows it as chips and builds the relic via
+# POST /relic (relic.py) only if the user clicks one.
+_RELIC_FENCE_RE = re.compile(r"```relic\s*(.*?)\s*```", re.DOTALL)
+RELIC_KINDS = ("csv", "diagram", "markdown", "pdf")
+
+
+def _extract_relic_suggestions(content: str) -> tuple[str, list[dict]]:
+    """Strips every ```relic fence from a final answer and returns (content,
+    suggestions), each suggestion {"kind", "reason"}, unknown kinds and
+    duplicates dropped, at most two kept. A malformed fence is still stripped,
+    so it never shows up in the reply as raw JSON."""
+    suggestions: list[dict] = []
+    for match in _RELIC_FENCE_RE.finditer(content):
+        try:
+            parsed = json.loads(match.group(1))
+        except (ValueError, TypeError):
+            continue
+        items = parsed if isinstance(parsed, list) else [parsed]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            kind = str(item.get("kind") or "").strip().lower()
+            if kind not in RELIC_KINDS or any(s["kind"] == kind for s in suggestions):
+                continue
+            reason = str(item.get("reason") or "").strip()[:160]
+            suggestions.append({"kind": kind, "reason": reason})
+    return _RELIC_FENCE_RE.sub("", content).strip(), suggestions[:2]
+
 # Confirmed against qwen2.5-coder:7b via Ollama: after a long tool-schema-
 # heavy conversation, the model occasionally answers a plain question (no
 # tool calls at all) with a single bare word echoed from a JSON-schema key
@@ -998,6 +1030,22 @@ clarifying question only belongs AFTER you've already produced real findings
    is about confidence, not brevity — it does not mean cutting the actual
    discussion of your findings short (see rule 5); a confident one-line
    verdict with no analysis behind it is just as unhelpful as a hedgy one.
+
+7b. SUGGEST A BETTER OUTPUT FORMAT WHEN ONE FITS. You still answer in chat
+   as normal. But if this answer would genuinely serve the user better as a
+   standalone artifact, add a ```relic fenced block as the very LAST thing
+   in your final answer, holding a JSON list of one or two suggestions:
+   ```relic
+   [{{"kind": "csv", "reason": "Compare all 12 listings side by side in a spreadsheet"}}]
+   ```
+   Kinds: "csv" (tabular data: listings, prices, side-by-side comparisons),
+   "diagram" (a process, structure, or relationship worth keeping as an
+   image), "markdown" (a reusable brief or document to edit and keep), "pdf"
+   (a polished report to share). The reason is one short line in plain
+   words, naming what the artifact would contain. Do NOT mention the block
+   in your prose: the user sees it as a button, and nothing is built unless
+   they click it. Skip it for short answers, greetings, follow-up
+   questions, or anything that reads fine as a chat message.
 """ + (f"""
 8. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [], max_delegations)}
 9. Once your workers report back, do NOT restate or re-summarize each one's
@@ -1311,7 +1359,7 @@ clarifying question only belongs AFTER you've already produced real findings
 
             # No tool calls → final response
             if not effective_tool_calls:
-                final_text = raw_content or ""
+                final_text, relic_suggestions = _extract_relic_suggestions(raw_content or "")
                 described_not_called = (
                     not tool_calls_log
                     and not delegation_count
@@ -1454,6 +1502,7 @@ clarifying question only belongs AFTER you've already produced real findings
                             continue
                         if guard["verdict"] == "violation":
                             final_text = scope_guard.blocked_reply(spec)
+                            relic_suggestions = []
                         yield _scope_eval("chat_response", None, guard)
 
                 yield _status("Double-checking the reply…")
@@ -1471,6 +1520,9 @@ clarifying question only belongs AFTER you've already produced real findings
                     "type": "done",
                     "response": final_text,
                     "tool_calls": tool_calls_log,
+                    # Advisory: Chat.tsx shows these as chips, and only a
+                    # click spends anything (POST /relic, relic.py).
+                    "relic_suggestions": relic_suggestions,
                     "duration_seconds": round(time.time() - started_at, 1),
                     "usage": {
                         "input_tokens": total_input_tokens,

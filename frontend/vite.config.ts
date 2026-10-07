@@ -11,6 +11,7 @@ export default defineConfig({
       '/agent': 'http://localhost:4891',
       '/brief': 'http://localhost:4891',
       '/recap': 'http://localhost:4891',
+      '/relic': 'http://localhost:4891',
       '/agents': 'http://localhost:4891',
       '/agent-drafts': 'http://localhost:4891',
       '/file': 'http://localhost:4891',

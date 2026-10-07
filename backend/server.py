@@ -37,6 +37,7 @@ from bootstrap import generate_agent_config_stream, validate_config
 from agent_stream import run_agent_stream
 from brief import generate_brief
 from recap import generate_recap
+from relic import KINDS, generate_relic
 from llm_client import list_ollama_models, GEMINI_MODEL
 import bandit
 import rate_limit
@@ -186,6 +187,39 @@ def recap():
     if text is None:
         return jsonify({"error": "Could not generate a recap"}), 502
     return jsonify({"text": text})
+
+
+@app.route("/relic", methods=["POST", "OPTIONS"])
+def relic():
+    if request.method == "OPTIONS":
+        return "", 204
+    # Builds an artifact the agent suggested (agent_stream.py rule 7b) — only
+    # ever called when the user clicks a suggestion chip in Chat.tsx.
+    body = request.get_json() or {}
+    kind = (body.get("kind") or "").strip()
+    answer = (body.get("answer") or "").strip()
+    agent_config = body.get("agentConfig") or {}
+    if kind not in KINDS or not answer or not isinstance(agent_config, dict):
+        return jsonify({"error": "kind, answer and agentConfig are required"}), 400
+    provider = ((agent_config.get("provider") or "").strip() or None)
+    model = ((agent_config.get("ollama_model") or "").strip() or None)
+    if provider != "ollama":
+        rate_limit_error = rate_limit.check(rate_limit.client_ip(request))
+        if rate_limit_error:
+            return jsonify({"error": rate_limit_error}), 429
+    content, error = generate_relic(
+        kind=kind,
+        reason=(body.get("reason") or "").strip(),
+        question=(body.get("question") or "").strip(),
+        answer=answer,
+        workers=body.get("workers") if isinstance(body.get("workers"), list) else None,
+        agent_name=(body.get("agentName") or "").strip(),
+        provider=provider,
+        model=model,
+    )
+    if error:
+        return jsonify({"error": error}), 502
+    return jsonify({"kind": kind, "content": content})
 
 
 @app.route("/file/<path:filename>", methods=["GET"])

@@ -209,8 +209,18 @@ export type StreamEvent =
         requests_limit: string | null;
         requests_remaining: string | null;
       };
+      // Output relics the agent offers for this answer (agent_stream.py's
+      // rule 7b). Built only if the user clicks one (POST /relic).
+      relic_suggestions?: RelicSuggestion[];
     }
   | { type: 'error'; message: string }
+
+export type RelicKind = 'csv' | 'diagram' | 'markdown' | 'pdf'
+
+export interface RelicSuggestion {
+  kind: RelicKind
+  reason: string
+}
 
 export interface ModelAttempt {
   provider: string
@@ -250,6 +260,7 @@ export interface SavedChatMessage {
     requests_remaining: string | null;
     tokens_reset: string | null;
   };
+  relicSuggestions?: RelicSuggestion[];
 }
 
 // A whole saved conversation: everything needed to drop straight back into

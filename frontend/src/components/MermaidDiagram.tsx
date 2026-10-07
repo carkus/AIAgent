@@ -203,6 +203,17 @@ interface Props {
   caption?: string
 }
 
+// Same themed, repaired render as the component below, for callers that need
+// the SVG markup itself (Chat.tsx's diagram relic download). Desktop width,
+// since the file isn't bound to the current viewport.
+let standaloneSeq = 0
+export async function renderMermaidSvg(chart: string): Promise<string> {
+  ensureInitialized()
+  const adapted = fixUnbalancedBrackets(quoteParenLabels(fixReservedEndKeyword(adaptChartForWidth(chart, 1200))))
+  const result = await mermaid.render(`mermaid-standalone-${++standaloneSeq}`, adapted)
+  return withExplicitSvgSize(result.svg)
+}
+
 // Renders a ```mermaid fenced code block from the agent's reply as an actual
 // diagram (flowchart, pie/bar chart, mind map, etc.) instead of raw text —
 // the "prefer a diagram over a wordy paragraph" output style.

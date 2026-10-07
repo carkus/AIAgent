@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentSpec, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, SavedChatMessage, StreamEvent } from './types';
+import type { AgentConfig, AgentSpec, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, RelicSuggestion, SavedChatMessage, StreamEvent } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -164,6 +164,32 @@ export async function fetchChatRecap(
   }
   const data = await res.json();
   return data.text;
+}
+
+/**
+ * Builds an output relic (backend/src/relic.py) from a finished answer, when
+ * the user accepts one of the agent's suggestions. Returns the relic's text
+ * content; the caller turns it into the downloaded file.
+ */
+export async function buildRelic(
+  suggestion: RelicSuggestion,
+  question: string,
+  answer: string,
+  workers: { name: string; task: string; response: string }[],
+  agentConfig: AgentConfig,
+  agentName: string,
+): Promise<string> {
+  const res = await fetch(`${API_URL}/relic`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: suggestion.kind, reason: suggestion.reason, question, answer, workers, agentConfig, agentName }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? 'Failed to build relic');
+  }
+  const data = await res.json();
+  return data.content;
 }
 
 /**
