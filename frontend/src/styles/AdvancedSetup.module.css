@@ -40,6 +40,8 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* Keeps inputs off the scrollbar. */
+  padding-right: 0.6rem;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;

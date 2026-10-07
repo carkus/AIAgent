@@ -80,6 +80,7 @@ expecting it to reach production.
 | `backend/src/eval_checks.py` | Self-evaluation checks (bootstrap/chat-response/tool-call/worker-delegation) — every recorded result carries the `provider`/`model` that produced the thing being graded, which is what makes `bandit.py` possible |
 | `backend/src/eval_log.py` | File-store of `eval_checks.py` results (`data/eval_results.json`); `list_all()` returns the full retained history (unordered, uncapped-per-call) for `bandit.py`'s per-arm aggregation, alongside the pre-existing `list_recent()` used for display |
 | `backend/src/bandit.py` | UCB1 multi-armed-bandit ranking over `eval_log.py` history — `recommend(candidates)` scores each `(provider, model)` arm and returns the top pick plus per-arm stats; advisory only, consumed by `/models` |
+| `backend/eval_harness.py`, `backend/eval_cases/bootstrap.jsonl` | Offline eval harness — runs fixed bootstrap cases × model arms × N repeats, scores with `eval_checks` plus per-case expectations, writes `eval_runs/<stamp>.jsonl` + `.md` report; isolated from live `eval_log`/`bootstrap_memory` |
 | `backend/src/agent_spec.py` | Advanced Setup's structured spec — `normalize()` (re-run at every trust boundary), `bootstrap_prompt_block()`, `enforce_on_config()` (post-bootstrap pins/drops), `runtime_scope_note()`, and the allow-list predicates `agent_stream.py` enforces |
 | `backend/src/scope_guard.py` | Output guard for `spec.out_of_scope` — separate narrow judge call screens final replies and worker responses; one regenerate, then a code-authored decline; fail-open |
 | `backend/src/rate_limit.py` | Per-IP rate limiting (process-local counters — see gunicorn `--workers 1` note in Deployment) |
@@ -280,6 +281,52 @@ selection logic built on top of it:
   `recommendedArm`/`armStats` down to `SettingsModal.tsx`, which shows a
   "🏆 Data-backed pick" hint and marks the matching Ollama `<option>` — the
   provider/model `<select>`s' own `onChange`/`value` wiring is untouched.
+
+### Offline eval harness — fixed cases, not live traffic
+
+`bandit.py` learns from live `eval_log` history, where every arm saw
+different purposes from different users, so an arm can look worse just
+because it drew harder requests. `backend/eval_harness.py` gives every arm
+the identical inputs instead:
+
+```bash
+python backend/eval_harness.py --models gemini ollama:qwen2.5-coder:7b --repeats 3 --judge gemini
+python backend/eval_harness.py --models ollama:qwen2.5-coder:7b --only url_summariser --repeats 1
+```
+
+- **Cases** — `backend/eval_cases/bootstrap.jsonl`, one `{id, purpose,
+  agent_type?, spec?, expect?}` per line. The first four purposes are real
+  ones from `data/bootstrap_memory.json`. `expect` adds deterministic,
+  case-specific checks (`tools_any`/`tools_none` substring match on tool or
+  `mcp_tool` names, `mcp_servers`, `min_tools`/`max_tools`, `persona`),
+  reported as `case:<name>`. Prefer `tools_any` over `mcp_servers` when more
+  than one vetted tool could legitimately do the job (e.g. `fetch` vs
+  Tavily's `tavily_extract`).
+- **Reuses the real path** — runs `generate_agent_config_stream` (same
+  retries, validators and drops as production) and collects the
+  `eval_checks.check_bootstrap` results it already yields. No parallel
+  scoring logic.
+- **Isolated from live data** by patching module attributes in the harness
+  process only: `eval_log.record` and `bootstrap_memory.record` are no-ops
+  (test runs never feed the bandit or become few-shot examples), and
+  `retrieve_similar` returns `[]` unless `--fewshot` (memory changes over
+  time, so grounding makes runs non-repeatable).
+- **`--judge`** fixes the `purpose_fit_judge` model across arms. Without it
+  each arm judges itself, as in production, which tends to be lenient on its
+  own output. The judge only runs once deterministic checks pass.
+- **Usage capture** — `create_chat_completion` is wrapped per module
+  (`gen` vs `judge`) for calls, wall time and tokens. Bootstrap's first call
+  streams, so the wrapper adds `stream_options.include_usage` and times the
+  stream until consumed; if a provider rejects that option it retries
+  without it, so bookkeeping never fails a run. Verified on Ollama; Gemini
+  untested locally (no key in `env.json`).
+- **Report** — pass rate per check per arm, an "all deterministic checks"
+  row, median latency, mean calls/tokens (judge excluded, totalled
+  separately), a warning if any run was served by a cascade fallback rather
+  than the requested arm, and a failure table. `eval_runs/` is gitignored.
+- **Scope** — bootstrap only so far. Chat-turn cases (`run_agent_stream` +
+  `check_chat_response`) are the natural next step; live tool calls make
+  those non-repeatable unless tool responses are recorded and replayed.
 
 ### Live status updates during the agent loop
 
