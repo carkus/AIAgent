@@ -84,7 +84,7 @@ longer a blind guess. Every self-evaluation check the platform already runs
 against its own output (bootstrap validity, chat-response relevance,
 tool-call correctness, worker-delegation success — `backend/src/eval_checks.py`)
 is tagged with the provider/model that produced the thing being graded, so
-the accumulated pass/fail history (`data/eval_results.json`) is attributable
+the accumulated pass/fail history (`eval_results` table in `data/agentone.db`) is attributable
 per model, not just an anonymous feed.
 
 `backend/src/bandit.py` runs a UCB1 multi-armed-bandit ranking over that
@@ -213,7 +213,7 @@ deploy/redeploy.sh all        # both
 
 Run from the repo root; requires SSH access to the droplet.
 
-- `gunicorn server:app` runs the chat/bootstrap API under the `aiagent` systemd unit — single worker process (rate-limit counters are process-local, don't raise `--workers`)
+- `gunicorn server:app` runs the chat/bootstrap API under the `aiagent` systemd unit — 1 worker process × 16 threads (all state, including rate-limit counters, is in the shared SQLite database `data/agentone.db`, so more workers are safe if the box grows)
 - `uvicorn mcp_server:app` runs the MCP server under its own `aiagent-mcp` systemd unit — a structurally separate ASGI process, since the MCP SDK's HTTP transports are Starlette-only and can't share the Flask/gunicorn app
 - nginx serves the built frontend and reverse-proxies API routes to gunicorn and `/mcp` to uvicorn; one shared HTTP Basic Auth login gates the whole app
 - Production is Gemini-only — no Ollama fallback in prod

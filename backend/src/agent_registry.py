@@ -10,54 +10,51 @@ allowlist, not a real sandbox (Limitation #2), so turning a one-off
 bootstrap into a permanently externally-callable tool is a deliberate
 choice, not a side effect of bootstrapping.
 
-Same file-store pattern as saved_searches.py: JSON file under DATA_DIR,
-threading.Lock + atomic replace (write to .tmp, os.replace). DATA_DIR
-deliberately lives outside backend/ — see deploy/redeploy.sh's
-deploy_backend(), which tars and overwrites the entire backend/ directory on
-every deploy.
-
-Single gunicorn worker in production (deploy/aiagent.service) for the Flask
-app, and mcp_server.py runs as its own single-process uvicorn service
-(deploy/aiagent-mcp.service) — both processes share this same file, so the
-threading.Lock only guards against races within one process; cross-process
-races are last-writer-wins on the same file, acceptable at this scale (rare,
-human-triggered publish/unpublish calls, not high-frequency writes).
+Stored in the shared SQLite database (db.py, table agent_registry) under
+DATA_DIR, which deliberately lives outside backend/ — see
+deploy/redeploy.sh's deploy_backend(), which tars and overwrites the entire
+backend/ directory on every deploy. gunicorn (publish/unpublish) and
+mcp_server.py (list/get) both use it; SQLite's transactions make that safe
+across processes, and the UNIQUE tool_name column means two concurrent
+publishes can't both claim the same MCP tool name.
 """
 
-import json
-import os
 import re
-import threading
 import time
 import uuid
 
-_lock = threading.Lock()
+import db
 
 
-def _data_path() -> str:
-    data_dir = os.environ.get("DATA_DIR", os.getcwd())
-    os.makedirs(data_dir, exist_ok=True)
-    return os.path.join(data_dir, "agent_registry.json")
+def _insert(conn, entry: dict) -> None:
+    conn.execute(
+        "INSERT INTO agent_registry (id, tool_name, agent_config_id, data) VALUES (?, ?, ?, ?)",
+        (
+            entry["id"],
+            entry["tool_name"],
+            (entry.get("agent_config") or {}).get("agent_config_id"),
+            db.dumps(entry),
+        ),
+    )
 
 
-def _load() -> list:
-    path = _data_path()
-    if not os.path.exists(path):
-        return []
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, OSError):
-        return []
+def _migrate() -> None:
+    # agent_registry.json was stored newest first; insert oldest first so
+    # ORDER BY seq DESC reproduces the same order.
+    def insert_rows(conn, items):
+        seen = set()
+        for item in reversed(items):
+            if not item.get("tool_name") or item["tool_name"] in seen:
+                continue
+            seen.add(item["tool_name"])
+            item.setdefault("id", uuid.uuid4().hex)
+            _insert(conn, item)
+    db.migrate_json_store("agent_registry", "agent_registry.json", insert_rows)
 
 
-def _save(agents: list) -> None:
-    path = _data_path()
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(agents, f, indent=2)
-    os.replace(tmp_path, path)
+def _load(conn) -> list:
+    rows = conn.execute("SELECT data FROM agent_registry ORDER BY seq DESC").fetchall()
+    return [db.loads(r["data"]) for r in rows]
 
 
 def _slugify(name: str) -> str:
@@ -78,16 +75,18 @@ def _unique_tool_name(name: str, existing: list) -> str:
 
 def list_agents() -> list:
     """All published agents, most recently published first."""
-    with _lock:
-        return _load()
+    _migrate()
+    with db.read() as conn:
+        return _load(conn)
 
 
 def get_by_tool_name(tool_name: str) -> dict | None:
-    with _lock:
-        for a in _load():
-            if a.get("tool_name") == tool_name:
-                return a
-    return None
+    _migrate()
+    with db.read() as conn:
+        row = conn.execute(
+            "SELECT data FROM agent_registry WHERE tool_name = ?", (tool_name,)
+        ).fetchone()
+    return db.loads(row["data"]) if row else None
 
 
 def publish(name: str, description: str, agent_config: dict) -> dict:
@@ -109,36 +108,40 @@ def publish(name: str, description: str, agent_config: dict) -> dict:
     tool_name is derived from name and deduplicated against existing
     published agents for a genuinely new entry — it's the literal MCP tool
     name a client calls, so once assigned it stays fixed for that entry."""
-    with _lock:
-        agents = _load()
+    _migrate()
+    with db.write() as conn:
         config_id = agent_config.get("agent_config_id")
-        existing = next(
-            (a for a in agents if config_id and a.get("agent_config", {}).get("agent_config_id") == config_id),
-            None,
-        )
-        if existing is not None:
+        row = conn.execute(
+            "SELECT data FROM agent_registry WHERE agent_config_id = ? ORDER BY seq DESC LIMIT 1",
+            (config_id,),
+        ).fetchone() if config_id else None
+        if row is not None:
+            existing = db.loads(row["data"])
             existing["name"] = name
             existing["description"] = description
             existing["agent_config"] = agent_config
             existing["created_at"] = time.time()
-            _save(agents)
+            # Updated in place: keeps its seq, so its list position doesn't
+            # move — same as the JSON store mutating the entry where it sat.
+            conn.execute(
+                "UPDATE agent_registry SET data = ? WHERE id = ?",
+                (db.dumps(existing), existing["id"]),
+            )
             return existing
 
         entry = {
             "id": uuid.uuid4().hex,
-            "tool_name": _unique_tool_name(name, agents),
+            "tool_name": _unique_tool_name(name, _load(conn)),
             "name": name,
             "description": description,
             "agent_config": agent_config,
             "created_at": time.time(),
         }
-        agents.insert(0, entry)
-        _save(agents)
+        _insert(conn, entry)
     return entry
 
 
 def unpublish(agent_id: str) -> None:
-    with _lock:
-        agents = _load()
-        agents = [a for a in agents if a.get("id") != agent_id]
-        _save(agents)
+    _migrate()
+    with db.write() as conn:
+        conn.execute("DELETE FROM agent_registry WHERE id = ?", (agent_id,))

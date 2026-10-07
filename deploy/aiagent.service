@@ -15,14 +15,19 @@ EnvironmentFile=/var/www/aiagent/.env
 # /var/www/aiagent/data — confirmed live (empty /agents despite a populated
 # registry file at the intended path). DATA_DIR here overrides that inference.
 Environment=DATA_DIR=/var/www/aiagent/data
-# Single worker PROCESS is required — rate_limit.py's counters are process-local.
-# --threads gives real concurrency for the streaming /agent endpoint without
-# violating that. --timeout must exceed the longest expected agent loop
-# (25 tool-call rounds x LLM latency) — this is the whole point of moving off
-# API Gateway's 29s cap, don't shrink it back down.
+# workers x threads = how many /agent streams (i.e. agents) can run at once:
+# each streaming request holds one thread for its whole agent loop, so 1 x 16
+# allows 16 simultaneous agents. Agent loops are almost entirely waiting on
+# LLM/HTTP I/O, so threads carry the concurrency at a few MB each, whereas a
+# worker process costs ~90MB resident — and the 1GB, 1-vCPU droplet was
+# already into swap with one. More workers are safe if the box grows: every
+# store, including rate_limit.py's counters, lives in the shared SQLite
+# database (backend/src/db.py) rather than in process memory. --timeout must exceed the
+# longest expected agent loop (25 tool-call rounds x LLM latency) — this is
+# the whole point of moving off API Gateway's 29s cap, don't shrink it back down.
 ExecStart=/var/www/aiagent/venv/bin/gunicorn \
     --workers 1 \
-    --threads 4 \
+    --threads 16 \
     --worker-class gthread \
     --timeout 300 \
     --bind 127.0.0.1:8787 \

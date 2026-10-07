@@ -93,7 +93,9 @@ sudo systemctl status aiagent
 curl -s http://127.0.0.1:8787/models   # expect {"models": []} — no Ollama configured for this app on this box
 ```
 
-Keep `--workers 1` in the unit — `rate_limit.py`'s counters are process-local; more worker *processes* would each get their own counters and silently multiply the effective rate limit. `--threads 4` gives real concurrency for the streaming `/agent` endpoint without that problem.
+`--workers × --threads` is how many agents can run at once (each streaming `/agent` request holds one thread for its whole loop); the unit ships with 1 × 16, since each worker process costs ~90MB and the 1GB droplet was already into swap with one. More than one worker process would be safe because all state, including `rate_limit.py`'s counters, lives in the shared SQLite database (`DATA_DIR/agentone.db`, `backend/src/db.py`), not in process memory. Watch memory on the 1GB droplet — prefer raising `--threads` over `--workers`.
+
+After changing the unit file on an existing box, re-run the `cp` + `daemon-reload` above and `sudo systemctl restart aiagent` — `deploy/redeploy.sh` doesn't reinstall unit files. On first start, each legacy `data/*.json` store is imported into `agentone.db` once and renamed to `*.json.migrated` (kept for rollback).
 
 ## 4.5. MCP server unit (published agents as MCP tools)
 

@@ -6,47 +6,42 @@ saved_searches.py) and from a "Saved Agent" chat (a fully bootstrapped agent
 with real conversation history, see chatStorage.ts). No system prompt/tools
 exist yet at this stage — that only happens once the draft is commissioned.
 
-Same JSON-file-backed, lock/atomic-replace pattern as saved_searches.py.
+Stored in the shared SQLite database (db.py, table agent_drafts), same
+pattern as saved_searches.py.
 """
 
-import json
-import os
-import threading
 import time
 import uuid
 
-_lock = threading.Lock()
+import db
 
 
-def _data_path() -> str:
-    data_dir = os.environ.get("DATA_DIR", os.getcwd())
-    os.makedirs(data_dir, exist_ok=True)
-    return os.path.join(data_dir, "agent_drafts.json")
+def _insert(conn, entry: dict) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO agent_drafts (id, data) VALUES (?, ?)",
+        (entry["id"], db.dumps(entry)),
+    )
 
 
-def _load() -> list:
-    path = _data_path()
-    if not os.path.exists(path):
-        return []
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, OSError):
-        return []
+def _migrate() -> None:
+    # agent_drafts.json was stored newest first; insert oldest first so
+    # ORDER BY seq DESC reproduces the same order.
+    def insert_rows(conn, items):
+        for item in reversed(items):
+            item.setdefault("id", uuid.uuid4().hex)
+            _insert(conn, item)
+    db.migrate_json_store("agent_drafts", "agent_drafts.json", insert_rows)
 
 
-def _save(drafts: list) -> None:
-    path = _data_path()
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(drafts, f, indent=2)
-    os.replace(tmp_path, path)
+def _load(conn) -> list:
+    rows = conn.execute("SELECT data FROM agent_drafts ORDER BY seq DESC").fetchall()
+    return [db.loads(r["data"]) for r in rows]
 
 
 def list_drafts() -> list:
-    with _lock:
-        return _load()
+    _migrate()
+    with db.read() as conn:
+        return _load(conn)
 
 
 def add_draft(
@@ -67,27 +62,24 @@ def add_draft(
         "behaviorToggles": behavior_toggles or [],
         "savedAt": int(time.time() * 1000),
     }
-    with _lock:
-        drafts = _load()
+    _migrate()
+    with db.write() as conn:
         # Same name+type+keywords+location saved again is a distinct-entry
         # repeat — collapse it, matching saved_searches.py's behaviour.
-        drafts = [
-            d for d in drafts
-            if not (
+        for d in _load(conn):
+            if (
                 d.get("agentName") == agent_name
                 and d.get("agentType") == agent_type
                 and d.get("keywords") == keywords
                 and d.get("location") == location
                 and d.get("behaviorToggles", []) == (behavior_toggles or [])
-            )
-        ]
-        drafts.insert(0, entry)
-        _save(drafts)
+            ):
+                conn.execute("DELETE FROM agent_drafts WHERE id = ?", (d["id"],))
+        _insert(conn, entry)
     return entry
 
 
 def delete_draft(draft_id: str) -> None:
-    with _lock:
-        drafts = _load()
-        drafts = [d for d in drafts if d.get("id") != draft_id]
-        _save(drafts)
+    _migrate()
+    with db.write() as conn:
+        conn.execute("DELETE FROM agent_drafts WHERE id = ?", (draft_id,))

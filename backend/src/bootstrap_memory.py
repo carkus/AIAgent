@@ -4,10 +4,10 @@ purpose -> generated config pair after a successful bootstrap, and retrieve
 the nearest past purposes + their working tool schemas as few-shot examples
 for new bootstraps."
 
-Storage shape mirrors saved_searches.py: a single JSON file under DATA_DIR,
-threading.Lock around plain read/write (single gunicorn worker in production,
-see that module's docstring for why that's sufficient), atomic replace on
-save. Retrieval is an in-memory linear cosine-similarity scan over stored
+Stored in the shared SQLite database (db.py, table bootstrap_memory) — worker
+bootstraps are recorded from the MCP server process as well as gunicorn, so a
+per-process lock wasn't enough. Retrieval is an in-memory linear
+cosine-similarity scan over stored
 embeddings (embeddings.py) — no vector-DB dependency, same shape as
 ChattyPrayers.Api's ConversationIndex, proportionate to at most a few hundred
 stored entries (FIFO-capped below).
@@ -16,18 +16,15 @@ Every public function here is best-effort and never raises past its own
 boundary: a broken/unavailable embedding provider or a disk hiccup should
 degrade bootstrap back to today's cold-start behavior, not fail it.
 """
-import json
 import logging
-import os
-import threading
 import time
 import uuid
 
+import db
 from embeddings import embed_text, cosine_similarity
 
 logger = logging.getLogger(__name__)
 
-_lock = threading.Lock()
 _MAX_ENTRIES = 200
 _SYSTEM_PROMPT_EXCERPT_LEN = 300
 
@@ -40,30 +37,28 @@ _SYSTEM_PROMPT_EXCERPT_LEN = 300
 _SUCCESS_BOOST_WEIGHT = 0.15
 
 
-def _data_path() -> str:
-    data_dir = os.environ.get("DATA_DIR", os.getcwd())
-    os.makedirs(data_dir, exist_ok=True)
-    return os.path.join(data_dir, "bootstrap_memory.json")
+def _insert(conn, entry: dict) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO bootstrap_memory (id, data) VALUES (?, ?)",
+        (entry["id"], db.dumps(entry)),
+    )
+
+
+def _migrate() -> None:
+    # bootstrap_memory.json was stored oldest first.
+    def insert_rows(conn, items):
+        for item in items:
+            item.setdefault("id", uuid.uuid4().hex)
+            _insert(conn, item)
+    db.migrate_json_store("bootstrap_memory", "bootstrap_memory.json", insert_rows)
 
 
 def _load() -> list:
-    path = _data_path()
-    if not os.path.exists(path):
-        return []
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, OSError):
-        return []
-
-
-def _save(entries: list) -> None:
-    path = _data_path()
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(entries, f)
-    os.replace(tmp_path, path)
+    """Every stored entry, oldest first."""
+    _migrate()
+    with db.read() as conn:
+        rows = conn.execute("SELECT data FROM bootstrap_memory ORDER BY seq").fetchall()
+    return [db.loads(r["data"]) for r in rows]
 
 
 def record(
@@ -99,12 +94,14 @@ def record(
             "created_at": time.time(),
         }
 
-        with _lock:
-            entries = _load()
-            entries.append(entry)
-            if len(entries) > _MAX_ENTRIES:
-                entries = entries[-_MAX_ENTRIES:]
-            _save(entries)
+        _migrate()
+        with db.write() as conn:
+            _insert(conn, entry)
+            conn.execute(
+                "DELETE FROM bootstrap_memory WHERE seq <= "
+                "(SELECT seq FROM bootstrap_memory ORDER BY seq DESC LIMIT 1 OFFSET ?)",
+                (_MAX_ENTRIES,),
+            )
     except Exception as e:
         logger.info("bootstrap_memory.record skipped: %s", e)
 
@@ -171,8 +168,7 @@ def retrieve_similar(
         if query_embedding is None:
             return []
 
-        with _lock:
-            entries = _load()
+        entries = _load()
 
         scored = []
         for entry in entries:

@@ -4,55 +4,46 @@ Server-side persistence for Setup screen "saved searches".
 Previously these lived in the browser's localStorage, which is scoped per
 origin (protocol+host+port) — every dev-server port change silently handed
 the user a brand-new, empty storage bucket. This module replaces that with a
-small JSON-file-backed store so saved searches survive port/browser changes.
+small server-side store so saved searches survive port/browser changes.
 
-Storage path is resolved from the DATA_DIR env var (set by server.py from its
-existing _ROOT computation) rather than recomputed here, and deliberately
-lives outside backend/ — see deploy/redeploy.sh's deploy_backend(), which
-tars and overwrites the entire backend/ directory on every deploy.
-
-Single gunicorn worker in production (see deploy/aiagent.service), so a
-threading.Lock() around plain file reads/writes is sufficient — no
-multi-process race to worry about.
+Stored in the shared SQLite database (db.py, table saved_searches) under the
+DATA_DIR env var (set by server.py from its existing _ROOT computation),
+which deliberately lives outside backend/ — see deploy/redeploy.sh's
+deploy_backend(), which tars and overwrites the entire backend/ directory on
+every deploy.
 """
 
-import json
-import os
-import threading
 import uuid
 
-_lock = threading.Lock()
+import db
 
 
-def _data_path() -> str:
-    data_dir = os.environ.get("DATA_DIR", os.getcwd())
-    os.makedirs(data_dir, exist_ok=True)
-    return os.path.join(data_dir, "saved_searches.json")
+def _insert(conn, entry: dict) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO saved_searches (id, data) VALUES (?, ?)",
+        (entry["id"], db.dumps(entry)),
+    )
 
 
-def _load() -> list:
-    path = _data_path()
-    if not os.path.exists(path):
-        return []
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, OSError):
-        return []
+def _migrate() -> None:
+    # saved_searches.json was stored newest first; insert oldest first so
+    # ORDER BY seq DESC reproduces the same order.
+    def insert_rows(conn, items):
+        for item in reversed(items):
+            item.setdefault("id", uuid.uuid4().hex)
+            _insert(conn, item)
+    db.migrate_json_store("saved_searches", "saved_searches.json", insert_rows)
 
 
-def _save(searches: list) -> None:
-    path = _data_path()
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(searches, f, indent=2)
-    os.replace(tmp_path, path)
+def _load(conn) -> list:
+    rows = conn.execute("SELECT data FROM saved_searches ORDER BY seq DESC").fetchall()
+    return [db.loads(r["data"]) for r in rows]
 
 
 def list_searches() -> list:
-    with _lock:
-        return _load()
+    _migrate()
+    with db.read() as conn:
+        return _load(conn)
 
 
 def add_search(name: str, keywords: list, agent_type: str | None) -> dict:
@@ -62,18 +53,18 @@ def add_search(name: str, keywords: list, agent_type: str | None) -> dict:
         "keywords": keywords,
         "agentType": agent_type,
     }
-    with _lock:
-        searches = _load()
+    _migrate()
+    with db.write() as conn:
         # Same keywords saved under the same agent type is a distinct-entry
         # repeat — collapse it, matching the old localStorage behaviour.
-        searches = [s for s in searches if not (s.get("name") == name and s.get("agentType") == agent_type)]
-        searches.insert(0, entry)
-        _save(searches)
+        for s in _load(conn):
+            if s.get("name") == name and s.get("agentType") == agent_type:
+                conn.execute("DELETE FROM saved_searches WHERE id = ?", (s["id"],))
+        _insert(conn, entry)
     return entry
 
 
 def delete_search(search_id: str) -> None:
-    with _lock:
-        searches = _load()
-        searches = [s for s in searches if s.get("id") != search_id]
-        _save(searches)
+    _migrate()
+    with db.write() as conn:
+        conn.execute("DELETE FROM saved_searches WHERE id = ?", (search_id,))
