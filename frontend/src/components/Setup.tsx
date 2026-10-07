@@ -74,8 +74,10 @@ function SaveIcon() {
 // button-in-button), so it's a div with role="button" instead; the HelpTip's
 // own onClick stops propagation so opening the popover doesn't also
 // toggle the section.
-function SectionHeader({ label, expanded, onToggle, help, right }: {
+function SectionHeader({ label, count, expanded, onToggle, help, right }: {
   label: string
+  // Shown after the label as "(n)", the same way the Dossier's section titles show theirs.
+  count?: number
   expanded: boolean
   onToggle: () => void
   help: string
@@ -93,7 +95,7 @@ function SectionHeader({ label, expanded, onToggle, help, right }: {
       <span className={styles.fieldLabel}>
         <span className={styles.sectionBulb} aria-hidden="true" />
         {right}
-        {label}
+        {label}{count ? ` (${count})` : ''}
       </span>
       <span className={styles.fieldLabelRight}>
         <HelpTip text={help} label={`${label} help`} />
@@ -1103,53 +1105,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 <span className={styles.modelLinerIcon} aria-hidden="true">🧠</span>
                 <span>{describeModel(provider, ollamaModel)}</span>
               </button>
-              <div className={styles.resetToolbar}>
-                <button
-                  type="button"
-                  className={styles.profileResetBtn}
-                  onClick={() => {
-                    setKeywords([])
-                    setDraft('')
-                    setActiveToggles([])
-                    setSelectedTraits([])
-                    setPurposeImage(null)
-                    onNewAgent()
-                    inputRef.current?.focus()
-                  }}
-                  disabled={bootstrapping}
-                >
-                  CLEAR
-                </button>
-                <button
-                  type="button"
-                  className={styles.profileSaveBtn}
-                  onClick={saveAgentDraft}
-                  disabled={bootstrapping}
-                  title="Save Agent profile — name, type, location and focus areas"
-                  aria-label="Save agent"
-                >
-                  <span aria-hidden="true"><SaveIcon /></span>
-                </button>
-                <button
-                  type="button"
-                  className={styles.characterGenBtn}
-                  onClick={ev => { ev.stopPropagation(); setCharacterGenOpen(true) }}
-                  disabled={bootstrapping}
-                >
-                  OPEN AGENT
-                </button>
-                {onOpenAdvanced && (
-                  <button
-                    type="button"
-                    className={styles.characterGenBtn}
-                    onClick={ev => { ev.stopPropagation(); onOpenAdvanced() }}
-                    disabled={bootstrapping}
-                    title="Define the agent with a structured spec, hard tool limits and a review step"
-                  >
-                    ADVANCED
-                  </button>
-                )}
-              </div>
             </div>
           </div>
 
@@ -1172,9 +1127,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       expanded={personalityOpen}
                       onToggle={() => setPersonalityOpen(o => !o)}
                       help="Personality traits give the agent a consistent character quirk beyond its raw behavior — e.g. Inquisitive or Meticulous for a researcher. Purely optional flavor that still shapes its generated system prompt, and the pool of traits on offer changes with the agent type below. Active traits are summarized in the Brief below."
-                      right={!personalityOpen && activeTraits.length > 0 && (
-                        <span className={styles.fieldLabelCount}>{activeTraits.length}/{traitPool.length}</span>
-                      )}
+                      count={activeTraits.length}
                     />
                     {personalityOpen && (
                       <div className={styles.behaviorTogglesRow}>
@@ -1259,9 +1212,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 expanded={specialtiesOpen}
                 onToggle={() => setSpecialtiesOpen(o => !o)}
                 help="Focus: the topics, roles, or keywords this agent will actually work on. Add at least one — they drive the Brief below and what the agent searches or reports on once commissioned."
-                right={!specialtiesOpen && keywords.length > 0 && (
-                  <span className={styles.fieldLabelCount}>{keywords.length}/{savedKeywordPool.length}</span>
-                )}
+                count={keywords.length}
               />
               {specialtiesOpen && (
                 <p className={styles.specialtiesHint}>
@@ -1297,15 +1248,18 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     disabled={bootstrapping || keywords.length >= MAX_SPECIALTIES}
                     maxLength={MAX_FOCUS_CHARS}
                   />
-                  {keywords.length > 0 && (
-                    <span
-                      className={styles.keywordTally}
-                      title={`${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} added`}
-                      aria-hidden="true"
-                    >
-                      {keywords.length}
-                    </span>
-                  )}
+                  <button
+                    type="button"
+                    className={styles.focusAttachBtn}
+                    onClick={ev => { ev.stopPropagation(); handlePurposeImageAttachClick() }}
+                    disabled={bootstrapping || attachingPurposeImage}
+                    title="Attach an image for the agent to look at — it'll inform the agent's design the same way a keyword would"
+                    aria-label="Attach an image"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" aria-hidden="true">
+                      <path d="M16.5 6.5 8.7 14.3a3 3 0 1 0 4.24 4.24l7.1-7.1a5 5 0 1 0-7.07-7.07L5.5 11.84" />
+                    </svg>
+                  </button>
                 </div>
               )}
               {specialtiesOpen && (
@@ -1318,19 +1272,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     onChange={handlePurposeImageFileChange}
                   />
                   <div className={styles.purposeImageLeft}>
-                    <button
-                      type="button"
-                      className={styles.attachImageBtn}
-                      onClick={handlePurposeImageAttachClick}
-                      disabled={bootstrapping || attachingPurposeImage}
-                      title="Attach an image for the agent to look at — it'll inform the agent's design the same way a keyword would"
-                      aria-label="Attach an image"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" width="14" height="14" aria-hidden="true">
-                        <path d="M16.5 6.5 8.7 14.3a3 3 0 1 0 4.24 4.24l7.1-7.1a5 5 0 1 0-7.07-7.07L5.5 11.84" />
-                      </svg>
-                      Attach Image
-                    </button>
                     {(purposeImage || attachingPurposeImage) && (
                       <div className={styles.purposeImageChip}>
                         {attachingPurposeImage ? (
@@ -1489,6 +1430,54 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               )}
             </div>
           )}
+          </div>
+
+          <div className={styles.resetToolbar}>
+            <button
+              type="button"
+              className={styles.profileResetBtn}
+              onClick={() => {
+                setKeywords([])
+                setDraft('')
+                setActiveToggles([])
+                setSelectedTraits([])
+                setPurposeImage(null)
+                onNewAgent()
+                inputRef.current?.focus()
+              }}
+              disabled={bootstrapping}
+            >
+              CLEAR
+            </button>
+            <button
+              type="button"
+              className={styles.profileSaveBtn}
+              onClick={saveAgentDraft}
+              disabled={bootstrapping}
+              title="Save Agent profile — name, type, location and focus areas"
+              aria-label="Save agent"
+            >
+              <span aria-hidden="true"><SaveIcon /></span>
+            </button>
+            <button
+              type="button"
+              className={styles.characterGenBtn}
+              onClick={ev => { ev.stopPropagation(); setCharacterGenOpen(true) }}
+              disabled={bootstrapping}
+            >
+              OPEN AGENT
+            </button>
+            {onOpenAdvanced && (
+              <button
+                type="button"
+                className={styles.characterGenBtn}
+                onClick={ev => { ev.stopPropagation(); onOpenAdvanced() }}
+                disabled={bootstrapping}
+                title="Define the agent with a structured spec, hard tool limits and a review step"
+              >
+                ADVANCED
+              </button>
+            )}
           </div>
 
           <div className={styles.profileCommissionRow}>

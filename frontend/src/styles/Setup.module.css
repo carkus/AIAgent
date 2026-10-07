@@ -171,24 +171,33 @@
   letter-spacing: 0.03em;
 }
 
-.keywordTally {
+/* Paperclip at the right end of the Focus field. */
+.focusAttachBtn {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.5rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  box-shadow: 0 1px 3px rgba(28, 40, 51, 0.1);
-  color: var(--color-accent);
-  font-family: 'Share Tech Mono', monospace;
-  font-size: var(--font-size-base);
-  font-weight: 400;
+  width: 1.7rem;
   height: 1.7rem;
-  min-width: 1.7rem;
-  padding: 0 0.4rem;
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
+  padding: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent-secondary);
+  border-radius: 8px;
+  color: var(--color-accent-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.focusAttachBtn:hover:not(:disabled) {
+  background: var(--color-accent-secondary);
+  color: #fff;
+}
+
+.focusAttachBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .charHint {
@@ -573,46 +582,13 @@
   margin-top: 0.5rem;
 }
 
-/* Groups Attach Image + its chip as one flex item so .purposeImageRow's
-   justify-content: space-between pushes just this cluster left and Save
-   Focus's .profileActions right, instead of space-between spreading all
-   three children (button/chip/save) evenly across the row. */
+/* Holds the attached-image chip (the paperclip itself is in the Focus field)
+   so .purposeImageRow's space-between keeps it left and Save Focus right. */
 .purposeImageLeft {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.6rem;
-}
-
-/* Same text-pill shape/chrome as .characterGenBtn — a small bordered accent
-   button, not the circular ghost-icon treatment Chat.tsx's composer uses,
-   so it reads as one of this form's own field-level actions. */
-.attachImageBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-accent-secondary);
-  border-radius: 4px;
-  color: var(--color-accent-secondary);
-  cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: var(--font-size-xs);
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.4rem 0.75rem;
-  transition: background-color 0.15s, color 0.15s;
-}
-
-.attachImageBtn:hover:not(:disabled) {
-  background: var(--color-accent-secondary);
-  color: #fff;
-}
-
-.attachImageBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 /* Mirrors Chat.module.css's .attachmentChip/.attachmentThumb/.attachmentRemove
@@ -1020,7 +996,7 @@
 .fieldLabel {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   color: var(--color-accent-secondary);
   font-family: 'Share Tech Mono', monospace;
   font-size: var(--font-size-sm);
@@ -1073,6 +1049,8 @@
   font-size: var(--font-size-xs);
   font-weight: 600;
   padding: 0.05rem 0.45rem;
+  /* The label's wide tracking would pad the count's trailing edge. */
+  letter-spacing: 0;
   /* Shows the actual selected labels now, not just a count, so this can be
      a much longer string (e.g. every behavior toggle at once) — truncates
      with an ellipsis instead of pushing the caret/help button off the row. */
