@@ -629,7 +629,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     })
 
     const html =
-      `<div style="font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:720px;">` +
+      `<div style="font-family:Inter,'Segoe UI',sans-serif;color:#1f2937;max-width:720px;">` +
       `<h2 style="margin:0 0 0.8em;color:#053750;">Agent ${escapeHtml(agentName)} — Chat Transcript</h2>` +
       blocks.join('') +
       `</div>`

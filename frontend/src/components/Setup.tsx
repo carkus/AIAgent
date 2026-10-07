@@ -17,7 +17,6 @@ import HelpTip from './HelpTip'
 import BehaviorIcon from './BehaviorIcon'
 import FeedbackStatusBar from './FeedbackStatusBar'
 import RelicPreviewModal from './RelicPreviewModal'
-import ToolbarBuilder from './ToolbarBuilder'
 import { useToolbarDrag, useToolbarLayout, type ToolbarItem } from '../toolbarLayout'
 import { downloadRelic, RELIC_LABELS, relicFilename } from '../relicFiles'
 
@@ -72,21 +71,17 @@ function SaveIcon() {
 }
 
 // Toolbar icon per output kind (the Brief's offered relics).
-// The Setup toolbar's buttons for the toolbar builder (ToolbarBuilder):
-// the default order is the order listed here. Save Agent is locked on (it
-// must always be visible). Outputs only appear when the Brief offers them.
+// The Setup toolbar's buttons (toolbarLayout.ts): the default order is the
+// order listed here; dragging a button on the toolbar reorders its group.
+// Save Agent is locked on (it must always be visible). Outputs only appear
+// when the Brief offers them.
 const SETUP_TOOLBAR_ITEMS: ToolbarItem[] = [
-  { id: 'clear', label: 'Clear', group: 'controls' },
+  { id: 'clear', label: 'Clear', group: 'danger' },
   { id: 'save', label: 'Save agent', group: 'controls', locked: true },
   { id: 'open', label: 'Open agent', group: 'controls' },
   { id: 'advanced', label: 'Advanced setup', group: 'controls' },
   ...(['pdf', 'docx', 'markdown', 'slides', 'diagram', 'chart', 'csv', 'json'] as RelicKind[])
     .map(kind => ({ id: kind, label: RELIC_LABELS[kind], group: 'outputs' })),
-]
-
-const SETUP_TOOLBAR_GROUPS = [
-  { id: 'controls', label: 'Agent' },
-  { id: 'outputs', label: 'Outputs (when the Brief offers them)' },
 ]
 
 function ClearIcon() {
@@ -119,15 +114,6 @@ function AdvancedIcon() {
   )
 }
 
-function setupToolbarIcon(id: string) {
-  switch (id) {
-    case 'clear': return <ClearIcon />
-    case 'save': return <SaveIcon />
-    case 'open': return <OpenAgentIcon />
-    case 'advanced': return <AdvancedIcon />
-    default: return id in RELIC_LABELS ? <RelicIcon kind={id as RelicKind} /> : null
-  }
-}
 
 function RelicIcon({ kind }: { kind: RelicKind }) {
   const paths: Record<RelicKind, React.ReactNode> = {
@@ -1292,6 +1278,28 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 <span>{describeModel(provider, ollamaModel)}</span>
               </button>
             </div>
+            <div className={styles.agentTypeSelector}>
+              <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
+                {AGENT_TEMPLATES.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={agentType === t.id}
+                    aria-label={t.label}
+                    title={t.label}
+                    className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
+                    onClick={() => handleAgentTypeChange(t.id)}
+                    disabled={bootstrapping}
+                  >
+                    <span className={styles.agentTypePillIcon} aria-hidden="true">
+                      <AgentTypeIcon id={t.id} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <span className={styles.agentTypeLabel}>{getTemplate(agentType).label}</span>
+            </div>
           </div>
 
           <div className={styles.agentCardBody}>
@@ -1312,7 +1320,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       label="Personality (Optional)"
                       expanded={personalityOpen}
                       onToggle={() => setPersonalityOpen(o => !o)}
-                      help="Personality traits give the agent a consistent character quirk beyond its raw behavior — e.g. Inquisitive or Meticulous for a researcher. Purely optional flavor that still shapes its generated system prompt, and the pool of traits on offer changes with the agent type below. Active traits are summarized in the Brief below."
+                      help="Personality traits give the agent a consistent character quirk beyond its raw behavior — e.g. Inquisitive or Meticulous for a researcher. Purely optional flavor that still shapes its generated system prompt, and the pool of traits on offer changes with the agent type (top right). Active traits are summarized in the Brief below."
                       count={activeTraits.length}
                     />
                     {personalityOpen && (
@@ -1623,37 +1631,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           <div className={styles.resetToolbar}>
             {toolbarLayout.visible('controls').map(id => {
               switch (id) {
-                case 'clear':
-                  return (
-                    <button
-                      key={id}
-                      {...toolbarDrag.dragProps(id)}
-                      type="button"
-                      className={`${styles.toolbarIconBtn} ${styles.toolbarIconDanger}`}
-                      onClick={() => {
-                        setEditing(null)
-                        setKeywords([])
-                        setDraft('')
-                        setActiveToggles([])
-                        setSelectedTraits([])
-                        setPurposeImage(null)
-                        onNewAgent()
-                        inputRef.current?.focus()
-                      }}
-                      disabled={bootstrapping}
-                      title="Clear: start a fresh agent"
-                      aria-label="Clear"
-                    >
-                      <ClearIcon />
-                    </button>
-                  )
                 case 'save':
                   return (
                     <button
                       key={id}
                       {...toolbarDrag.dragProps(id)}
                       type="button"
-                      className={styles.toolbarIconBtn}
+                      className={`${styles.toolbarIconBtn} ${styles.toolbarControlBtn}`}
                       onClick={saveAgentDraft}
                       disabled={bootstrapping}
                       title="Save Agent profile — name, type, location and focus areas"
@@ -1668,7 +1652,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       key={id}
                       {...toolbarDrag.dragProps(id)}
                       type="button"
-                      className={styles.toolbarIconBtn}
+                      className={`${styles.toolbarIconBtn} ${styles.toolbarControlBtn}`}
                       onClick={ev => { ev.stopPropagation(); setCharacterGenOpen(true) }}
                       disabled={bootstrapping}
                       title="Open Agent: generate a character"
@@ -1683,7 +1667,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       key={id}
                       {...toolbarDrag.dragProps(id)}
                       type="button"
-                      className={styles.toolbarIconBtn}
+                      className={`${styles.toolbarIconBtn} ${styles.toolbarControlBtn}`}
                       onClick={ev => { ev.stopPropagation(); onOpenAdvanced() }}
                       disabled={bootstrapping}
                       title="Advanced: define the agent with a structured spec, hard tool limits and a review step"
@@ -1720,12 +1704,29 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 })}
               </div>
             )}
-            <ToolbarBuilder
-              layout={toolbarLayout}
-              groups={SETUP_TOOLBAR_GROUPS}
-              renderIcon={setupToolbarIcon}
-              disabled={bootstrapping}
-            />
+            {/* Clear is destructive, so it sits apart, after the outputs. */}
+            {toolbarLayout.visible('danger').map(id => (
+              <button
+                key={id}
+                type="button"
+                className={`${styles.toolbarIconBtn} ${styles.toolbarIconDanger} ${styles.toolbarIsolated}`}
+                onClick={() => {
+                  setEditing(null)
+                  setKeywords([])
+                  setDraft('')
+                  setActiveToggles([])
+                  setSelectedTraits([])
+                  setPurposeImage(null)
+                  onNewAgent()
+                  inputRef.current?.focus()
+                }}
+                disabled={bootstrapping}
+                title="Clear: start a fresh agent"
+                aria-label="Clear"
+              >
+                <ClearIcon />
+              </button>
+            ))}
           </div>
 
           <div className={styles.profileCommissionRow}>
@@ -1734,32 +1735,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               )}
               <div className={styles.commissionGroup}>
                 <HelpTip
-                  text="Agent type decides which primitive tools and default behavior this agent gets — e.g. only a Job search agent can call the live job-listings tool. Switching types also swaps the personality traits on offer above. Deploy bootstraps it and starts the chat."
+                  text="Agent type (top right, beside the agent's name) decides which primitive tools and default behavior this agent gets — e.g. only a Job search agent can call the live job-listings tool. Switching types also swaps the personality traits on offer above. Deploy bootstraps it and starts the chat."
                   label="Commission bar help"
                   direction="up"
                 />
-                <div className={styles.agentTypeSelector}>
-                  <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
-                    {AGENT_TEMPLATES.map(t => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={agentType === t.id}
-                        aria-label={t.label}
-                        title={t.label}
-                        className={`${styles.agentTypePill} ${agentType === t.id ? styles.agentTypePillActive : ''}`}
-                        onClick={() => handleAgentTypeChange(t.id)}
-                        disabled={bootstrapping}
-                      >
-                        <span className={styles.agentTypePillIcon} aria-hidden="true">
-                          <AgentTypeIcon id={t.id} />
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <span className={styles.agentTypeLabel}>{getTemplate(agentType).label}</span>
-                </div>
                 <button
                   type="submit"
                   form="agentSetupForm"

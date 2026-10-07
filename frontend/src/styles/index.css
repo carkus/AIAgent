@@ -96,7 +96,14 @@ html, body {
      plain prose that doesn't — e.g. ToolActivity's search-result titles/
      snippets and job-card text — has no ancestor font-family to inherit
      without this, so it falls back to the browser's default serif. */
-  font-family: 'Inter', 'Space Grotesk', sans-serif;
+  font-family: 'Inter', 'Space Grotesk', 'Segoe UI', sans-serif;
+}
+
+/* Form controls don't inherit the page font by default: each browser gives
+   them its system UI font (Arial-like on Windows), which must never show on
+   this site. Any control without its own font-family takes the page's. */
+button, input, select, textarea, optgroup {
+  font-family: inherit;
 }
 
 #root {

@@ -45,7 +45,7 @@ export interface AgentTemplate {
 export const AGENT_TEMPLATES: AgentTemplate[] = [
   {
     id: 'general',
-    label: 'General assistant',
+    label: 'General tasks',
     keywordPlaceholder: 'Type a topic, press Enter…',
     buildPurpose: (keywords, loc) =>
       `General-purpose assistant covering the following topics: ${keywords.join(', ')}. ` +
