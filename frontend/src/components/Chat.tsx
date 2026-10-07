@@ -277,10 +277,6 @@ function evalTargetLabel(item: EvalResultItem): string {
   }
 }
 
-// Same cap as Setup.tsx's MAX_SPECIALTIES — kept independent (not imported)
-// since Setup's constant isn't exported, but the two should stay in sync.
-const MAX_FOCUS = 5
-
 interface Props {
   agentConfig: AgentConfig
   agentName: string
@@ -385,43 +381,15 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       return next
     })
   }
-  // Live, editable copy of the agent's specialty pool. Seeded from
-  // agentConfig.keywords at bootstrap but no longer read from that static
-  // prop afterward — agent_stream.py's _delegation_rule_body rebuilds its
-  // instruction fresh from whatever keywords travel with each /agent
-  // request, so editing this in-chat and sending it on the next turn is
-  // enough to change the agent's focus without a re-bootstrap.
-  const [focusPool, setFocusPool] = useState<string[]>(agentConfig.keywords ?? [])
-  const [focusDraft, setFocusDraft] = useState('')
+  // The agent's specialty pool, fixed at bootstrap — shown read-only in the
+  // chat header and sent with each /agent request (agent_stream.py's
+  // _delegation_rule_body iterates over it). Changing focus means going back
+  // to Setup, not editing it mid-chat.
+  const focusPool = agentConfig.keywords ?? []
 
   // Recomputed whenever messages changes, so a new image shows up in the
   // strip as soon as the reply that carries it finishes streaming in.
   const assets = useMemo(() => extractImageAssets(messages), [messages])
-
-  function addFocus() {
-    const value = focusDraft.trim()
-    if (!value) return
-    if (focusPool.length >= MAX_FOCUS) return
-    if (focusPool.some(kw => kw.toLowerCase() === value.toLowerCase())) {
-      setFocusDraft('')
-      return
-    }
-    setFocusPool(prev => [...prev, value.slice(0, 50)])
-    setFocusDraft('')
-  }
-
-  function removeFocus(kw: string) {
-    setFocusPool(prev => prev.filter(k => k !== kw))
-  }
-
-  function handleFocusKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      addFocus()
-    } else if (e.key === 'Backspace' && !focusDraft && focusPool.length > 0) {
-      setFocusPool(prev => prev.slice(0, -1))
-    }
-  }
 
   // Auto-send an initial task when the agent has a configured focus
   // pool. The pool itself (focusPool) is now the keyword source the
@@ -1031,32 +999,13 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
 
       <div className={styles.container}>
         <div className={styles.mainContent}>
-          <div className={styles.headerKeywords}>
-            {[...focusPool].sort((a, b) => a.localeCompare(b)).map(kw => (
-              <span key={kw} className={styles.headerChip}>
-                {kw}
-                <button
-                  type="button"
-                  className={styles.headerChipX}
-                  onClick={() => removeFocus(kw)}
-                  aria-label={`Remove ${kw} from focus`}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-            {focusPool.length < MAX_FOCUS && (
-              <input
-                type="text"
-                className={styles.headerChipInput}
-                value={focusDraft}
-                onChange={e => setFocusDraft(e.target.value.slice(0, 50))}
-                onKeyDown={handleFocusKeyDown}
-                onBlur={addFocus}
-                placeholder={focusPool.length === 0 ? 'Add focus…' : '+ add'}
-              />
-            )}
-          </div>
+          {focusPool.length > 0 && (
+            <div className={styles.headerKeywords}>
+              {[...focusPool].sort((a, b) => a.localeCompare(b)).map(kw => (
+                <span key={kw} className={styles.headerChip}>{kw}</span>
+              ))}
+            </div>
+          )}
           {assets.length > 0 && (
             <div className={styles.headerAssets}>
               {assets.map((a, ai) => (

@@ -411,45 +411,7 @@
   color: #284b6a;
   display: inline-flex;
   font-size: 0.75rem;
-  gap: 0.3rem;
-  padding: 0.15rem 0.4rem 0.15rem 0.5rem;
-}
-
-.headerChipX {
-  align-items: center;
-  background: transparent;
-  border: none;
-  color: #708393;
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 1.02rem;
-  justify-content: center;
-  line-height: 1;
-  padding: 0;
-}
-
-.headerChipX:hover {
-  color: #284b6a;
-}
-
-.headerChipInput {
-  background: #e6f2f1;
-  border: 1px solid #bfccd8;
-  border-radius: var(--radius-control);
-  box-sizing: border-box;
-  color: #284b6a;
-  font-size: 0.75rem;
   padding: 0.15rem 0.5rem;
-  width: 110px;
-}
-
-.headerChipInput:focus {
-  border-color: #284b6a;
-  outline: none;
-}
-
-.headerChipInput::placeholder {
-  color: #708393;
 }
 
 /* Same row chrome as .headerKeywords just above it — a thumbnail strip of
