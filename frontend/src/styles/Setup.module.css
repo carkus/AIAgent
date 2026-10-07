@@ -464,7 +464,6 @@
   padding: 1rem 0.625rem;
   margin-bottom: 1rem;
   position: relative;
-  box-shadow: -3px 3px 6px rgba(28, 40, 51, 0.08);
   flex-shrink: 0;
 }
 
@@ -1996,9 +1995,6 @@
      fallback: normally invisible (nothing overflows when there's room),
      it only engages once content genuinely can't fit. */
   overflow-y: auto;
-  /* Room for .agentCard's left-offset drop shadow — overflow-y: auto above
-     clips anything painted outside this box, including shadows. */
-  padding: 0 2px 5px 8px;
 }
 
 .focusStack .agentCard,
