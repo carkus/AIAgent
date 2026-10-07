@@ -3,6 +3,7 @@ import mermaid from 'mermaid'
 import styles from '../styles/Chat.module.css'
 import ImageViewer from './ImageViewer'
 import CopyButton from './CopyButton'
+import GraphFrame from './GraphFrame'
 
 const GRAPH_ACCENT = '#05384b'
 
@@ -274,20 +275,17 @@ export default function MermaidDiagram({ chart, label, caption }: Props) {
     </div>
   ) : (
     <>
-      <div
+      {/* Square, zoomable holder (GraphFrame) — drag to pan, +/−/fit to
+          zoom, ⛶ for the full-screen viewer. The svg is drawn at its own
+          natural size (withExplicitSvgSize) and the frame scales it. */}
+      <GraphFrame
         className={styles.mermaidDiagram}
-        role="button"
-        tabIndex={0}
-        aria-label="Open diagram in full view"
-        onClick={() => setViewerOpen(true)}
-        onKeyDown={e => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            setViewerOpen(true)
-          }
-        }}
-        dangerouslySetInnerHTML={{ __html: svg ?? '' }}
-      />
+        contentClassName={styles.mermaidContent}
+        label="Diagram"
+        onExpand={() => setViewerOpen(true)}
+      >
+        <div dangerouslySetInnerHTML={{ __html: svg ?? '' }} />
+      </GraphFrame>
       {viewerOpen && svg && <ImageViewer svg={svg} onClose={() => setViewerOpen(false)} />}
     </>
   )

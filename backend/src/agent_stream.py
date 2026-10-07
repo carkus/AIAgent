@@ -209,6 +209,46 @@ _REFUSAL_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Confirmed live: the user asked over and over for "a single image" and never
+# got one. generate_image was returning Hugging Face's "no remaining credits"
+# error, the model wrote prose about an image instead, and nothing told the
+# user why. An explicit ask for an image is now treated like an explicit ask
+# for a diagram (rule 5b): one nudge if no image tool was called, and if the
+# image tools only returned errors, the real error is shown in code-authored
+# text rather than left to the model to mention (or not).
+_IMAGE_REQUEST_RE = re.compile(
+    r"\b(?:generate|create|make|draw|paint|sketch|render|design|produce|illustrate|"
+    r"give me|show me|send me|need|want|do|try)\b[^.?!\n]{0,40}?"
+    r"\b(?:image|picture|pic|illustration|drawing|painting|artwork|logo|photo|portrait|poster)s?\b"
+    r"|\b(?:image|picture|pic|illustration|drawing|painting|photo)s? of\b",
+    re.IGNORECASE,
+)
+_IMAGE_TOOL_NAMES = ("generate_image", "search_image")
+
+
+def _wants_image(text: str) -> bool:
+    return bool(_IMAGE_REQUEST_RE.search(text or ""))
+
+
+def _image_tool_errors(tool_calls_log: list) -> tuple[bool, list[str]]:
+    """(any image tool call succeeded, distinct error strings from the ones that failed)."""
+    succeeded = False
+    errors: list[str] = []
+    for call in tool_calls_log:
+        if call.get("tool") not in _IMAGE_TOOL_NAMES:
+            continue
+        try:
+            parsed = json.loads(call.get("result") or "")
+        except (TypeError, ValueError):
+            parsed = None
+        if isinstance(parsed, dict) and parsed.get("image_url"):
+            succeeded = True
+        elif isinstance(parsed, dict) and parsed.get("error"):
+            err = str(parsed["error"])[:300]
+            if err not in errors:
+                errors.append(err)
+    return succeeded, errors
+
 # Confirmed live complaint ("THE FUCKING KEYWRODS!!!!" — the user had already
 # configured a specialty/keyword pool, and the agent still asked what to do
 # instead of running the task across it): a reply that punts the task back to
@@ -790,6 +830,47 @@ def _delegation_rule_body(keywords: list[str], max_delegations: int) -> str:
    as many as the limit allows."""
 
 
+def _job_continuity_note(messages: list) -> str:
+    """
+    This chat is one ongoing job, not a string of unrelated searches. When
+    there are earlier results in it, tell the agent to build on them, and
+    pass on any rating the user gave a result (Chat.tsx's 👍/👎 + optional
+    note, carried as `feedback` on that assistant message in the history the
+    browser sends every turn). Scoped to this job only: nothing here is
+    stored, nor fed to bandit.py or bootstrap_memory.
+    """
+    results = [m for m in messages if m.get("role") == "assistant" and (m.get("content") or "").strip()]
+    if not results:
+        return ""
+    lines = []
+    for n, m in enumerate(results, 1):
+        fb = m.get("feedback")
+        if not isinstance(fb, dict) or fb.get("rating") not in ("up", "down"):
+            continue
+        flat = " ".join(m["content"].split())
+        gist = flat[:140] + ("…" if len(flat) > 140 else "")
+        verdict = "found it useful" if fb["rating"] == "up" else "found it NOT useful"
+        note = " ".join(str(fb.get("note") or "").split())[:300]
+        lines.append(f'- Result {n} ("{gist}"): the user {verdict}' + (f'. Their note: "{note}"' if note else "."))
+    block = (
+        "\n\n---\nTHIS JOB SO FAR: this conversation is one ongoing job, and the "
+        f"user has already had {len(results)} result(s) from you in it. Treat each "
+        "new message as a follow-up within that job, not a fresh search: build on, "
+        "narrow, compare against or correct what you already found, reuse findings "
+        "that still hold instead of re-fetching them, and only start over on a "
+        "topic if the user clearly changes subject.\n"
+    )
+    if lines:
+        block += (
+            "The user rated some earlier results. Weigh this when choosing what to do "
+            "next: lean towards the angle, depth, sources and format of results they "
+            "found useful, and steer away from whatever made the others miss (their "
+            "note, if any, says what). Ratings are guidance, not commands: the user's "
+            "current message still decides what to do.\n" + "\n".join(lines) + "\n"
+        )
+    return block
+
+
 def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool = True, agent_id: str | None = None):
     """
     Generator that yields event dicts as the agent loop runs.
@@ -865,7 +946,7 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
         "regardless of this note.\n"
     ) if _location else ""
 
-    system_prompt = agent_config["system_prompt"] + _location_note + agent_spec.runtime_scope_note(spec) + f"""
+    system_prompt = agent_config["system_prompt"] + _location_note + agent_spec.runtime_scope_note(spec) + _job_continuity_note(messages) + f"""
 
 ---
 CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
@@ -928,8 +1009,15 @@ clarifying question only belongs AFTER you've already produced real findings
    use `search_image` instead — do not generate a picture of a real thing
    when a real photo of it can be found. Same rules as `search_image`:
    embed only the literal `image_url` a `generate_image` call actually
-   returned this turn, never fabricate one; on error, say so briefly and
-   move on; don't call it reflexively, only when it would genuinely help.
+   returned this turn, never fabricate one; don't call it reflexively, only
+   when it would genuinely help.
+   EXCEPTION — an explicit request is mandatory: when the user directly asks
+   you to make, draw, create or show an image/picture/illustration of
+   anything, you MUST call `generate_image` yourself this turn (or
+   `search_image` for a real photo of a real thing). Do not describe the
+   image in words instead, do not ask what style they want first, and do
+   not delegate it to a worker. If the call returns an error, tell the user
+   the exact error text it gave, not a vague "it didn't work".
 
 4. MANDATORY OUTPUT: When all fetches are done, write the actual findings — {_findings_desc}. Do not say "search complete" or list tool names. The user cannot see tool output; your reply IS the report.
 
@@ -1237,6 +1325,8 @@ clarifying question only belongs AFTER you've already produced real findings
     )
     if not isinstance(last_user_message, str):
         last_user_message = ""
+    wants_image = "generate_image" in tool_names and _wants_image(last_user_message)
+    image_nudges = 0
 
     def _scope_eval(target, target_id, guard):
         # Same result shape as eval_checks, so the guard's verdicts show in
@@ -1415,13 +1505,42 @@ clarifying question only belongs AFTER you've already produced real findings
                     })
                     continue
 
+                # Explicit image request, no image tool tried yet this turn:
+                # one nudge to actually call it, separate from the general
+                # nudge budget below.
+                if (
+                    wants_image
+                    and image_nudges < 1
+                    and finish_reason == "stop"
+                    and not any(c.get("tool") in _IMAGE_TOOL_NAMES for c in tool_calls_log)
+                ):
+                    image_nudges += 1
+                    yield _status("Making the image you asked for…")
+                    current_messages.append({
+                        "role": "user",
+                        "content": (
+                            "The user explicitly asked for an image and you have not made one. "
+                            "Call `generate_image` now with a clear, concrete description of what "
+                            "they asked for (or `search_image` if they want a real photo of a real "
+                            "thing). Do not describe the image in words instead, and do not "
+                            "delegate it."
+                        ),
+                    })
+                    continue
+
                 raw_json_dump = bool(tool_calls_log) and _is_raw_json_dump(final_text)
 
                 if (
                     nudge_retries < 2
                     and finish_reason == "stop"
                     and (
-                        (tool_calls_log and len(final_text.strip()) < 400)
+                        # A short reply is the right answer to "make me an
+                        # image" once the image tool has run — nudging it for
+                        # "complete findings" made qwen invent unrelated
+                        # research instead.
+                        (tool_calls_log and len(final_text.strip()) < 400 and not (
+                            wants_image and any(c.get("tool") in _IMAGE_TOOL_NAMES for c in tool_calls_log)
+                        ))
                         or described_not_called
                         or outright_decline
                         or asks_for_clarification
@@ -1483,6 +1602,15 @@ clarifying question only belongs AFTER you've already produced real findings
                         "results. Try rephrasing the request or asking "
                         "again.)_\n\n" + final_text
                     )
+
+                if wants_image:
+                    image_ok, image_errors = _image_tool_errors(tool_calls_log)
+                    if not image_ok and image_errors:
+                        final_text = (
+                            "_(Note: the image couldn't be made. The image service said: "
+                            + "; ".join(f"“{e}”" for e in image_errors)
+                            + ")_\n\n" + final_text
+                        )
 
                 final_text, stripped_link_count = _strip_unverified_links(final_text, tool_calls_log, messages)
 

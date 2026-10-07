@@ -2,14 +2,10 @@
    palette as the rest of the app (see root CLAUDE.md's "Branding — Agent
    One" section), not React Flow's own default dark theme. */
 
+/* Extra class on the GraphFrame (GraphFrame.tsx owns the square size,
+   border and zoom controls). */
 .container {
-  width: 100%;
-  height: 260px;
-  border: 1px solid #e2dfd5;
-  border-radius: 10px;
   background: #fbfaf7;
-  margin: 0.5rem 0;
-  overflow: hidden;
   cursor: grab;
 }
 

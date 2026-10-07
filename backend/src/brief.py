@@ -24,8 +24,9 @@ sentence, that's a prompt regression, not an acceptable output.
 Active Behavior toggles and Personality traits (Setup.tsx's BEHAVIOR_TOGGLES
 / PERSONALITY_TRAITS — e.g. "Max Delegation", "Meticulous") change what the
 bootstrapped agent will actually do just as much as a specialty does, so the
-brief must fold their real effect into the same paragraph rather than only
-ever discussing the keywords. See generate_brief's `behaviors`/`traits` args.
+brief gives them their own paragraph, naming every one selected and its
+concrete effect on these focuses, rather than only ever discussing the
+keywords. See generate_brief's `behaviors`/`traits` args.
 
 Alongside a brief, the model may offer up to two output "relics" (relic.py)
 suited to this commission — e.g. slides to pitch it, a PDF case file, a
@@ -65,7 +66,17 @@ Most of the time, just write the brief directly and confidently — you don't ne
 
 If Agent type is not "job_search", the agent has no ability to search live job listings or job boards — even when a specialty sounds job-related (e.g. "jobs advertised", "job openings"), describe it as scouting for leads and pointing toward useful sources on that topic, never as finding, searching, or reporting back actual job postings/listings. That capability only exists for a "job_search" agent type.
 
-When writing the brief: one tight paragraph, 3-4 sentences, third person. The house style — "Agent {agent_name} will <interpret/act on the topics>{location_clause}. If commissioned, it will <2-3 concrete actions> and report back with <what>." — is a scaffold for the FIRST sentence or two only, not the whole brief; never let those exact clause shapes ("Agent {agent_name} will...", "If commissioned, it will...") become a template you refill every time; vary the wording agent to agent so two briefs never read like the same mail-merge with different nouns swapped in. Actually work out what direction the specialties point in together — the underlying goal they share, or which one is load-bearing if they pull in different directions — and write THAT, not a keyword walk; if the brief would read the same with the keywords shuffled, rewrite it. Then go further than restating the mandate: add real analysis — why this particular combination is useful together, what tension or gap exists between the specialties if any, and at least one concrete, specific scenario or use case where commissioning this agent would actually pay off (a real situation, not "this could be useful for various purposes"). If any behaviors or personality traits are active (not "(none)"), the brief MUST also actually account for them — work their real effect on how the agent will act into the same paragraph (e.g. a "Max Delegation" behavior means it will split the work across worker agents; a "Meticulous" trait means it will flag caveats and uncertainty) rather than only ever discussing the specialties. Do not just tack a trait/behavior's label onto the end as a dangling clause — write the sentence as if that behavior/trait actually governs how the actions in it get carried out.
+When writing the brief: third person, THREE short paragraphs separated by a blank line (a "
+
+" inside the JSON string), roughly 8-11 sentences in all. It should read as a considered write-up of this particular agent, not a one-liner.
+
+PARAGRAPH 1, the focuses: your analytical read of the combination, not the list. Open with what these specialties mean TOGETHER that none of them means alone: the intersection they define, the underlying goal they imply, or which one is load-bearing and which ones narrow or qualify it. Then analyse that combination: why it is more useful than covering each specialty separately, where they pull against each other or leave a gap, and one concrete, specific scenario where commissioning this agent would actually pay off (a real situation, not "this could be useful for various purposes"). Do NOT open by naming the keywords one after another, and never name more than two keywords in a single sentence; refer to them through what they combine into (e.g. "solar", "insurance", "farms" becomes "the risk side of putting solar on agricultural land", not "solar, insurance and farms"). If this paragraph would read the same with the keywords shuffled, or a reader could reconstruct it from the keyword list alone, it is a keyword walk: rewrite it. A location ({location}) only belongs where it genuinely shapes the work.
+
+PARAGRAPH 2, its character: how the selected personality traits and behaviors shape the way it will tackle THESE focuses. Name EVERY active trait and behavior listed above (none may be left out), each tied to a concrete effect on this case: what it will do differently with these specialties because of it (e.g. "Meticulous" means it will flag where the evidence on crop-insurance terms is thin rather than smoothing it over; "Max Delegation" means each focus goes to its own worker agent and the main agent only compares their findings). Where two selections interact or pull against each other (e.g. "Concise" with "Cite Sources"), say how that plays out. Never just list the labels. If both traits and behaviors are "(none)", keep this paragraph to one sentence on the plain, default way it will work.
+
+PARAGRAPH 3, the work: what the agent will actually do and what it will report back with, as 2-3 concrete actions that follow from paragraphs 1 and 2 (not one action per keyword). Vary the wording agent to agent; never fall back on a fixed shape like "Agent {agent_name} will... If commissioned, it will... and report back with..." that would make two briefs read like the same mail-merge with different nouns swapped in.
+
+Not enough to go on (should be RARE): only when the specialties together give you genuinely nothing to analyse (e.g. a single generic word, or terms you cannot place at all) and no single clarifying question would fix it, say so plainly in the brief instead of padding it out (it can be shorter than three paragraphs then, but still cover the selected traits and behaviors): one sentence on what you can infer, one on what is missing for a real read, and what kind of specialty the user could add. Do not use this to dodge a combination that just takes some thought; almost any set of two or more specific specialties has a direction worth stating.
 
 Separately from the ambiguity check above, also assess whether commissioning this agent as specified is likely to go badly, and if so add ONE short, specific warning (a plain sentence, no hedging disclaimer boilerplate). Flag it when you see:
 - More than {max_delegations} distinct specialties/topics — the platform delegates one worker per topic with a cap of {max_delegations} per turn, so extras will be dropped or starved rather than covered.
@@ -128,7 +139,7 @@ def generate_brief(
         response = create_chat_completion(
             provider=provider,
             model=model,
-            max_tokens=560,
+            max_tokens=1400,
             temperature=0.6,
             messages=[{"role": "user", "content": prompt}],
         )

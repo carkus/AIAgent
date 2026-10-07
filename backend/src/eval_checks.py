@@ -294,9 +294,28 @@ def check_tool_call(
         ))
 
     errored = isinstance(result_str, str) and result_str.startswith("Tool execution error:")
+    # Primitives and MCP calls don't raise — they return {"error": ...}. That
+    # used to pass this check (e.g. generate_image "executed without error"
+    # while returning Hugging Face's "no remaining credits"), hiding a tool
+    # that failed every time.
+    returned_error = None
+    if not errored and isinstance(result_str, str) and result_str.lstrip().startswith("{"):
+        try:
+            parsed = json.loads(result_str)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict) and parsed.get("error"):
+            returned_error = str(parsed["error"])[:200]
+    if errored:
+        reason = f"{tool_name} raised an exception during execution"
+    elif returned_error:
+        reason = f"{tool_name} returned an error: {returned_error}"
+    else:
+        reason = f"{tool_name} executed without error"
+    errored = errored or returned_error is not None
     results.append(_result(
         "tool_execution_error", "tool_call", str(call_index), not errored,
-        f"{tool_name} executed without error" if not errored else f"{tool_name} raised an exception during execution",
+        reason,
         "deterministic", severity="info" if not errored else "warning",
         provider=provider, model=model, agent_id=agent_id,
     ))

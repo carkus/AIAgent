@@ -16,12 +16,13 @@ import RelicPreviewModal from './RelicPreviewModal'
 import { downloadRelic, RELIC_KINDS, RELIC_LABELS, relicFilename } from '../relicFiles'
 import ImageViewer from './ImageViewer'
 import FeedbackStatusBar from './FeedbackStatusBar'
-import type { AgentConfig, EvalResultItem, Relic, RelicKind, RelicSuggestion, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
+import type { AgentConfig, EvalResultItem, Relic, RelicKind, RelicSuggestion, ResultFeedback, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import { describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
 import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate, getDateFormat } from '../dateFormat'
 import { extractMermaidDiagrams } from '../mermaidExtract'
 import AgentBriefingModal, { briefingHidden } from './AgentBriefingModal'
+import ResultRating from './ResultRating'
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/favicon.png'
 
@@ -229,6 +230,8 @@ interface LiveToolCall {
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  // The user's optional 👍/👎 (+ note) on this result; see ResultRating.
+  feedback?: ResultFeedback
   // What the user bubble actually shows, when it needs to differ from the
   // literal text sent to the backend as this turn's user message — e.g. the
   // auto-fired initial search still sends a standardized instruction (the
@@ -435,8 +438,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       id: chatIdRef.current,
       agentName,
       agentConfig: { ...agentConfig, keywords: focusPool },
-      messages: messages.map(({ role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics }) => ({
-        role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics,
+      messages: messages.map(({ role, content, feedback, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics }) => ({
+        role, content, feedback, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics,
       })),
       savedAt: Date.now(),
     }
@@ -758,7 +761,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     setStatusTokens(null)
     setModelInfo(null)
 
-    const apiMessages = withUser.map(m => ({ role: m.role, content: m.content, image: m.image }))
+    const apiMessages = withUser.map(m => ({ role: m.role, content: m.content, image: m.image, feedback: m.feedback }))
     // Send the live, possibly-edited focus pool rather than the static
     // bootstrap-time prop — agent_stream.py rebuilds its delegation
     // instruction from this field fresh on every request.
@@ -1280,7 +1283,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                   ))}
                   <button
                     type="button"
-                    className={styles.viewToggleBtn}
+                    className={styles.exportAsBtn}
                     disabled={relicBusy !== null}
                     onClick={() => setExportMenuFor(exportMenuFor === i ? null : i)}
                   >
@@ -1329,6 +1332,12 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                   </span>
                 )}
               </p>
+            )}
+            {msg.role === 'assistant' && msg.durationSeconds !== undefined && msg.content && (
+              <ResultRating
+                feedback={msg.feedback}
+                onChange={feedback => setMessages(prev => prev.map((m, mi) => (mi === i ? { ...m, feedback } : m)))}
+              />
             )}
             {thinking && i === messages.length - 1 && msg.role === 'assistant' && !msg.content && (
               <>

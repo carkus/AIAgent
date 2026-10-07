@@ -7,6 +7,9 @@
 import { useMemo, useState } from 'react'
 import {
   ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+  useViewport,
   Background,
   BackgroundVariant,
   Handle,
@@ -18,6 +21,7 @@ import '@xyflow/react/dist/style.css'
 import type { TimelineNode } from '../graphTimeline'
 import type { EvalResultItem } from '../types'
 import JsonTree from './JsonTree'
+import GraphFrame from './GraphFrame'
 import styles from '../styles/GraphView.module.css'
 
 interface Props {
@@ -248,23 +252,45 @@ function buildGraph(timeline: TimelineNode[], live: boolean, evalResults: EvalRe
   return { nodes, edges }
 }
 
-export default function GraphView({ timeline, live = false, evalResults = [] }: Props) {
-  const [openNode, setOpenNode] = useState<TimelineNode | null>(null)
-  const { nodes, edges } = useMemo(() => buildGraph(timeline, live, evalResults, setOpenNode), [timeline, live, evalResults])
-
-  if (timeline.length === 0) {
+export default function GraphView(props: Props) {
+  if (props.timeline.length === 0) {
     return <p className={styles.empty}>No live trace recorded for this reply.</p>
   }
+  // The provider lets the frame's zoom buttons drive React Flow's own viewport.
+  return (
+    <ReactFlowProvider>
+      <GraphViewInner {...props} />
+    </ReactFlowProvider>
+  )
+}
+
+const FIT_OPTIONS = { padding: 0.25, maxZoom: 1 }
+
+function GraphViewInner({ timeline, live = false, evalResults = [] }: Props) {
+  const [openNode, setOpenNode] = useState<TimelineNode | null>(null)
+  const { nodes, edges } = useMemo(() => buildGraph(timeline, live, evalResults, setOpenNode), [timeline, live, evalResults])
+  const flow = useReactFlow()
+  const { zoom } = useViewport()
 
   return (
-    <div className={styles.container}>
+    <GraphFrame
+      className={styles.container}
+      label="Reasoning trace graph"
+      zoom={{
+        zoomIn: () => { void flow.zoomIn({ duration: 150 }) },
+        zoomOut: () => { void flow.zoomOut({ duration: 150 }) },
+        fit: () => { void flow.fitView({ ...FIT_OPTIONS, duration: 150 }) },
+        level: zoom,
+      }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
-        minZoom={0.3}
+        fitViewOptions={FIT_OPTIONS}
+        minZoom={0.1}
+        maxZoom={4}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}
@@ -277,6 +303,6 @@ export default function GraphView({ timeline, live = false, evalResults = [] }: 
         <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#e2dfd5" />
       </ReactFlow>
       {openNode && <NodeDetailModal node={openNode} onClose={() => setOpenNode(null)} />}
-    </div>
+    </GraphFrame>
   )
 }

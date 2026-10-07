@@ -119,9 +119,19 @@ export interface ToolCall {
   source?: 'primitive' | 'generated' | 'mcp';
 }
 
+// The user's optional rating of one assistant result (Chat.tsx's
+// ResultRating). Rides along on that message in the history sent every
+// turn, so agent_stream.py's _job_continuity_note can steer later turns of
+// the same job by it; it is never stored server-side or used across jobs.
+export interface ResultFeedback {
+  rating: 'up' | 'down';
+  note?: string;
+}
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
+  feedback?: ResultFeedback;
   // Base64 data URL of a user-attached image, sent alongside content
   // for the backend to fold into a multimodal request (agent_stream.py).
   // Optional/undefined on every message that isn't an image upload.
@@ -251,6 +261,7 @@ export type BootstrapStreamEvent =
 export interface SavedChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  feedback?: ResultFeedback;
   // What the bubble shows in place of `content`, when they differ (e.g. the
   // auto-fired initial search's real instruction vs. the agent's original
   // setup purpose). Undefined on every ordinary typed message.
