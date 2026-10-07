@@ -79,6 +79,39 @@ def add_draft(
     return entry
 
 
+def update_draft(
+    draft_id: str,
+    agent_name: str,
+    agent_type: str | None,
+    keywords: list,
+    location: str,
+    traits: list,
+    behavior_toggles: list | None = None,
+) -> dict | None:
+    """Edits a saved profile in place (same id, moved to the top). Returns
+    None when the id no longer exists, so the caller can fall back to add."""
+    _migrate()
+    with db.write() as conn:
+        row = conn.execute("SELECT data FROM agent_drafts WHERE id = ?", (draft_id,)).fetchone()
+        if row is None:
+            return None
+        entry = {
+            **db.loads(row["data"]),
+            "agentName": agent_name,
+            "agentType": agent_type,
+            "keywords": keywords,
+            "location": location,
+            "traits": traits,
+            "behaviorToggles": behavior_toggles or [],
+            "savedAt": int(time.time() * 1000),
+        }
+        # Delete + insert rather than UPDATE so seq (the list order) moves
+        # it to the top, like a fresh save.
+        conn.execute("DELETE FROM agent_drafts WHERE id = ?", (draft_id,))
+        _insert(conn, entry)
+    return entry
+
+
 def delete_draft(draft_id: str) -> None:
     _migrate()
     with db.write() as conn:

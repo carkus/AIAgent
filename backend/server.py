@@ -56,7 +56,7 @@ app = Flask(__name__)
 def add_cors(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     return response
 
 
@@ -278,12 +278,32 @@ def agent_drafts_collection():
     return jsonify(entry), 201
 
 
-@app.route("/agent-drafts/<draft_id>", methods=["DELETE", "OPTIONS"])
+@app.route("/agent-drafts/<draft_id>", methods=["PUT", "DELETE", "OPTIONS"])
 def agent_drafts_item(draft_id):
     if request.method == "OPTIONS":
         return "", 204
-    agent_drafts.delete_draft(draft_id)
-    return "", 204
+    if request.method == "DELETE":
+        agent_drafts.delete_draft(draft_id)
+        return "", 204
+    # Edit a loaded profile in place, so a removed Focus stays removed
+    # instead of the old profile surviving next to a new one.
+    body = request.get_json() or {}
+    agent_name = (body.get("agentName") or "").strip()
+    keywords = body.get("keywords") or []
+    if not agent_name or not isinstance(keywords, list):
+        return jsonify({"error": "agentName and keywords are required"}), 400
+    entry = agent_drafts.update_draft(
+        draft_id,
+        agent_name,
+        body.get("agentType") or None,
+        keywords,
+        body.get("location") or "",
+        body.get("traits") or [],
+        body.get("behaviorToggles") or [],
+    )
+    if entry is None:
+        return jsonify({"error": "Saved agent profile not found"}), 404
+    return jsonify(entry)
 
 
 @app.route("/agents", methods=["GET", "POST", "OPTIONS"])

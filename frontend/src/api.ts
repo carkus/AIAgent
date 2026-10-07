@@ -353,6 +353,26 @@ export async function createAgentDraft(
   return res.json();
 }
 
+/** Edits a saved profile in place (same id). Throws on failure, including a
+ * 404 when the profile was deleted elsewhere; the caller then creates one. */
+export async function updateAgentDraft(
+  id: string,
+  agentName: string,
+  agentType: AgentTemplateId | null,
+  keywords: string[],
+  location: string,
+  traits: string[],
+  behaviorToggles: string[] = [],
+): Promise<AgentDraft> {
+  const res = await fetch(`${API_URL}/agent-drafts/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentName, agentType, keywords, location, traits, behaviorToggles }),
+  });
+  if (!res.ok) throw new Error('Failed to update agent profile');
+  return res.json();
+}
+
 export async function deleteAgentDraft(id: string): Promise<void> {
   await fetch(`${API_URL}/agent-drafts/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
