@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from llm_client import create_chat_completion, OLLAMA_NUM_CTX
 from tools import execute_tool, fetch_page, search_jobs, search_image, generate_image
 import agent_spec
+import scope_guard
 import eval_checks
 import eval_log
 import mcp_client
@@ -1179,6 +1180,22 @@ clarifying question only belongs AFTER you've already produced real findings
     # still stuck after two corrections is treated as genuinely done.
     nudge_retries = 0
     degenerate_retries = 0
+    scope_retries = 0
+    last_user_message = next(
+        (m.get("content") for m in reversed(messages) if m.get("role") == "user"), ""
+    )
+    if not isinstance(last_user_message, str):
+        last_user_message = ""
+
+    def _scope_eval(target, target_id, guard):
+        # Same result shape as eval_checks, so the guard's verdicts show in
+        # the feedback bar and feed eval_log/bandit like any other check.
+        passed = guard["verdict"] != "violation"
+        return {"type": "eval_result", **eval_checks._result(
+            "scope_guard", target, target_id, passed, guard["reason"], "llm_judge",
+            severity="info" if guard["verdict"] == "pass" else "warning",
+            provider=provider, model=model, agent_id=agent_id,
+        )}
     delegation_count = 0
     # Hard ceiling on LLM calls per request — without this, a model stuck in a
     # tool-calling loop (or a buggy tool) burns unlimited API quota on one request.
@@ -1303,8 +1320,13 @@ clarifying question only belongs AFTER you've already produced real findings
                         or bool(_NARRATION_INTENT_RE.search(final_text))
                     )
                 )
+                # With an out_of_scope rule, declining is often the correct
+                # answer — the "you declined without trying" nudge below would
+                # push the agent straight into the forbidden topic. The scope
+                # guard judges those replies instead.
                 outright_decline = (
-                    not tool_calls_log
+                    not scope_guard.active(spec)
+                    and not tool_calls_log
                     and not delegation_count
                     and not described_not_called
                     and bool(_REFUSAL_RE.search(final_text))
@@ -1413,13 +1435,29 @@ clarifying question only belongs AFTER you've already produced real findings
 
                 final_text, stripped_link_count = _strip_unverified_links(final_text, tool_calls_log, messages)
 
+                # Scope guard (scope_guard.py): the spec's out_of_scope rule
+                # is only *asked* of the agent by its prompt; this screens the
+                # finished reply with a separate judge before it's shown. One
+                # regenerate on a violation, then a code-authored decline —
+                # the reply that reaches the user is never the flagged one.
+                if scope_guard.active(spec):
+                    yield _status("Checking the reply against your scope rules…")
+                    guard = scope_guard.screen(final_text, last_user_message, spec, provider, model)
+                    if guard:
+                        if guard["verdict"] == "violation" and scope_retries < 1:
+                            scope_retries += 1
+                            yield _scope_eval("chat_response", None, guard)
+                            current_messages.append({
+                                "role": "user",
+                                "content": scope_guard.correction_message(guard["reason"]),
+                            })
+                            continue
+                        if guard["verdict"] == "violation":
+                            final_text = scope_guard.blocked_reply(spec)
+                        yield _scope_eval("chat_response", None, guard)
+
                 yield _status("Double-checking the reply…")
                 try:
-                    last_user_message = next(
-                        (m.get("content") for m in reversed(messages) if m.get("role") == "user"), ""
-                    )
-                    if not isinstance(last_user_message, str):
-                        last_user_message = ""
                     for eval_result in eval_checks.check_chat_response(
                         last_user_message, final_text, tool_calls_log, stripped_link_count, provider, model,
                         agent_id=agent_id,
@@ -1615,6 +1653,22 @@ clarifying question only belongs AFTER you've already produced real findings
                         result = future.result()
                     except Exception as e:
                         result = {"error": f"Worker crashed: {e}"}
+                    # Workers are bootstrapped from their task alone and never
+                    # see the spec, and their response is shown to the user as
+                    # its own card — so screen it here, before either the
+                    # user or the main agent sees it.
+                    if (
+                        scope_guard.active(spec)
+                        and isinstance(result, dict)
+                        and isinstance(result.get("response"), str)
+                    ):
+                        guard = scope_guard.screen(
+                            result["response"], str(tool_inputs.get("task") or ""), spec, provider, model,
+                        )
+                        if guard:
+                            if guard["verdict"] == "violation":
+                                result["response"] = scope_guard.withheld_worker_response(guard["reason"])
+                            yield _scope_eval("worker_delegation", result.get("worker_name"), guard)
                     result_str = _finish(tc, tool_name, tool_inputs, result, source)
                     yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source, "call_index": idx}
                     tool_def = tool_def_map.get(tool_name)

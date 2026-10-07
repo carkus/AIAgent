@@ -17,10 +17,11 @@ import styles from '../styles/AdvancedSetup.module.css'
 //   review  → edit system_prompt/tools, re-check via /validate-config, launch
 
 type Step = 'define' | 'building' | 'review'
-type Layer = 'prompt' | 'pinned' | 'code'
+type Layer = 'prompt' | 'guarded' | 'pinned' | 'code'
 
 const LAYER_TEXT: Record<Layer, string> = {
   prompt: 'prompt — asked, not guaranteed',
+  guarded: 'prompt + output guard — screened, not guaranteed',
   pinned: 'pinned — overwritten after bootstrap',
   code: 'enforced in code at runtime',
 }
@@ -392,7 +393,7 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
             <textarea className={styles.input} rows={2} value={successCriteria} onChange={e => setSuccessCriteria(e.target.value)} />
           </label>
           <label className={styles.field}>
-            <span>Out of scope — the agent should decline <LayerTag layer="prompt" /></span>
+            <span>Out of scope — the agent should decline <LayerTag layer="guarded" /></span>
             <textarea className={styles.input} rows={2} value={outOfScope} onChange={e => setOutOfScope(e.target.value)} />
           </label>
         </section>
