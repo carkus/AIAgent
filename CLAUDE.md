@@ -698,6 +698,20 @@ Vague purpose descriptions produce generic tools. The Setup screen's Agent Type 
 
 ---
 
+## Product Direction — outputs, not a chat
+
+The user wants to move away from presenting a job (the work an agent does on
+its Focus topics) as a **"Chat"**. The target is a **collection of outputs**
+the agent offers, based on what it judges will be most useful for that job:
+spreadsheets, charts, diagrams, reports, documents, slide decks, data files
+and so on. The chat transcript becomes one way in, not the product itself.
+Output relics (`relic.py`, agent_stream.py rule 7b, the Export menu and
+relics list in `Chat.tsx`) are the first step. When adding UI or naming
+things, lean toward outputs/deliverables over "chat" wording, and treat
+the agent proactively proposing the right outputs as the core behaviour.
+
+---
+
 ## Roadmap — Multi-Agent Direction
 
 Five forward-looking directions for this project. Captured here as work to accomplish, not as current limitations of the single-agent design — each assumes the existing bootstrap/agent-loop architecture as a starting point rather than a replacement.
