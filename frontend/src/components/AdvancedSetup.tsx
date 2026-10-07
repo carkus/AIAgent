@@ -484,6 +484,24 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
           </section>
 
           <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Limits <LayerTag layer="code" /></h3>
+            <div className={styles.row}>
+              <label className={styles.field}>
+                <span>Max tool rounds (1–25)</span>
+                <input className={styles.input} type="number" min={1} max={25} value={maxRounds} onChange={e => setMaxRounds(e.target.value)} placeholder="25" />
+              </label>
+              <label className={styles.field}>
+                <span>Max calls per round (1–20)</span>
+                <input className={styles.input} type="number" min={1} max={20} value={maxCallsPerStep} onChange={e => setMaxCallsPerStep(e.target.value)} placeholder="Default" />
+              </label>
+              <label className={styles.field}>
+                <span>Temperature (0–1.5)</span>
+                <input className={styles.input} type="number" min={0} max={1.5} step={0.1} value={temperature} onChange={e => setTemperature(e.target.value)} placeholder="Default" />
+              </label>
+            </div>
+          </section>
+
+          <section className={styles.section}>
             <h3 className={styles.sectionTitle}>Tools <LayerTag layer="code" /></h3>
             <p className={styles.hint}>
               Unticked tools are removed from the tool list the model sees, and any call to them is
@@ -517,24 +535,6 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
               <input type="checkbox" checked={allowDelegation} onChange={e => setAllowDelegation(e.target.checked)} />
               Allow delegating to worker agents
             </label>
-          </section>
-
-          <section className={styles.section}>
-            <h3 className={styles.sectionTitle}>Limits <LayerTag layer="code" /></h3>
-            <div className={styles.row}>
-              <label className={styles.field}>
-                <span>Max tool rounds (1–25)</span>
-                <input className={styles.input} type="number" min={1} max={25} value={maxRounds} onChange={e => setMaxRounds(e.target.value)} placeholder="25" />
-              </label>
-              <label className={styles.field}>
-                <span>Max calls per round (1–20)</span>
-                <input className={styles.input} type="number" min={1} max={20} value={maxCallsPerStep} onChange={e => setMaxCallsPerStep(e.target.value)} placeholder="Default" />
-              </label>
-              <label className={styles.field}>
-                <span>Temperature (0–1.5)</span>
-                <input className={styles.input} type="number" min={0} max={1.5} step={0.1} value={temperature} onChange={e => setTemperature(e.target.value)} placeholder="Default" />
-              </label>
-            </div>
           </section>
         </div>
 
