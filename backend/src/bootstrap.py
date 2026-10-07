@@ -5,6 +5,7 @@ import re
 import uuid
 from llm_client import create_chat_completion
 import bootstrap_memory
+import agent_spec
 import eval_checks
 import eval_log
 import mcp_client
@@ -17,7 +18,7 @@ You are a meta-agent configurator. A user wants a custom AI agent for the follow
 <purpose>
 {purpose}
 </purpose>
-{image_note}{fewshot}
+{spec_block}{image_note}{fewshot}
 Design and configure this agent. Return a single JSON object with exactly these fields:
 
 {{
@@ -70,8 +71,7 @@ Rules:
 - Do NOT generate an image-search or fetch-image tool — use the built-in `search_image` primitive instead
 - Do NOT generate an image-generation or image-creation tool — use the built-in `generate_image` primitive instead
 {jobsearch_rule}{search_rule}
-- Always include a `save_output` tool that writes a final result using os.path.join(TEMP_DIR, filename); the tool must set result = {{'status': 'saved', 'filename': filename, 'path': os.path.join(TEMP_DIR, filename)}}
-- Inside every `implementation` string, write Python string/dict literals with SINGLE quotes only (e.g. {{'status': 'saved'}}, not {{"status": "saved"}}). The `implementation` value itself is a double-quoted JSON string — an unescaped double quote inside your Python code ends that JSON string early and breaks the whole response. Single-quoting your Python avoids this entirely; it is not optional style, it is what keeps your own JSON valid.
+{save_output_rule}- Inside every `implementation` string, write Python string/dict literals with SINGLE quotes only (e.g. {{'status': 'saved'}}, not {{"status": "saved"}}). The `implementation` value itself is a double-quoted JSON string — an unescaped double quote inside your Python code ends that JSON string early and breaks the whole response. Single-quoting your Python avoids this entirely; it is not optional style, it is what keeps your own JSON valid.
 - The system_prompt you generate MUST instruct the agent that after all tool calls are done it must present the actual findings (listings, data, analysis) in its reply — not list tool names, not say "search complete"
 - Search/fetch tools MUST filter results for relevance: only include items where the search keyword appears in the title or description/snippet (case-insensitive). Discard unrelated results returned by the API.
 - Return ONLY valid JSON — no markdown fences, no explanation
@@ -564,7 +564,7 @@ def _normalize_intro(config: dict) -> None:
 
 def _build_prompt(
     purpose: str, provider: str | None, is_worker: bool, agent_type: str | None = None,
-    has_image: bool = False,
+    has_image: bool = False, spec: dict | None = None,
 ) -> tuple[str, int]:
     """Grounds the bootstrap prompt in real data (CLAUDE.md RAG priority 5 +
     MCP priority 6): past similar bootstraps as few-shot examples, and the
@@ -576,7 +576,7 @@ def _build_prompt(
     it) — treated like an extra keyword: something to let inform the
     persona/system_prompt/tools, not merely acknowledge."""
     fewshot_entries = bootstrap_memory.retrieve_similar(purpose, provider, is_worker, agent_type=agent_type)
-    mcp_catalog = mcp_client.catalog_summary()
+    mcp_catalog = agent_spec.filter_mcp_catalog(mcp_client.catalog_summary(), spec)
     _has_web_search_mcp = any(c["server_id"] == "search" for c in mcp_catalog)
     # search_jobs is only ever wired up at runtime for a job_search agent
     # (agent_stream.run_agent_stream gates it by AgentConfig.template) — an
@@ -684,8 +684,17 @@ def _build_prompt(
         "system_prompt, and tools you design, the same way a keyword would, "
         "rather than only acknowledging that an image exists.\n"
     ) if has_image else ""
+    # The spec can forbid generated tools outright, which would contradict an
+    # unconditional "always include save_output" rule — so it's conditional.
+    save_output_rule = (
+        "- Always include a `save_output` tool that writes a final result using "
+        "os.path.join(TEMP_DIR, filename); the tool must set result = {'status': "
+        "'saved', 'filename': filename, 'path': os.path.join(TEMP_DIR, filename)}\n"
+    ) if not spec or spec["allow_generated_tools"] else ""
     prompt = _BOOTSTRAP_PROMPT.format(
         purpose=purpose,
+        spec_block=agent_spec.bootstrap_prompt_block(spec),
+        save_output_rule=save_output_rule,
         image_note=image_note,
         fewshot=_format_fewshot(fewshot_entries),
         mcp_catalog=_format_mcp_catalog(mcp_catalog),
@@ -698,7 +707,7 @@ def _build_prompt(
 
 def generate_agent_config(
     purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False,
-    agent_type: str | None = None, image: str | None = None,
+    agent_type: str | None = None, image: str | None = None, spec: dict | None = None,
 ) -> tuple[dict, int]:
     """Returns (config, fewshot_count) — the count is how many past similar
     bootstraps grounded this one (0 if none), surfaced by callers that want
@@ -707,7 +716,7 @@ def generate_agent_config(
     `image` (a base64 data URL, same shape as a chat turn's attachment) lets
     the purpose be illustrated rather than typed out in full — see
     _build_user_content."""
-    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type, has_image=bool(image))
+    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type, has_image=bool(image), spec=spec)
     user_content = _build_user_content(prompt, image, provider)
     response = create_chat_completion(
         provider=provider,
@@ -823,7 +832,9 @@ def generate_agent_config(
     # "this is the same agent being re-published" and update the existing
     # MCP-tool entry in place instead of creating a duplicate.
     config["agent_config_id"] = uuid.uuid4().hex
-    bootstrap_memory.record(purpose, config, provider, is_worker, agent_type=agent_type)
+    agent_spec.enforce_on_config(config, spec)
+    if not agent_spec.restricts_tools(spec):
+        bootstrap_memory.record(purpose, config, provider, is_worker, agent_type=agent_type)
     return config, fewshot_count
 
 
@@ -842,7 +853,7 @@ def _model_event(meta: dict) -> dict:
 
 def generate_agent_config_stream(
     purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False,
-    agent_type: str | None = None, image: str | None = None,
+    agent_type: str | None = None, image: str | None = None, spec: dict | None = None,
 ):
     """
     Streaming counterpart to generate_agent_config, used only by server.py's
@@ -865,7 +876,7 @@ def generate_agent_config_stream(
     """
     yield {"type": "status", "message": "Thinking about your purpose…"}
 
-    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type, has_image=bool(image))
+    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type, has_image=bool(image), spec=spec)
     user_content = _build_user_content(prompt, image, provider)
     if fewshot_count:
         yield {"type": "status", "message": f"Found {fewshot_count} similar past agent(s) — reusing what worked…"}
@@ -1041,6 +1052,8 @@ def generate_agent_config_stream(
     # See generate_agent_config's identical assignment above for why this
     # exists — a stable id agent_registry.publish() can key off of.
     config["agent_config_id"] = uuid.uuid4().hex
+    for note in agent_spec.enforce_on_config(config, spec):
+        yield {"type": "status", "message": note}
 
     try:
         for eval_result in eval_checks.check_bootstrap(
@@ -1051,5 +1064,57 @@ def generate_agent_config_stream(
     except Exception as e:
         logger.info("bootstrap eval checks skipped: %s", e)
 
-    bootstrap_memory.record(purpose, config, provider, is_worker, agent_type=agent_type)
+    # A tool-restricted agent is a poor few-shot example for an unrestricted
+    # one with a similar purpose (it'd teach "this kind of agent has no
+    # tools"), so it's kept out of retrieval memory.
+    if not agent_spec.restricts_tools(spec):
+        bootstrap_memory.record(purpose, config, provider, is_worker, agent_type=agent_type)
     yield {"type": "done", "config": config}
+
+
+def validate_config(config: dict) -> tuple[dict, list[dict]]:
+    """Review-step validation for a config the user hand-edited after
+    bootstrap (AdvancedSetup.tsx). Runs the same deterministic checks
+    bootstrap runs on model output — a human editing tool code can produce
+    exactly the same bug classes a model can — but reports instead of
+    retrying/dropping, since the human is the one who should fix it.
+
+    Returns (config, errors). `config` has MCP tools re-resolved against the
+    live catalog and the spec re-enforced; errors are {tool, message,
+    severity?} — severity "note" is informational, anything else blocks."""
+    tools = config.get("tools")
+    if not isinstance(tools, list):
+        return config, [{"tool": None, "message": "tools must be a list"}]
+    if not isinstance(config.get("system_prompt"), str) or not config["system_prompt"].strip():
+        return config, [{"tool": None, "message": "system_prompt must be a non-empty string"}]
+    errors: list[dict] = []
+    seen: set[str] = set()
+    for t in tools:
+        name = t.get("name") if isinstance(t, dict) else None
+        if not isinstance(name, str) or not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]{0,63}", name):
+            errors.append({"tool": str(name), "message": "name must be a snake_case identifier"})
+        elif name in agent_spec.PRIMITIVE_NAMES or name == "delegate_to_worker":
+            errors.append({"tool": name, "message": "name collides with a built-in primitive"})
+        elif name in seen:
+            errors.append({"tool": name, "message": "duplicate tool name"})
+        else:
+            seen.add(name)
+    forbidden_names = set(agent_spec.PRIMITIVE_NAMES) | {
+        c["tool_name"] for c in mcp_client.catalog_summary()
+    }
+    for name, err in (
+        _tool_syntax_errors(config)
+        + _forbidden_call_errors(config, forbidden_names)
+        + _undefined_call_errors(config, forbidden_names)
+        + _local_endpoint_errors(config)
+        + _fake_save_output_errors(config)
+    ):
+        where = f" (line {err.lineno})" if err.lineno not in (None, "?") else ""
+        errors.append({"tool": name, "message": f"{err.msg}{where}"})
+    _resolve_mcp_tools(config)
+    spec = agent_spec.normalize(config.get("spec"))
+    # Spec enforcement isn't an error the user must fix — it's applied
+    # either way — so it's reported as a note rather than blocking launch.
+    for note in agent_spec.enforce_on_config(config, spec):
+        errors.append({"tool": None, "message": note, "severity": "note"})
+    return config, errors

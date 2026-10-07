@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, SavedChatMessage, StreamEvent } from './types';
+import type { AgentConfig, AgentSpec, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, SavedChatMessage, StreamEvent } from './types';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -16,6 +16,7 @@ export async function bootstrap(
   agentType?: AgentTemplateId,
   signal?: AbortSignal,
   image?: string | null,
+  spec?: AgentSpec,
 ): Promise<AgentConfig> {
   const res = await fetch(`${API_URL}/bootstrap`, {
     method: 'POST',
@@ -26,6 +27,7 @@ export async function bootstrap(
       ollama_model: ollamaModel ?? undefined,
       agentType: agentType ?? undefined,
       image: image ?? undefined,
+      spec: spec ?? undefined,
     }),
     signal,
   });
@@ -418,4 +420,31 @@ export async function runAgent(
   } finally {
     reader.cancel().catch(() => {})
   }
+}
+
+export interface ConfigValidationIssue {
+  tool: string | null;
+  message: string;
+  // 'note' = informational (e.g. the spec dropped a tool); anything else blocks launch
+  severity?: 'note';
+}
+
+/** Review-step check for a hand-edited AgentConfig — runs bootstrap's
+ * deterministic validators (compile, AST undefined-name, forbidden calls,
+ * spec enforcement) without an LLM call. Returns the server's normalized
+ * config (MCP schemas re-resolved, spec re-applied), which is what should
+ * actually be launched. */
+export async function validateConfig(
+  agentConfig: AgentConfig,
+): Promise<{ config: AgentConfig; errors: ConfigValidationIssue[] }> {
+  const res = await fetch(`${API_URL}/validate-config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agent_config: agentConfig }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? 'Validation failed');
+  }
+  return res.json();
 }

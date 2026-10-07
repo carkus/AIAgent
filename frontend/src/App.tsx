@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Setup from './components/Setup'
+import AdvancedSetup from './components/AdvancedSetup'
 import Chat from './components/Chat'
 import SplashScreen from './components/SplashScreen'
 import type { AgentConfig, SavedChat } from './types'
@@ -11,7 +12,7 @@ import { listPublishedAgents } from './api'
 // checks for a previously-opened chat/agent to reopen — it exists purely to
 // avoid a flash of the splash screen for the (common, once this feature is
 // used) case where that check succeeds and jumps straight to 'chat'.
-type Phase = 'restoring' | 'splash' | 'setup' | 'bootstrapping' | 'chat'
+type Phase = 'restoring' | 'splash' | 'setup' | 'bootstrapping' | 'advanced' | 'chat'
 
 function randomSurname(): string {
   return SURNAMES[Math.floor(Math.random() * SURNAMES.length)]
@@ -98,6 +99,17 @@ export default function App() {
     setPhase('chat')
   }
 
+  // Advanced Setup runs its own bootstrap + review flow and only hands back a
+  // finished config, so the "new design supersedes the old chat" reset that
+  // handleBootstrapStart does happens here, at launch, instead.
+  function handleAdvancedDone(config: AgentConfig) {
+    setBootstrapError(null)
+    setResumedChat(null)
+    setLastOpenedPointer(null)
+    if (config.persona?.name) setAgentName(config.persona.name)
+    handleBootstrapDone(config)
+  }
+
   function handleBootstrapError(msg: string) {
     setBootstrapError(msg)
     setPhase('setup')
@@ -140,6 +152,8 @@ export default function App() {
     <div style={styles.root}>
       {phase === 'restoring' ? null : phase === 'splash' ? (
         <SplashScreen onDone={() => setPhase('setup')} />
+      ) : phase === 'advanced' ? (
+        <AdvancedSetup onCancel={() => setPhase('setup')} onDone={handleAdvancedDone} />
       ) : phase === 'setup' || phase === 'bootstrapping' ? (
         <Setup
           agentName={agentName}
@@ -152,6 +166,7 @@ export default function App() {
           onError={handleBootstrapError}
           onResumeChat={handleResumeChat}
           activeAgentConfig={agentConfig}
+          onOpenAdvanced={() => setPhase('advanced')}
         />
       ) : agentConfig ? (
         <Chat

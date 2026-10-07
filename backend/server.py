@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 import tempfile
 from flask import Flask, Response, jsonify, request, stream_with_context
-from bootstrap import generate_agent_config_stream
+from bootstrap import generate_agent_config_stream, validate_config
 from agent_stream import run_agent_stream
 from brief import generate_brief
 from recap import generate_recap
@@ -42,6 +42,7 @@ import bandit
 import rate_limit
 import saved_searches
 import agent_registry
+import agent_spec
 import agent_stats
 import agent_drafts
 import mcp_client
@@ -72,6 +73,9 @@ def bootstrap():
     # Base64 data URL, same shape as a chat turn's attachment (Chat.tsx) —
     # lets the purpose be illustrated rather than typed out in full.
     image = ((body or {}).get("image") or "").strip() or None
+    # Structured spec from the Advanced Setup screen — None for the basic
+    # Setup flow, which keeps its existing purpose-string-only behaviour.
+    spec = agent_spec.normalize((body or {}).get("spec"))
     # Only rate-limit requests that actually spend Gemini quota — a local-only
     # request costs nothing, so don't burn a caller's rate-limit budget on it.
     if provider != "ollama":
@@ -80,7 +84,7 @@ def bootstrap():
             return jsonify({"error": rate_limit_error}), 429
     def generate():
         try:
-            for event in generate_agent_config_stream(purpose, provider, model, agent_type=agent_type, image=image):
+            for event in generate_agent_config_stream(purpose, provider, model, agent_type=agent_type, image=image, spec=spec):
                 yield json.dumps(event) + "\n"
         except Exception as e:
             yield json.dumps({"type": "error", "message": str(e)}) + "\n"
@@ -90,6 +94,19 @@ def bootstrap():
         mimetype="application/x-ndjson",
         headers={"X-Accel-Buffering": "no"},
     )
+
+
+@app.route("/validate-config", methods=["POST", "OPTIONS"])
+def validate_config_route():
+    if request.method == "OPTIONS":
+        return "", 204
+    # Review step for a hand-edited AgentConfig (AdvancedSetup.tsx) — no LLM
+    # call, just bootstrap's deterministic checks, so no rate limit needed.
+    agent_config = (request.get_json() or {}).get("agent_config")
+    if not isinstance(agent_config, dict):
+        return jsonify({"error": "agent_config is required"}), 400
+    config, errors = validate_config(agent_config)
+    return jsonify({"config": config, "errors": errors})
 
 
 @app.route("/models", methods=["GET", "OPTIONS"])

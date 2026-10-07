@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from urllib.parse import urlsplit
 from llm_client import create_chat_completion, OLLAMA_NUM_CTX
 from tools import execute_tool, fetch_page, search_jobs, search_image, generate_image
+import agent_spec
 import eval_checks
 import eval_log
 import mcp_client
@@ -779,6 +780,13 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
     # saved chats/drafts predate these fields).
     max_delegations = agent_config.get("max_delegations") or MAX_DELEGATIONS_PER_REQUEST
     search_defaults = agent_config.get("search_defaults") or {}
+    # Advanced Setup's structured spec (agent_spec.py). Re-normalized here
+    # because AgentConfig round-trips through the browser — this is the trust
+    # boundary, not wherever it was last normalized. None = no spec, which
+    # leaves every limit below at its existing platform default.
+    spec = agent_spec.normalize(agent_config.get("spec"))
+    if spec and not spec["allow_delegation"]:
+        allow_delegation = False
     # search_jobs is only meaningful for a job-search agent — a general/research
     # agent given the same tool would sometimes reach for it on any keyword that
     # sounded job-adjacent. Gated by template rather than by prompt wording alone
@@ -791,7 +799,13 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
     # its "mandatory output" was job titles/salaries/companies — priming it
     # to frame unrelated answers as job-search results. Gated the same way
     # rule 2 below already was.
-    _tool_list_desc = "fetch_page, search_jobs, search_image, generate_image, delegate_to_worker" if is_job_search_agent else "fetch_page, search_image, generate_image, delegate_to_worker"
+    _allowed_primitive_names = [
+        name for name in agent_spec.PRIMITIVE_NAMES
+        if (name != "search_jobs" or is_job_search_agent) and agent_spec.primitive_allowed(name, spec)
+    ]
+    _tool_list_desc = ", ".join(
+        _allowed_primitive_names + (["delegate_to_worker"] if allow_delegation else [])
+    ) or "no built-in tools"
     _findings_desc = "listing counts, job titles, salary ranges, company names" if is_job_search_agent else "key facts, figures, names, and comparisons"
 
     # Setup's location field (default "Melbourne, Australia", auto-detected via
@@ -818,7 +832,7 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
         "regardless of this note.\n"
     ) if _location else ""
 
-    system_prompt = agent_config["system_prompt"] + _location_note + f"""
+    system_prompt = agent_config["system_prompt"] + _location_note + agent_spec.runtime_scope_note(spec) + f"""
 
 ---
 CRITICAL TOOL RULES — READ BEFORE CALLING ANY TOOL:
@@ -1007,10 +1021,13 @@ clarifying question only belongs AFTER you've already produced real findings
    genuinely nowhere further to take it.
 ---"""
 
-    tool_definitions = agent_config["tools"]
+    # Filtered again at runtime, not just at bootstrap: the config came back
+    # from the browser and could have been edited to re-add a tool the spec
+    # forbids.
+    tool_definitions = [t for t in agent_config["tools"] if agent_spec.tool_def_allowed(t, spec)]
 
-    primitive_tools = _PRIMITIVE_TOOLS if is_job_search_agent else [
-        t for t in _PRIMITIVE_TOOLS if t["function"]["name"] != "search_jobs"
+    primitive_tools = [
+        t for t in _PRIMITIVE_TOOLS if t["function"]["name"] in _allowed_primitive_names
     ]
     tools = primitive_tools + ([_DELEGATE_TOOL] if allow_delegation else []) + [
         {
@@ -1165,7 +1182,9 @@ clarifying question only belongs AFTER you've already produced real findings
     delegation_count = 0
     # Hard ceiling on LLM calls per request — without this, a model stuck in a
     # tool-calling loop (or a buggy tool) burns unlimited API quota on one request.
-    max_iterations = 25
+    max_iterations = (spec and spec["max_tool_rounds"]) or 25
+    max_calls_per_step = (spec and spec["max_tool_calls_per_step"]) or MAX_TOOL_CALLS_PER_TURN
+    sampling = {"temperature": spec["temperature"]} if spec and spec["temperature"] is not None else {}
 
     # Tracks the last {"used", "failed"} reported by create_chat_completion's
     # _meta, so a 'model' event is only emitted when it actually changes this
@@ -1194,6 +1213,7 @@ clarifying question only belongs AFTER you've already produced real findings
                     tools=tools,
                     messages=current_messages,
                     _meta=call_meta,
+                    **sampling,
                 )
             except Exception:
                 yield {"type": "model", "used": call_meta.get("used"), "failed": call_meta.get("failed", [])}
@@ -1475,10 +1495,10 @@ clarifying question only belongs AFTER you've already produced real findings
                 except json.JSONDecodeError:
                     tool_inputs = {}
 
-                if idx >= MAX_TOOL_CALLS_PER_TURN:
+                if idx >= max_calls_per_step:
                     result_str = json.dumps({
                         "error": (
-                            f"Tool-call limit for this turn ({MAX_TOOL_CALLS_PER_TURN}) "
+                            f"Tool-call limit for this turn ({max_calls_per_step}) "
                             "reached — stop calling tools and answer now with what "
                             "you already have."
                         )
@@ -1495,6 +1515,17 @@ clarifying question only belongs AFTER you've already produced real findings
                     "primitive" if tool_name in ("fetch_page", "search_jobs", "search_image", "generate_image", "delegate_to_worker") else "generated"
                 )
                 yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs, "source": source, "call_index": idx}
+
+                # Dispatch is by name, so leaving a tool out of `tools` only
+                # hides it — a model can still emit a call to a name it was
+                # never offered (hallucinated, or remembered from earlier in
+                # history). This is what actually makes the allow-list hard.
+                if tool_name not in tool_names and tool_name not in _SEARCH_TOOL_NAMES:
+                    result = {"error": f"Tool '{tool_name}' is not available to this agent. Use only the tools you were given."}
+                    result_str = _finish(tc, tool_name, tool_inputs, result, source)
+                    yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source, "call_index": idx}
+                    yield from _tool_call_eval_events(tool_name, tool_inputs, tool_def, result_str, source, idx)
+                    continue
 
                 if tool_name == "delegate_to_worker":
                     if delegation_count >= max_delegations:

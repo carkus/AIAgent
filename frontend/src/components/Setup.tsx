@@ -259,9 +259,11 @@ interface Props {
   // agentConfig, passed through onBackToSetup) — undefined/null the first
   // time Setup is shown, before anything has been bootstrapped yet.
   activeAgentConfig?: AgentConfig | null
+  // Opens AdvancedSetup.tsx (structured spec + review step) instead of this screen.
+  onOpenAdvanced?: () => void
 }
 
-export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat, activeAgentConfig }: Props) {
+export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootstrapping, error, onStart, onDone, onError, onResumeChat, activeAgentConfig, onOpenAdvanced }: Props) {
   // Persisted across reloads/new-agent resets, same localStorage idiom as
   // provider/dateFormat above — otherwise the type picker silently reverted
   // to "general" every time, discarding the user's last choice.
@@ -1581,6 +1583,16 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 >
                   {bootstrapping ? 'Configuring…' : 'Deploy >'}
                 </button>
+                {onOpenAdvanced && !bootstrapping && (
+                  <button
+                    type="button"
+                    className={styles.advancedLink}
+                    onClick={onOpenAdvanced}
+                    title="Define the agent with a structured spec, hard tool limits and a review step"
+                  >
+                    Advanced…
+                  </button>
+                )}
                 {bootstrapping && (
                   <button
                     type="button"

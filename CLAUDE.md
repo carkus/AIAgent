@@ -80,6 +80,7 @@ expecting it to reach production.
 | `backend/src/eval_checks.py` | Self-evaluation checks (bootstrap/chat-response/tool-call/worker-delegation) — every recorded result carries the `provider`/`model` that produced the thing being graded, which is what makes `bandit.py` possible |
 | `backend/src/eval_log.py` | File-store of `eval_checks.py` results (`data/eval_results.json`); `list_all()` returns the full retained history (unordered, uncapped-per-call) for `bandit.py`'s per-arm aggregation, alongside the pre-existing `list_recent()` used for display |
 | `backend/src/bandit.py` | UCB1 multi-armed-bandit ranking over `eval_log.py` history — `recommend(candidates)` scores each `(provider, model)` arm and returns the top pick plus per-arm stats; advisory only, consumed by `/models` |
+| `backend/src/agent_spec.py` | Advanced Setup's structured spec — `normalize()` (re-run at every trust boundary), `bootstrap_prompt_block()`, `enforce_on_config()` (post-bootstrap pins/drops), `runtime_scope_note()`, and the allow-list predicates `agent_stream.py` enforces |
 | `backend/src/rate_limit.py` | Per-IP rate limiting (process-local counters — see gunicorn `--workers 1` note in Deployment) |
 | `backend/src/tools.py` | `execute_tool()` — runs Gemini-generated Python via `exec()`; also the primitive tools (`fetch_page`, `search_jobs`) |
 | `backend/src/handler.py`, `backend/src/agent.py`, `template.yaml` | AWS SAM/Lambda path — dev-only (`sam local`), not deployed |
@@ -88,6 +89,7 @@ expecting it to reach production.
 | `frontend/src/App.tsx` | Phase state machine |
 | `frontend/src/components/Setup.tsx` | Purpose input form |
 | `frontend/src/components/Chat.tsx` | Chat UI; owns message history and calls `runAgent()`; overrides `ReactMarkdown`'s `code` renderer so a ` ```mermaid ` fence renders as `MermaidDiagram` instead of a code block |
+| `frontend/src/components/AdvancedSetup.tsx` | Advanced agent creation: define a structured spec (each field labelled with the layer that enforces it) → stream bootstrap → review/edit the generated config, re-checked via `POST /validate-config` before launch |
 | `frontend/src/components/ToolActivity.tsx` | Renders tool call log inline under each assistant message; top-level container and every nested keyword/worker section are independently collapsible |
 | `frontend/src/components/MermaidDiagram.tsx` | Renders one Mermaid chart string to SVG via the `mermaid` package, themed to match the app's dark-cyan palette; used by `Chat.tsx` for ` ```mermaid ` fences in assistant replies |
 
@@ -123,6 +125,40 @@ After a config is generated, `_resolve_mcp_tools()` overwrites any `source: "mcp
 **A fixed forbidden-name list can't catch every hallucinated name, so there's also a general, AST-based check.** Live traffic surfaced a model calling `tas_search(...)` — not `search_jobs`, not a real vetted MCP tool name, just an invented helper that was never defined anywhere — which no fixed list could have anticipated in advance. `_undefined_call_errors()` statically parses each non-MCP `implementation` with `ast` and flags any bare `name(...)` call where `name` isn't actually injected into the `tools.py` sandbox (mirrored in `_SANDBOX_INJECTED_NAMES`/`_SANDBOX_BUILTIN_NAMES` — keep these in sync with `tools.py:execute_tool()`'s namespace if that ever changes), isn't one of the tool's own declared `input_schema` properties, and isn't something the implementation defines for itself (`def`/`class`/import/assignment/walrus/for/with/except-as — `_locally_bound_names()` walks the AST for all of these). It runs alongside `_forbidden_call_errors()` in the same retry/drop flow, passed that function's `forbidden_names` set so a name already reported with the more specific "that's a primitive/MCP tool" message isn't also reported here as a generic undefined-name error.
 
 **The bootstrap prompt itself can teach the model to produce invalid JSON — check the prompt's own examples first, not just the model's reliability.** A `Bootstrap JSON parse failed` report (`Expecting ',' delimiter`) traced back to `_BOOTSTRAP_PROMPT`'s own `save_output` example, which showed a *double-quoted* Python dict literal (`{"status": "saved"}`) — the model copied that pattern verbatim into a JSON string value, producing an unescaped inner quote that broke `json.loads` partway through. Fixed at the source: the example and an explicit accompanying rule now require single-quoting every Python string/dict literal inside an `implementation` value, since the JSON wrapper around it is double-quoted. A blind post-hoc regex/character-walking repair for this class of corruption was tried and deliberately rejected — tested against the actual reported payload, it didn't even fix that case, and more importantly a local scan can't reliably tell a real closing quote from an embedded `"key": "value"`-shaped fragment (both look identical), so a "successful" repair on some other input could silently splice one field's content into another with no compile-check to catch it (unlike `implementation`, `system_prompt` isn't Python). Instead, `_json_correction_message()` gives the model's own existing one-shot correction retry a specific, example-driven hint whenever the `JSONDecodeError` shape (`Expecting ',' delimiter`, `Expecting property name enclosed in double quotes`, `Unterminated string`) looks like this exact quote-collision bug, used by both `generate_agent_config()` and `generate_agent_config_stream()`.
+
+### Advanced Setup — structured spec, hard limits, review
+
+The basic Setup screen folds every choice into one `purpose` sentence that
+bootstrap *interprets*. Advanced Setup (`AdvancedSetup.tsx`, "Advanced…" link
+in Setup's commission bar) keeps the user's intent as data (`AgentSpec` in
+`types.ts`, `agent_spec.py` on the backend) so each field is routed to the
+layer that can actually guarantee it:
+
+- **Prompt (soft)** — mission, success criteria, out-of-scope, voice: tagged
+  sections in the bootstrap prompt (`{spec_block}`) *and* restated every turn
+  by `runtime_scope_note()`, since the generated system_prompt may paraphrase
+  them away.
+- **Post-generation (hard)** — `enforce_on_config()` pins persona name/traits
+  and drops disallowed tools after bootstrap, returning notes the UI shows
+  ("model chose X"). Spec-restricted bootstraps aren't recorded to
+  `bootstrap_memory`, so a deliberately narrow config can't become a few-shot
+  example for unrestricted agents.
+- **Runtime (hard)** — `agent_stream.py` filters primitives/MCP/generated tools
+  out of the tool list, applies `max_tool_rounds`/`max_tool_calls_per_step`/
+  `temperature`, disables delegation, and — the important part — **gates
+  dispatch by name**: a tool call whose name isn't in this turn's tool list
+  gets an error result, never executes. Hiding a tool from the list alone isn't
+  enforcement (the model can still emit any name), and the gate runs before the
+  `delegate_to_worker` branch so delegation can't bypass it either.
+
+`AgentConfig.spec` round-trips through the browser, so `agent_spec.normalize()`
+re-runs at `/bootstrap`, `/validate-config` and `/agent` rather than trusting
+a client copy. The review step's `POST /validate-config` (`bootstrap.py`'s
+`validate_config()`, no LLM call, not rate-limited) runs the same
+deterministic validators bootstrap uses (compile, forbidden calls, local
+endpoints, AST undefined names, MCP schema resolution, spec enforcement) on
+the user's hand edits; Launch always uses the server-returned copy. An
+output-contract (JSON schema) field is a planned v2 addition.
 
 ### Tool execution
 
@@ -536,7 +572,7 @@ The `save_output` tool writes to the backend process's `/tmp/`, served back via 
 A saved chat's `AgentConfig` still round-trips through `localStorage` (see limitation 3 above) for the "reload this browser's chat" case — no cross-device or server-side store for that. But an explicit **publish** step now does add server-side persistence for the narrower case of "expose this agent as a callable tool": `agent_registry.py` (file-store, `data/agent_registry.json`) backs `mcp_server.py`'s MCP tool list (see Backend Patterns above). It's deliberately not a general session/history store — just enough persistence for a chosen `AgentConfig` to be enumerable and re-runnable outside its original browser session.
 
 ### 8. Bootstrap quality is input-dependent — partially addressed
-Vague purpose descriptions produce generic tools. The Setup screen's Agent Type preset dropdown (`AGENT_TEMPLATES` in `Setup.tsx`) narrows this by giving Gemini a purpose-built prompt template per type rather than a freeform box. Bootstrap grounding (`bootstrap_memory.py`/`embeddings.py`, see Backend Patterns above) now also feeds the model 1-2 similar past `purpose → config` pairs as few-shot examples once enough bootstraps have accumulated — cold-start behavior (first bootstrap for a given kind of purpose) is unchanged. A structured review/regenerate step before launching chat is still a possible next step.
+Vague purpose descriptions produce generic tools. The Setup screen's Agent Type preset dropdown (`AGENT_TEMPLATES` in `Setup.tsx`) narrows this by giving Gemini a purpose-built prompt template per type rather than a freeform box. Bootstrap grounding (`bootstrap_memory.py`/`embeddings.py`, see Backend Patterns above) now also feeds the model 1-2 similar past `purpose → config` pairs as few-shot examples once enough bootstraps have accumulated — cold-start behavior (first bootstrap for a given kind of purpose) is unchanged. The Advanced Setup screen (see Backend Patterns) now adds a structured spec plus a review/edit/regenerate step before launch; the basic Setup screen still launches straight from bootstrap.
 
 ---
 

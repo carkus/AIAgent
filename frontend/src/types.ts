@@ -40,6 +40,30 @@ export interface SearchDefaults {
   radius_km?: number;
 }
 
+// Advanced Setup's structured spec (AdvancedSetup.tsx), mirrored by
+// backend/src/agent_spec.py's normalize(). Each field is routed to the layer
+// that can enforce it: mission/success/out_of_scope/voice go into the
+// bootstrap prompt and are restated every turn; persona pins overwrite what
+// bootstrap invents; the tool allow-lists and limits are enforced in code by
+// agent_stream.py. For the allow-lists, null/undefined = no restriction and
+// [] = nothing allowed.
+export interface AgentSpec {
+  mission?: string;
+  success_criteria?: string;
+  out_of_scope?: string;
+  voice?: string;
+  persona_name?: string;
+  persona_traits?: string[];
+  allowed_primitives?: string[] | null;
+  // "server_id/tool_name" pairs from GET /mcp-tools
+  allowed_mcp_tools?: string[] | null;
+  allow_generated_tools?: boolean;
+  allow_delegation?: boolean;
+  max_tool_rounds?: number | null;
+  max_tool_calls_per_step?: number | null;
+  temperature?: number | null;
+}
+
 export interface AgentConfig {
   purpose: string;
   system_prompt: string;
@@ -77,6 +101,8 @@ export interface AgentConfig {
   // chat can restore which traits were selected. undefined/[] on older saved
   // chats predating this field.
   active_traits?: string[];
+  // Present only for agents built on the Advanced Setup screen.
+  spec?: AgentSpec;
 }
 
 export interface ToolCall {

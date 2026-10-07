@@ -2342,3 +2342,15 @@
     padding: 0.35rem 0.75rem;
   }
 }
+
+/* Entry point to AdvancedSetup.tsx — deliberately a plain text link, not a
+   third commission-bar button competing with Deploy. */
+.advancedLink {
+  border: none;
+  background: none;
+  padding: 0 4px;
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  text-decoration: underline;
+}

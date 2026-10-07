@@ -17,6 +17,7 @@ export default defineConfig({
       '/models': 'http://localhost:4891',
       '/saved-searches': 'http://localhost:4891',
       '/mcp-tools': 'http://localhost:4891',
+      '/validate-config': 'http://localhost:4891',
     },
   },
 })

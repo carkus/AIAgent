@@ -20,7 +20,9 @@ SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-n
 
 deploy_backend() {
     echo "==> Syncing backend/ ..."
-    tar czf - --exclude='__pycache__' --exclude='*.pyc' -C backend . \
+    # venv excluded: the droplet uses $REMOTE_BASE/venv, and a local (often
+    # Windows) venv is large and useless there.
+    tar czf - --exclude='__pycache__' --exclude='*.pyc' --exclude='venv' -C backend . \
         | ssh "${SSH_OPTS[@]}" "$HOST" "sudo -u aiagent tar xzf - -C $REMOTE_BASE/src/backend"
 
     echo "==> Installing any new/changed Python deps ..."
