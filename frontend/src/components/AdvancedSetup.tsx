@@ -2,9 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { bootstrap, listMcpTools, validateConfig } from '../api'
 import type { ConfigValidationIssue, McpServerInfo } from '../api'
 import type { AgentConfig, AgentSpec, AgentTemplateId, LlmProvider, ToolDefinition } from '../types'
-import { AGENT_TEMPLATES } from '../agentTypes'
+import { BEHAVIOR_TOGGLES, PERSONALITY_TRAITS, getTemplate } from '../agentTypes'
 import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback } from '../modelLabel'
 import styles from '../styles/AdvancedSetup.module.css'
+// Basic Setup's pill/chip classes, so Focus, Personality and Behavior look
+// the same on both screens.
+import pills from '../styles/Setup.module.css'
+import BehaviorIcon from './BehaviorIcon'
+
+// Same cap as basic Setup's MAX_SPECIALTIES.
+const MAX_FOCUS = 5
 
 // Advanced agent creation: the same bootstrap pipeline as Setup.tsx, but the
 // user's intent travels as a structured spec (types.ts's AgentSpec) instead of
@@ -16,6 +23,10 @@ import styles from '../styles/AdvancedSetup.module.css'
 //   building → stream /bootstrap (spec included)
 //   review  → edit system_prompt/tools, re-check via /validate-config, launch
 
+// Advanced Setup always bootstraps a general agent; the job-search template
+// is a basic-Setup preset.
+const AGENT_TYPE: AgentTemplateId = 'general'
+
 type Step = 'define' | 'building' | 'review'
 type Layer = 'prompt' | 'guarded' | 'pinned' | 'code'
 
@@ -26,9 +37,10 @@ const LAYER_TEXT: Record<Layer, string> = {
   code: 'enforced in code at runtime',
 }
 
-const PRIMITIVES: { name: string; label: string; jobOnly?: boolean }[] = [
+// search_jobs is omitted: agent_stream.py only exposes it to job_search
+// agents, and Advanced Setup always builds a general one.
+const PRIMITIVES: { name: string; label: string }[] = [
   { name: 'fetch_page', label: 'fetch_page — read a known URL' },
-  { name: 'search_jobs', label: 'search_jobs — Adzuna listings', jobOnly: true },
   { name: 'search_image', label: 'search_image — find images' },
   { name: 'generate_image', label: 'generate_image — create images' },
 ]
@@ -40,6 +52,10 @@ interface Props {
 
 function LayerTag({ layer }: { layer: Layer }) {
   return <span className={`${styles.layer} ${styles[`layer_${layer}`]}`}>{LAYER_TEXT[layer]}</span>
+}
+
+function toggleId(ids: string[], id: string): string[] {
+  return ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id]
 }
 
 function optionalInt(value: string): number | null {
@@ -54,12 +70,18 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
   const [step, setStep] = useState<Step>('define')
 
   // --- define ---
-  const [purpose, setPurpose] = useState('')
-  const [agentType, setAgentType] = useState<AgentTemplateId>('general')
-  const [location, setLocation] = useState('')
   const [personaName, setPersonaName] = useState('')
-  const [traits, setTraits] = useState('')
-  const [voice, setVoice] = useState('')
+  const [keywords, setKeywords] = useState<string[]>([])
+  const [draft, setDraft] = useState('')
+  const focusInputRef = useRef<HTMLInputElement>(null)
+  function addKeyword() {
+    const kw = draft.trim()
+    setDraft('')
+    if (!kw || keywords.length >= MAX_FOCUS || keywords.some(k => k.toLowerCase() === kw.toLowerCase())) return
+    setKeywords(prev => [...prev, kw])
+  }
+  const [selectedTraits, setSelectedTraits] = useState<string[]>([])
+  const [activeToggles, setActiveToggles] = useState<string[]>([])
   const [mission, setMission] = useState('')
   const [successCriteria, setSuccessCriteria] = useState('')
   const [outOfScope, setOutOfScope] = useState('')
@@ -93,9 +115,7 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
     return () => abortRef.current?.abort()
   }, [])
 
-  // Primitives that exist for this agent type at all — search_jobs is only
-  // ever exposed to job_search agents (agent_stream.py), regardless of spec.
-  const availablePrimitives = PRIMITIVES.filter(p => !p.jobOnly || agentType === 'job_search')
+  const availablePrimitives = PRIMITIVES
 
   function togglePrimitive(name: string) {
     setPrimitives(prev => {
@@ -122,9 +142,7 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
       mission: mission.trim(),
       success_criteria: successCriteria.trim(),
       out_of_scope: outOfScope.trim(),
-      voice: voice.trim(),
       persona_name: personaName.trim(),
-      persona_traits: traits.split(',').map(t => t.trim()).filter(Boolean),
       // Everything ticked = no restriction (null), so newly-added primitives
       // or MCP servers aren't silently excluded from an "allow all" spec.
       allowed_primitives:
@@ -140,33 +158,47 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
   }
 
   async function generate() {
-    if (!purpose.trim()) return
+    if (keywords.length === 0) return
     const controller = new AbortController()
     abortRef.current = controller
     setProgress([])
     setBuildError(null)
     setStep('building')
     try {
+      // No free-text role: as on the basic screen, the agent's role comes
+      // from the stackable personality and behavior pills. The purpose is
+      // built exactly as Setup.tsx's runBootstrap builds it — the template
+      // over the focus topics, then behavior, then personality instructions.
+      // Focus is the job: stored as config.keywords (what Chat.tsx
+      // auto-starts on and agent_stream.py delegates over).
+      const traitPool = PERSONALITY_TRAITS[AGENT_TYPE]
+      const traitIds = traitPool.filter(t => selectedTraits.includes(t.id)).map(t => t.id)
+      const behaviorInstructions = BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.instruction)
+      const traitInstructions = traitPool.filter(t => selectedTraits.includes(t.id)).map(t => t.instruction)
+      const purpose = getTemplate(AGENT_TYPE).buildPurpose(keywords, '') +
+        (behaviorInstructions.length > 0 ? ` ${behaviorInstructions.join(' ')}` : '') +
+        (traitInstructions.length > 0 ? ` ${traitInstructions.join(' ')}` : '')
       const result = await bootstrap(
-        purpose.trim(),
+        purpose,
         provider,
         ollamaModel,
         event => {
           if (event.type === 'status') setProgress(p => [...p, event.message])
           else if (event.type === 'tool') setProgress(p => [...p, `Tool: ${event.name}`])
         },
-        agentType,
+        AGENT_TYPE,
         controller.signal,
         null,
         buildSpec(),
       )
       setConfig({
         ...result,
-        location: location.trim() || undefined,
         provider,
         ollama_model: ollamaModel,
-        template: agentType,
-        keywords: [],
+        template: AGENT_TYPE,
+        keywords,
+        active_toggles: activeToggles,
+        active_traits: traitIds,
       })
       setIssues([])
       setValidated(false)
@@ -352,41 +384,87 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
 
         <div className={styles.scroll}>
           <section className={styles.section}>
-            <h3 className={styles.sectionTitle}>Purpose</h3>
-            <label className={styles.field}>
-              <span>What should this agent do? <LayerTag layer="prompt" /></span>
-              <textarea className={styles.input} rows={3} required value={purpose} onChange={e => setPurpose(e.target.value)} />
-            </label>
-            <div className={styles.row}>
-              <label className={styles.field}>
-                <span>Agent type <LayerTag layer="code" /></span>
-                <select className={styles.input} value={agentType} onChange={e => setAgentType(e.target.value as AgentTemplateId)}>
-                  {AGENT_TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                </select>
-              </label>
-              <label className={styles.field}>
-                <span>Location <LayerTag layer="prompt" /></span>
-                <input className={styles.input} value={location} onChange={e => setLocation(e.target.value)} />
-              </label>
+            <h3 className={styles.sectionTitle}>Focus</h3>
+            <p className={styles.hint}>
+              The job: the topics this agent works on. Kept apart from the agent itself, as in the
+              basic screen's Focus.
+            </p>
+            <span className={styles.hint}>Topics <LayerTag layer="prompt" /></span>
+            <div className={pills.chipArea} onClick={() => focusInputRef.current?.focus()}>
+              {keywords.map(kw => (
+                <span key={kw} className={pills.chip}>
+                  {kw}
+                  <button
+                    type="button"
+                    className={pills.chipX}
+                    onClick={ev => { ev.stopPropagation(); setKeywords(prev => prev.filter(k => k !== kw)) }}
+                    aria-label={`Remove ${kw}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                ref={focusInputRef}
+                className={pills.chipInput}
+                value={draft}
+                onChange={e => setDraft(e.target.value.slice(0, 50))}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); addKeyword() }
+                  if (e.key === 'Backspace' && !draft && keywords.length > 0) setKeywords(prev => prev.slice(0, -1))
+                }}
+                onBlur={() => { if (draft.trim()) addKeyword() }}
+                placeholder={keywords.length >= MAX_FOCUS ? `Limit of ${MAX_FOCUS} reached` : (keywords.length === 0 ? 'Type a topic, press Enter…' : '+ Add Focus')}
+                disabled={keywords.length >= MAX_FOCUS}
+                maxLength={50}
+              />
             </div>
           </section>
 
           <section className={styles.section}>
             <h3 className={styles.sectionTitle}>Identity</h3>
-            <div className={styles.row}>
-              <label className={styles.field}>
-                <span>Persona name <LayerTag layer="pinned" /></span>
-                <input className={styles.input} maxLength={40} value={personaName} onChange={e => setPersonaName(e.target.value)} placeholder="Let the model choose" />
-              </label>
-              <label className={styles.field}>
-                <span>Traits, comma-separated (max 5) <LayerTag layer="pinned" /></span>
-                <input className={styles.input} value={traits} onChange={e => setTraits(e.target.value)} placeholder="Let the model choose" />
-              </label>
-            </div>
             <label className={styles.field}>
-              <span>Voice <LayerTag layer="prompt" /></span>
-              <input className={styles.input} value={voice} onChange={e => setVoice(e.target.value)} placeholder="e.g. plain, direct, no filler" />
+              <span>Persona name <LayerTag layer="pinned" /></span>
+              <input className={styles.input} maxLength={40} value={personaName} onChange={e => setPersonaName(e.target.value)} placeholder="Let the model choose" />
             </label>
+            <span className={styles.hint}>Personality <LayerTag layer="prompt" /></span>
+            <div className={pills.behaviorTogglesRow}>
+              {PERSONALITY_TRAITS[AGENT_TYPE].map(t => {
+                const active = selectedTraits.includes(t.id)
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={active ? pills.behaviorToggleActive : pills.behaviorToggle}
+                    onClick={() => setSelectedTraits(prev => toggleId(prev, t.id))}
+                    title={t.instruction}
+                    aria-pressed={active}
+                  >
+                    {t.label}
+                  </button>
+                )
+              })}
+            </div>
+            <span className={styles.hint}>Behavior <LayerTag layer="prompt" /></span>
+            <div className={pills.behaviorIconRow}>
+              {BEHAVIOR_TOGGLES.map(t => {
+                const active = activeToggles.includes(t.id)
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={active ? pills.behaviorIconBtnActive : pills.behaviorIconBtn}
+                    onClick={() => setActiveToggles(prev => toggleId(prev, t.id))}
+                    title={t.description}
+                    aria-label={t.label}
+                    aria-pressed={active}
+                  >
+                    <span className={pills.behaviorIconGlyph} aria-hidden="true"><BehaviorIcon id={t.id} /></span>
+                    <span className={pills.behaviorIconLabel}>{t.label}</span>
+                  </button>
+                )
+              })}
+            </div>
           </section>
 
           <section className={styles.section}>
@@ -462,7 +540,7 @@ export default function AdvancedSetup({ onCancel, onDone }: Props) {
 
         <div className={styles.actions}>
           <button type="button" className={styles.btn} onClick={onCancel}>Back</button>
-          <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={!purpose.trim()}>
+          <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={keywords.length === 0}>
             Generate
           </button>
         </div>

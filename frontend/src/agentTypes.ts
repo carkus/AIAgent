@@ -6,7 +6,26 @@
 // its cosmetic name). Lives outside components/ so characterData.ts can
 // import it without a circular components/Setup.tsx <-> CharacterGenerator
 // dependency.
-import type { AgentTemplateId } from './types'
+import type { AgentSpec, AgentTemplateId } from './types'
+
+// The agent settings the basic Setup screen doesn't expose, at their
+// unconstrained defaults — every agent carries the same full spec Advanced
+// Setup edits, Basic just leaves most of it here. agent_spec.py treats this
+// as no restriction: no prompt sections, no tool filtering, no limits, no
+// scope guard, and the bootstrap is still recorded as a few-shot example.
+export const DEFAULT_AGENT_SPEC: AgentSpec = {
+  mission: '',
+  success_criteria: '',
+  out_of_scope: '',
+  persona_name: '',
+  allowed_primitives: null,
+  allowed_mcp_tools: null,
+  allow_generated_tools: true,
+  allow_delegation: true,
+  max_tool_rounds: null,
+  max_tool_calls_per_step: null,
+  temperature: null,
+}
 
 // Each template controls both the purpose text sent to bootstrap (which
 // determines what tools/behaviour Claude designs) and what the keyword

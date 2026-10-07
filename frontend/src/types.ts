@@ -101,7 +101,10 @@ export interface AgentConfig {
   // chat can restore which traits were selected. undefined/[] on older saved
   // chats predating this field.
   active_traits?: string[];
-  // Present only for agents built on the Advanced Setup screen.
+  // The agent's full settings. Advanced Setup edits all of it; basic Setup
+  // sends agentTypes.ts's DEFAULT_AGENT_SPEC. Absent on agents bootstrapped
+  // before basic Setup sent one, which the backend treats the same as the
+  // default.
   spec?: AgentSpec;
 }
 

@@ -135,7 +135,24 @@ The basic Setup screen folds every choice into one `purpose` sentence that
 bootstrap *interprets*. Advanced Setup (`AdvancedSetup.tsx`, "Advanced…" link
 in Setup's commission bar) keeps the user's intent as data (`AgentSpec` in
 `types.ts`, `agent_spec.py` on the backend) so each field is routed to the
-layer that can actually guarantee it:
+layer that can actually guarantee it.
+
+**The agent is kept separate from the job.** The agent is everything that
+holds whatever it's working on: persona name, personality, behaviour, scope
+(mission / success criteria / out-of-scope), tools and limits. There is
+deliberately no free-text role box: the role comes from the predefined,
+stackable personality/behaviour pills, on both screens, and Advanced builds
+its bootstrap purpose exactly as basic Setup does (`general` template over
+the focus topics, then behaviour, then personality instructions). The job
+is the Focus topics (`AgentConfig.keywords`, what `Chat.tsx` auto-starts on
+and `agent_stream.py` delegates over), plus type/location on the basic
+screen. Every agent carries the same full `spec`: Advanced edits all of it,
+basic Setup sends `DEFAULT_AGENT_SPEC` (`agentTypes.ts`), which
+`agent_spec.py` treats as unconstrained. Personality and behaviour use the
+same `PERSONALITY_TRAITS`/`BEHAVIOR_TOGGLES` lists on both screens, appended
+to the bootstrap purpose (Advanced always uses the `general` trait pool). The
+spec's `voice`/`persona_traits` fields are still accepted by the backend but
+no screen sets them any more.
 
 - **Prompt (soft)** — mission, success criteria, out-of-scope, voice: tagged
   sections in the bootstrap prompt (`{spec_block}`) *and* restated every turn
