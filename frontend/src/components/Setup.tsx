@@ -1629,8 +1629,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 onClick={() => toggleSavedSection('searches')}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSavedSection('searches') } }}
               >
-                <span className={styles.savedSectionCount}>{savedKeywordPool.length}</span>
-                <span className={styles.savedSectionTitle}>Saved Focus</span>
+                <span className={styles.savedSectionTitle}>Saved Focus ({savedKeywordPool.length})</span>
                 <span className={styles.savedSectionRight}>
                   <HelpTip text="Focus keywords you've saved for reuse across agents — tap one later to add it back into the Focus list above without retyping it." label="Saved Focus help" />
                   <span className={styles.savedSectionCaret} aria-hidden="true">
@@ -1738,8 +1737,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 onClick={() => toggleSavedSection('drafts')}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSavedSection('drafts') } }}
               >
-                <span className={styles.savedSectionCount}>{visibleDrafts.length}</span>
-                <span className={styles.savedSectionTitle}>Saved Agent Profiles</span>
+                <span className={styles.savedSectionTitle}>Saved Agent Profiles ({visibleDrafts.length})</span>
                 <span className={styles.savedSectionRight}>
                   <HelpTip text="Full agent setups you've saved — type, behavior, personality, and focus together — so you can reload one later instead of rebuilding it from scratch." label="Saved Agent Profiles help" />
                   <span className={styles.savedSectionCaret} aria-hidden="true">
@@ -1807,8 +1805,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 onClick={() => toggleSavedSection('chats')}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSavedSection('chats') } }}
               >
-                <span className={styles.savedSectionCount}>{visibleChats.length}</span>
-                <span className={styles.savedSectionTitle}>Saved Jobs</span>
+                <span className={styles.savedSectionTitle}>Saved Jobs ({visibleChats.length})</span>
                 <span className={styles.savedSectionRight}>
                   <HelpTip text="Finished or in-progress conversations you've saved — reload one to pick up right where it left off." label="Saved Jobs help" />
                   <span className={styles.savedSectionCaret} aria-hidden="true">
@@ -1913,8 +1910,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 onClick={() => toggleSavedSection('mcp')}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSavedSection('mcp') } }}
               >
-                <span className={styles.savedSectionCount}>{publishedAgents.length}</span>
-                <span className={styles.savedSectionTitle}>Agent Roster</span>
+                <span className={styles.savedSectionTitle}>Agent Roster ({publishedAgents.length})</span>
                 <span className={styles.savedSectionRight}>
                   <HelpTip text="Agents you've published as callable MCP tools — reachable by other MCP clients, not just this app's own chat." label="Agent Roster help" />
                   <span className={styles.savedSectionCaret} aria-hidden="true">

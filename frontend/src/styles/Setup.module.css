@@ -1421,16 +1421,6 @@
   flex-shrink: 0;
 }
 
-.savedSectionCount {
-  background: #eef1f0;
-  border-radius: 999px;
-  color: var(--color-accent);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  padding: 0.1rem 0.5rem;
-  flex-shrink: 0;
-}
-
 .savedSectionBody {
   border-top: 1px solid var(--color-dossier-setup-border);
   padding: 0.55rem 0.65rem 0.6rem;
@@ -2315,10 +2305,6 @@
     font-size: var(--font-size-base);
   }
 
-  .savedSectionCount {
-    font-size: var(--font-size-sm);
-    padding: 0.15rem 0.55rem;
-  }
 
   .savedKeywordChip {
     padding: 0.4rem 0.65rem 0.4rem 0.8rem;
