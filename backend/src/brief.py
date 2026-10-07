@@ -26,9 +26,31 @@ Active Behavior toggles and Personality traits (Setup.tsx's BEHAVIOR_TOGGLES
 bootstrapped agent will actually do just as much as a specialty does, so the
 brief must fold their real effect into the same paragraph rather than only
 ever discussing the keywords. See generate_brief's `behaviors`/`traits` args.
+
+Alongside a brief, the model may offer up to two output "relics" (relic.py)
+suited to this commission — e.g. slides to pitch it, a PDF case file, a
+diagram of how the work splits. Offered only; nothing is built unless the
+user clicks one in Setup, and then relic.py builds it from the case and the
+agent on board, not by restating this paragraph.
 """
 import json
 from llm_client import create_chat_completion
+
+# Brief-sourced relics: nothing has been researched yet, so a chart (which
+# needs real numbers) isn't offered.
+BRIEF_RELIC_KINDS = ("slides", "pdf", "docx", "diagram", "markdown", "csv", "json")
+
+
+def _relic_suggestions(raw) -> list[dict]:
+    suggestions = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip().lower()
+        reason = str(item.get("reason") or "").strip()
+        if kind in BRIEF_RELIC_KINDS and reason and all(s["kind"] != kind for s in suggestions):
+            suggestions.append({"kind": kind, "reason": reason[:200]})
+    return suggestions[:2]
 
 _BRIEF_PROMPT = """You are drafting the short "Brief" shown on an AI agent platform's Setup screen. It tells the user how the agent they're about to commission will interpret the specialties (keywords) they've added, before they actually launch it.
 
@@ -52,8 +74,10 @@ Separately from the ambiguity check above, also assess whether commissioning thi
 - A specialty that is only meaningful with a location (e.g. "job openings", "weather", "local events") but no location was given.
 This is independent of the question/brief choice above — a warning can accompany either a brief or a question. Omit "warning" (or use null) when nothing is actually wrong; don't invent a warning just to have one.
 
+When you write a brief (not a question), also offer up to two pieces of media the user could take away from this commission before it runs, picked for what would genuinely help THIS case: "slides" (to pitch or present the commission), "pdf" (a polished case file to share), "docx" (an editable case file), "diagram" (how the work splits across the focus topics and any workers), "markdown" (a working brief to keep editing), "csv" or "json" (one row per line of inquiry, for tracking). Each reason is one short line naming what it would contain for this case specifically. Offer none ([]) when nothing would really add to the brief.
+
 Respond with ONLY raw JSON, no markdown code fences, no other text, exactly one of:
-{{"type": "brief", "text": "...", "warning": "..." or null}}
+{{"type": "brief", "text": "...", "warning": "..." or null, "relics": [{{"kind": "...", "reason": "..."}}]}}
 {{"type": "question", "text": "...", "warning": "..." or null}}
 """
 
@@ -72,7 +96,8 @@ def generate_brief(
     traits: list[str] | None = None,
 ) -> dict | None:
     """
-    Returns {"type": "brief" | "question", "text": "...", "warning": "..." | None}
+    Returns {"type": "brief" | "question", "text": "...", "warning": "..." | None,
+    "relics": [{"kind", "reason"}, ...]} (relics empty for a question)
     or None if the call/parse failed — callers should fall back to the
     deterministic template brief on None rather than surfacing an error,
     since this is a nice-to-have polish step, not a required one.
@@ -103,7 +128,7 @@ def generate_brief(
         response = create_chat_completion(
             provider=provider,
             model=model,
-            max_tokens=420,
+            max_tokens=560,
             temperature=0.6,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -115,6 +140,7 @@ def generate_brief(
         warning = (data.get("warning") or "").strip() or None
         if not text:
             return None
-        return {"type": kind, "text": text, "warning": warning}
+        relics = _relic_suggestions(data.get("relics")) if kind == "brief" else []
+        return {"type": kind, "text": text, "warning": warning, "relics": relics}
     except Exception:
         return None

@@ -80,6 +80,48 @@ export interface AgentBrief {
   type: 'brief' | 'question';
   text: string;
   warning?: string | null;
+  // Media the model offers for this commission (brief.py); built only on click.
+  relics?: RelicSuggestion[];
+}
+
+// The commission and the agent on board, sent with a Brief-sourced relic so
+// relic.py builds a case briefing rather than restating the brief text.
+export interface RelicCase {
+  agentType: string;
+  keywords: string[];
+  location: string;
+  traits: string[];
+  behaviors: string[];
+  warning?: string | null;
+}
+
+/** Builds a relic offered by the Setup Brief, before the agent has run. */
+export async function buildBriefRelic(
+  suggestion: RelicSuggestion,
+  brief: string,
+  relicCase: RelicCase,
+  agentName: string,
+  provider?: LlmProvider,
+  ollamaModel?: string | null,
+): Promise<string> {
+  const res = await fetch(`${API_URL}/relic`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      kind: suggestion.kind,
+      reason: suggestion.reason,
+      answer: brief,
+      case: relicCase,
+      agentName,
+      agentConfig: { provider: provider ?? undefined, ollama_model: ollamaModel ?? undefined },
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? 'Failed to build relic');
+  }
+  const data = await res.json();
+  return data.content;
 }
 
 /**

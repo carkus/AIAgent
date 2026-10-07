@@ -218,6 +218,7 @@ def relic():
         agent_name=(body.get("agentName") or "").strip(),
         provider=provider,
         model=model,
+        case=body.get("case") if isinstance(body.get("case"), dict) else None,
     )
     if error:
         return jsonify({"error": error}), 502

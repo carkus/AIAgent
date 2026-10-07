@@ -1,11 +1,15 @@
 """
-Builds an output "relic" — a standalone artifact (CSV, diagram, markdown
-document, PDF report) made from a finished chat answer — when the user clicks
-one of the suggestions the agent attached to that answer (agent_stream.py's
-rule 7b / _extract_relic_suggestions).
+Builds an output "relic" — a standalone artifact (CSV, diagram, chart image,
+markdown document, PDF report, Word document, slide deck, JSON data) made from
+a finished chat answer — when the user clicks one of the suggestions the agent
+attached to that answer (agent_stream.py's rule 7b /
+_extract_relic_suggestions), or picks a kind from the answer's Export menu.
+It can also be built from the Setup screen's Brief (brief.py offers the
+kinds), before the agent has run: then `case` carries the commission and
+the agent on board, and _CASE_PROMPT turns them into a briefing artifact.
 
 Advisory and on demand: the agent only suggests, nothing is built unless the
-user accepts, and accepting costs one LLM call here (plus at most one
+user asks, and asking costs one LLM call here (plus at most one
 correction retry). Stateless like recap.py: the frontend sends the answer,
 the question it answered and any worker findings; nothing is stored, and the
 chat history is left untouched.
@@ -94,6 +98,37 @@ Build it ONLY from the material below. Do not invent data, sources, or numbers t
 {workers}
 Reply with the artifact content only."""
 
+_CASE_PROMPT = """You are {agent_name}, the agent assigned to this case. The user hasn't commissioned you yet; from the brief on their Setup screen they asked for {format_rules}
+
+Purpose of the artifact: {reason}
+
+Make it a briefing for the case, not a copy of the brief. The brief paragraph is one input; rework its substance rather than pasting it. Dress it up with the case details and who is on board:
+- the case: what is being asked, the focus topics, and the location if there is one;
+- the agent on board: you, by name, and how your personality traits and behaviours will actually shape the way the work gets done (not a list of their labels);
+- the plan: a line of inquiry per focus topic, saying what you will look for, why it matters to the case, and what you will hand back; how the work splits (one worker per topic if delegation is on);
+- risks and open questions, including the warning below if there is one;
+- what the user gets at the end, and anything they should decide before commissioning.
+Where the format asks for findings, data or a recommendation, use the plan and the decision in front of the user instead. Don't describe the artifact itself (its purpose, format, or that it will be converted); the purpose line above is for you, not a section. Nothing has been researched yet: describe intentions and approach, and never invent findings, figures, sources or results.
+
+<case>
+Agent type: {agent_type}
+Focus topics: {keywords}
+Location: {location}
+</case>
+
+<agent>
+Name: {agent_name}
+Personality: {traits}
+Behaviours: {behaviors}
+</agent>
+
+<brief>
+{brief}
+</brief>
+{warning}
+Reply with the artifact content only."""
+
+_CHART_START_RE = re.compile(r"^(pie|xychart-beta)\b", re.IGNORECASE)
 _DIAGRAM_START_RE = re.compile(
     r"^(flowchart|graph|mindmap|pie|xychart-beta|sequenceDiagram|timeline|quadrantChart)\b",
     re.IGNORECASE,
@@ -171,6 +206,26 @@ def _workers_block(workers: list[dict]) -> str:
     return "\nFindings your delegated workers reported (part of the answer):\n" + "\n".join(parts) + "\n"
 
 
+def _case_prompt(kind: str, reason: str, brief: str, case: dict, agent_name: str) -> str:
+    def listed(key: str) -> str:
+        values = case.get(key)
+        items = [str(v).strip() for v in values if str(v).strip()] if isinstance(values, list) else []
+        return ", ".join(items) or "(none)"
+    warning = str(case.get("warning") or "").strip()
+    return _CASE_PROMPT.format(
+        agent_name=f"Agent {agent_name}" if agent_name else "an AI agent",
+        format_rules=_FORMAT_RULES[kind],
+        reason=reason or "(none given)",
+        agent_type=str(case.get("agentType") or "general"),
+        keywords=listed("keywords"),
+        location=str(case.get("location") or "").strip() or "(none)",
+        traits=listed("traits"),
+        behaviors=listed("behaviors"),
+        brief=(brief or "")[:4000],
+        warning=f"\n<warning>\n{warning}\n</warning>\n" if warning else "",
+    )
+
+
 def generate_relic(
     kind: str,
     reason: str,
@@ -180,18 +235,23 @@ def generate_relic(
     agent_name: str,
     provider: str | None = None,
     model: str | None = None,
+    case: dict | None = None,
 ) -> tuple[str | None, str | None]:
-    """Returns (content, error). Exactly one is None."""
+    """Returns (content, error). Exactly one is None. With `case`, `answer`
+    is the Setup Brief text and the relic is built as a case briefing."""
     if kind not in KINDS:
         return None, f"Unknown relic kind: {kind}"
-    prompt = _PROMPT.format(
-        agent_name=f"Agent {agent_name}" if agent_name else "an AI agent",
-        format_rules=_FORMAT_RULES[kind],
-        reason=reason or "(none given)",
-        question=(question or "(not available)")[:4000],
-        answer=(answer or "")[:_MAX_SOURCE_CHARS],
-        workers=_workers_block(workers or []),
-    )
+    if case is not None:
+        prompt = _case_prompt(kind, reason, answer, case, agent_name)
+    else:
+        prompt = _PROMPT.format(
+            agent_name=f"Agent {agent_name}" if agent_name else "an AI agent",
+            format_rules=_FORMAT_RULES[kind],
+            reason=reason or "(none given)",
+            question=(question or "(not available)")[:4000],
+            answer=(answer or "")[:_MAX_SOURCE_CHARS],
+            workers=_workers_block(workers or []),
+        )
     messages = [{"role": "user", "content": prompt}]
     # Same one-correction-retry shape as bootstrap's JSON retry: a failed
     # deterministic check gets fed back once, then we give up.
