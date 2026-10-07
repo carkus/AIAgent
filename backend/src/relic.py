@@ -10,17 +10,19 @@ correction retry). Stateless like recap.py: the frontend sends the answer,
 the question it answered and any worker findings; nothing is stored, and the
 chat history is left untouched.
 
-Returns the relic's text content; the frontend turns it into the actual file
-(a .csv/.md download, a Mermaid-rendered .svg, or a jsPDF report built from
-the markdown for "pdf").
+Returns the relic's text content; the frontend previews it and turns it into
+the actual file: .csv/.md/.json as-is, Mermaid rendered to .svg ("diagram")
+or .png ("chart"), markdown laid out as a PDF ("pdf") or Word file ("docx"),
+and a slide outline built into a .pptx ("slides").
 """
 import csv
 import io
+import json
 import re
 
 from llm_client import create_chat_completion
 
-KINDS = ("csv", "diagram", "markdown", "pdf")
+KINDS = ("csv", "diagram", "chart", "markdown", "pdf", "docx", "slides", "json")
 
 _MAX_SOURCE_CHARS = 24000
 _MAX_WORKER_CHARS = 6000
@@ -48,6 +50,31 @@ _FORMAT_RULES = {
         "executive summary paragraph, `##` sections for each finding, tables "
         "where data is tabular, and a closing 'Recommendation' section. It must "
         "read on its own, without the chat. No Mermaid or other code blocks."
+    ),
+    "docx": (
+        "an editable report in markdown (it is converted to a Word document): a "
+        "`#` title, a summary paragraph, `##` sections for each finding, tables "
+        "where data is tabular, and a closing 'Recommendation' section. It must "
+        "read on its own, without the chat. No Mermaid or other code blocks."
+    ),
+    "chart": (
+        "a single Mermaid chart of the answer's numbers (it is rendered to a PNG "
+        "image). Use `pie` for shares of a whole, otherwise `xychart-beta` with "
+        "`x-axis [...]`, `y-axis \"Label (unit)\"` and one `bar` or `line` series. "
+        "Bare numeric values only, units in the title or axis label. Output the "
+        "Mermaid source only, no fence."
+    ),
+    "slides": (
+        "a short slide deck, as JSON only: {\"title\": str, \"subtitle\": str, "
+        "\"slides\": [{\"title\": str, \"bullets\": [str, ...], \"notes\": str}]}. "
+        "3 to 10 slides, at most 6 bullets each, each bullet under 15 words; "
+        "notes are optional speaker notes. End with a takeaway or next-steps slide."
+    ),
+    "json": (
+        "structured data as JSON only: an array of objects, one per item, with "
+        "the same keys on every object (camelCase, values as numbers/booleans "
+        "where they are numeric/yes-no). Wrap it in an object only if there is "
+        "more than one kind of item."
     ),
 }
 
@@ -79,10 +106,37 @@ def _strip_fence(text: str) -> str:
     return (match.group(1) if match else text).strip()
 
 
+def _slides_problem(data) -> str | None:
+    if not isinstance(data, dict) or not isinstance(data.get("slides"), list):
+        return 'It must be an object with a "slides" array.'
+    slides = data["slides"]
+    if not 3 <= len(slides) <= 10:
+        return f"It has {len(slides)} slides; it needs 3 to 10."
+    for i, slide in enumerate(slides, 1):
+        if not isinstance(slide, dict) or not str(slide.get("title") or "").strip():
+            return f"Slide {i} needs a title."
+        bullets = slide.get("bullets", [])
+        if not isinstance(bullets, list) or not all(isinstance(b, str) for b in bullets):
+            return f'Slide {i}: "bullets" must be a list of strings.'
+    return None
+
+
 def _problem(kind: str, content: str) -> str | None:
     """Deterministic check of the generated content; None when it's usable."""
     if not content:
         return "The reply was empty."
+    if kind in ("json", "slides"):
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as e:
+            return f"It isn't valid JSON ({e})."
+        if kind == "slides":
+            return _slides_problem(data)
+        if not data:
+            return "The JSON is empty."
+        return None
+    if kind == "chart" and not _CHART_START_RE.match(content):
+        return "It must start with `pie` or `xychart-beta`, with no fence or prose."
     if kind == "csv":
         try:
             rows = [r for r in csv.reader(io.StringIO(content)) if any(c.strip() for c in r)]
@@ -156,6 +210,8 @@ def generate_relic(
         content = _strip_fence(raw)
         problem = _problem(kind, content)
         if problem is None:
+            if kind in ("json", "slides"):
+                content = json.dumps(json.loads(content), indent=2, ensure_ascii=False)
             return content, None
         if attempt == 0:
             messages += [

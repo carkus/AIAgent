@@ -215,7 +215,16 @@ export type StreamEvent =
     }
   | { type: 'error'; message: string }
 
-export type RelicKind = 'csv' | 'diagram' | 'markdown' | 'pdf'
+export type RelicKind = 'csv' | 'diagram' | 'chart' | 'markdown' | 'pdf' | 'docx' | 'slides' | 'json'
+
+// A relic the user has built (POST /relic), kept on its answer so it can be
+// previewed and downloaded again without another LLM call. `content` is the
+// text relic.py returned; the file itself is built from it on download.
+export interface Relic {
+  kind: RelicKind
+  content: string
+  createdAt: string
+}
 
 export interface RelicSuggestion {
   kind: RelicKind
@@ -261,6 +270,7 @@ export interface SavedChatMessage {
     tokens_reset: string | null;
   };
   relicSuggestions?: RelicSuggestion[];
+  relics?: Relic[];
 }
 
 // A whole saved conversation: everything needed to drop straight back into

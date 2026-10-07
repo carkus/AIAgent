@@ -1,21 +1,22 @@
 import { isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { renderToStaticMarkup } from 'react-dom/server'
 import remarkGfm from 'remark-gfm'
 import { buildRelic, publishAgent, runAgent } from '../api'
 import { saveChat, setLastOpenedPointer } from '../chatStorage'
-import { buildChatPdf, buildReportPdf, type PdfAgentContext, type PdfMessage } from '../chatPdf'
+import { buildChatPdf, type PdfAgentContext, type PdfMessage } from '../chatPdf'
 import { BEHAVIOR_TOGGLES, PERSONALITY_TRAITS } from '../agentTypes'
 import ToolActivity from './ToolActivity'
 import GraphView from './GraphView'
 import { appendTimelineNode, nextSeq, type TimelineNode } from '../graphTimeline'
-import MermaidDiagram, { renderMermaidSvg } from './MermaidDiagram'
+import MermaidDiagram from './MermaidDiagram'
 import JsonTree from './JsonTree'
 import CodeBlock from './CodeBlock'
 import PdfPreviewModal from './PdfPreviewModal'
+import RelicPreviewModal from './RelicPreviewModal'
+import { downloadRelic, RELIC_KINDS, RELIC_LABELS, relicFilename } from '../relicFiles'
 import ImageViewer from './ImageViewer'
 import FeedbackStatusBar from './FeedbackStatusBar'
-import type { AgentConfig, EvalResultItem, RelicSuggestion, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
+import type { AgentConfig, EvalResultItem, Relic, RelicKind, RelicSuggestion, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
 import { describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
 import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate, getDateFormat } from '../dateFormat'
@@ -225,22 +226,6 @@ interface LiveToolCall {
   callIndex: number
 }
 
-const RELIC_LABELS: Record<RelicSuggestion['kind'], string> = {
-  csv: 'Spreadsheet (CSV)',
-  diagram: 'Diagram (SVG)',
-  markdown: 'Markdown document',
-  pdf: 'PDF report',
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 0)
-}
-
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
@@ -277,6 +262,9 @@ interface ChatMessage {
   // Output relics the agent offered for this answer (done event's
   // relic_suggestions); each renders as a chip that builds the file on click.
   relicSuggestions?: RelicSuggestion[]
+  // Relics the user has built from this answer (one per kind), kept so they
+  // can be previewed and downloaded again without another model call.
+  relics?: Relic[]
 }
 
 // Same wording as FeedbackReportModal.tsx's own targetLabel — kept as a
@@ -355,6 +343,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   const [exporting, setExporting] = useState(false)
   const [relicBusy, setRelicBusy] = useState<string | null>(null)
   const [relicError, setRelicError] = useState<{ key: string; message: string } | null>(null)
+  const [relicPreview, setRelicPreview] = useState<{ index: number; kind: RelicKind } | null>(null)
+  const [exportMenuFor, setExportMenuFor] = useState<number | null>(null)
   const [pdfPreview, setPdfPreview] = useState<{ blobUrl: string; filename: string; doc: ReturnType<typeof buildChatPdf> } | null>(null)
   // Rendered markdown DOM per assistant message index, so PDF export can
   // walk react-markdown's actual output (link hrefs, list/heading structure)
@@ -445,8 +435,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       id: chatIdRef.current,
       agentName,
       agentConfig: { ...agentConfig, keywords: focusPool },
-      messages: messages.map(({ role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions }) => ({
-        role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions,
+      messages: messages.map(({ role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics }) => ({
+        role, content, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics,
       })),
       savedAt: Date.now(),
     }
@@ -549,47 +539,49 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     pdfPreview.doc.save(pdfPreview.filename)
   }
 
-  // Builds the relic the user accepted (POST /relic) and downloads it. The
-  // answer alone is thin when workers did the research (rule 7: the main
-  // reply only synthesises), so their responses travel with it.
-  async function handleBuildRelic(index: number, suggestion: RelicSuggestion) {
-    const key = `${index}-${suggestion.kind}`
-    if (relicBusy) return
+  // Builds a relic (POST /relic) and opens its preview; the user downloads
+  // from there. A relic already built for this answer just reopens, unless
+  // `regenerate`. The answer alone is thin when workers did the research
+  // (rule 7: the main reply only synthesises), so their responses travel
+  // with it.
+  async function handleBuildRelic(index: number, kind: RelicKind, reason = '', regenerate = false) {
+    const key = `${index}-${kind}`
     const msg = messages[index]
+    setExportMenuFor(null)
+    if (!regenerate && msg.relics?.some(r => r.kind === kind)) {
+      setRelicPreview({ index, kind })
+      return
+    }
+    if (relicBusy) return
     const question = messages.slice(0, index).reverse().find(m => m.role === 'user')?.content ?? ''
     const workers = (msg.toolCalls ?? [])
       .filter(tc => tc.tool === 'delegate_to_worker')
       .map(tc => { try { return JSON.parse(tc.result) as Record<string, unknown> } catch { return null } })
       .filter((w): w is Record<string, unknown> => !!w && typeof w.response === 'string')
       .map(w => ({ name: String(w.worker_name ?? 'worker'), task: String(w.task ?? ''), response: String(w.response) }))
+    const suggestedReason = reason || msg.relicSuggestions?.find(s => s.kind === kind)?.reason || ''
 
     setRelicBusy(key)
     setRelicError(null)
     try {
-      const content = await buildRelic(suggestion, question, msg.content, workers, agentConfig, agentName)
-      const safeName = agentName.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'agent'
-      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
-      const base = `${safeName}-${suggestion.kind}-${stamp}`
-      if (suggestion.kind === 'csv') {
-        downloadBlob(new Blob([content], { type: 'text/csv;charset=utf-8' }), `${base}.csv`)
-      } else if (suggestion.kind === 'markdown') {
-        downloadBlob(new Blob([content], { type: 'text/markdown;charset=utf-8' }), `${base}.md`)
-      } else if (suggestion.kind === 'diagram') {
-        const svg = await renderMermaidSvg(content)
-        downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), `${base}.svg`)
-      } else {
-        const el = document.createElement('div')
-        el.innerHTML = renderToStaticMarkup(<ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>)
-        // The report's own `# title` becomes the PDF title rather than a duplicate first heading.
-        const h1 = el.querySelector('h1')
-        const title = h1?.textContent?.trim() || `Agent ${agentName} report`
-        h1?.remove()
-        buildReportPdf(title, el).save(`${base}.pdf`)
-      }
+      const content = await buildRelic({ kind, reason: suggestedReason }, question, msg.content, workers, agentConfig, agentName)
+      const relic: Relic = { kind, content, createdAt: new Date().toISOString() }
+      setMessages(prev => prev.map((m, j) => j === index
+        ? { ...m, relics: [...(m.relics ?? []).filter(r => r.kind !== kind), relic] }
+        : m))
+      setRelicPreview({ index, kind })
     } catch (err) {
       setRelicError({ key, message: err instanceof Error ? err.message : 'Could not build that file' })
     } finally {
       setRelicBusy(null)
+    }
+  }
+
+  async function handleDownloadRelic(relic: Relic) {
+    try {
+      await downloadRelic(relic, agentName)
+    } catch (err) {
+      setRelicError({ key: `${relicPreview?.index}-${relic.kind}`, message: err instanceof Error ? err.message : 'Download failed' })
     }
   }
 
@@ -1256,28 +1248,66 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                 )}
               </>
             )}
-            {msg.relicSuggestions && (
-              <div>
-                {msg.relicSuggestions.map(s => {
-                  const key = `${i}-${s.kind}`
-                  return (
+            {msg.role === 'assistant' && msg.durationSeconds !== undefined && (msg.relicSuggestions || msg.relics || msg.content.length >= 200) && (() => {
+              const built = msg.relics ?? []
+              const isBuilt = (kind: RelicKind) => built.some(r => r.kind === kind)
+              const suggested = (msg.relicSuggestions ?? []).filter(s => !isBuilt(s.kind))
+              const busyKind = relicBusy?.startsWith(`${i}-`) ? relicBusy.slice(`${i}-`.length) as RelicKind : null
+              return (
+                <div>
+                  {built.map(r => (
                     <button
-                      key={s.kind}
+                      key={`built-${r.kind}`}
+                      type="button"
+                      className={styles.viewToggleBtn}
+                      title="Preview and download"
+                      onClick={() => setRelicPreview({ index: i, kind: r.kind })}
+                    >
+                      📎 {RELIC_LABELS[r.kind]}
+                    </button>
+                  ))}
+                  {suggested.map(s => (
+                    <button
+                      key={`suggested-${s.kind}`}
                       type="button"
                       className={styles.viewToggleBtn}
                       title={s.reason}
                       disabled={relicBusy !== null}
-                      onClick={() => handleBuildRelic(i, s)}
+                      onClick={() => handleBuildRelic(i, s.kind, s.reason)}
                     >
-                      {relicBusy === key ? `Building ${RELIC_LABELS[s.kind]}…` : `⬇ ${RELIC_LABELS[s.kind]}`}
+                      ✨ {RELIC_LABELS[s.kind]}
                     </button>
-                  )
-                })}
-                {relicError && relicError.key.startsWith(`${i}-`) && (
-                  <p className={styles.duration}>{relicError.message}</p>
-                )}
-              </div>
-            )}
+                  ))}
+                  <button
+                    type="button"
+                    className={styles.viewToggleBtn}
+                    disabled={relicBusy !== null}
+                    onClick={() => setExportMenuFor(exportMenuFor === i ? null : i)}
+                  >
+                    {exportMenuFor === i ? '✕ Close export' : '⬇ Export as…'}
+                  </button>
+                  {exportMenuFor === i && (
+                    <div>
+                      {RELIC_KINDS.map(kind => (
+                        <button
+                          key={`export-${kind}`}
+                          type="button"
+                          className={styles.viewToggleBtn}
+                          disabled={relicBusy !== null}
+                          onClick={() => handleBuildRelic(i, kind)}
+                        >
+                          {isBuilt(kind) ? '📎' : '⬇'} {RELIC_LABELS[kind]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {busyKind && <p className={styles.duration}>Building {RELIC_LABELS[busyKind]}…</p>}
+                  {relicError && relicError.key.startsWith(`${i}-`) && !relicPreview && (
+                    <p className={styles.duration}>{relicError.message}</p>
+                  )}
+                </div>
+              )
+            })()}
             {msg.durationSeconds !== undefined && (
               <p className={styles.duration}>
                 {msg.toolCalls?.length
@@ -1418,6 +1448,23 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           onClose={handleClosePdfPreview}
         />
       )}
+      {relicPreview && (() => {
+        const relic = messages[relicPreview.index]?.relics?.find(r => r.kind === relicPreview.kind)
+        if (!relic) return null
+        const key = `${relicPreview.index}-${relic.kind}`
+        return (
+          <RelicPreviewModal
+            relic={relic}
+            filename={relicFilename(relic, agentName)}
+            agentName={agentName}
+            busy={relicBusy === key}
+            error={relicError?.key === key ? relicError.message : null}
+            onDownload={() => handleDownloadRelic(relic)}
+            onRegenerate={() => handleBuildRelic(relicPreview.index, relic.kind, '', true)}
+            onClose={() => { setRelicPreview(null); setRelicError(null) }}
+          />
+        )
+      })()}
       {viewerImage && <ImageViewer src={viewerImage} onClose={() => setViewerImage(null)} />}
     </div>
   )

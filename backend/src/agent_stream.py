@@ -86,7 +86,7 @@ def _extract_plan_diagram(content: str) -> tuple[str | None, str | None, str]:
 # suggestion — the frontend shows it as chips and builds the relic via
 # POST /relic (relic.py) only if the user clicks one.
 _RELIC_FENCE_RE = re.compile(r"```relic\s*(.*?)\s*```", re.DOTALL)
-RELIC_KINDS = ("csv", "diagram", "markdown", "pdf")
+RELIC_KINDS = ("csv", "diagram", "chart", "markdown", "pdf", "docx", "slides", "json")
 
 
 def _extract_relic_suggestions(content: str) -> tuple[str, list[dict]]:
@@ -1039,9 +1039,12 @@ clarifying question only belongs AFTER you've already produced real findings
    [{{"kind": "csv", "reason": "Compare all 12 listings side by side in a spreadsheet"}}]
    ```
    Kinds: "csv" (tabular data: listings, prices, side-by-side comparisons),
-   "diagram" (a process, structure, or relationship worth keeping as an
-   image), "markdown" (a reusable brief or document to edit and keep), "pdf"
-   (a polished report to share). The reason is one short line in plain
+   "json" (the same kind of records, for feeding into another tool or
+   script), "diagram" (a process, structure, or relationship worth keeping
+   as an image), "chart" (numbers worth showing as a pie or bar/line chart
+   image), "markdown" (a reusable brief or document to edit and keep),
+   "docx" (a report to edit in Word), "pdf" (a polished report to share),
+   "slides" (a short deck to present the findings). The reason is one short line in plain
    words, naming what the artifact would contain. Do NOT mention the block
    in your prose: the user sees it as a button, and nothing is built unless
    they click it. Skip it for short answers, greetings, follow-up

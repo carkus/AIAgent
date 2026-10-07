@@ -193,8 +193,10 @@ def recap():
 def relic():
     if request.method == "OPTIONS":
         return "", 204
-    # Builds an artifact the agent suggested (agent_stream.py rule 7b) — only
-    # ever called when the user clicks a suggestion chip in Chat.tsx.
+    # Builds an artifact from a finished answer — only ever called when the
+    # user clicks a suggestion chip (agent_stream.py rule 7b) or picks a kind
+    # from the answer's Export menu in Chat.tsx — or, with `case`, from one
+    # of the Setup Brief's offers (answer = the brief text, see brief.py).
     body = request.get_json() or {}
     kind = (body.get("kind") or "").strip()
     answer = (body.get("answer") or "").strip()

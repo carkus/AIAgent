@@ -168,8 +168,9 @@ export async function fetchChatRecap(
 
 /**
  * Builds an output relic (backend/src/relic.py) from a finished answer, when
- * the user accepts one of the agent's suggestions. Returns the relic's text
- * content; the caller turns it into the downloaded file.
+ * the user accepts one of the agent's suggestions or picks a kind from the
+ * Export menu (reason empty). Returns the relic's text content; the caller
+ * previews it and builds the downloaded file from it.
  */
 export async function buildRelic(
   suggestion: RelicSuggestion,
