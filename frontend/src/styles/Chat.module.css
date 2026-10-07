@@ -14,7 +14,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem 0.75rem;
-  padding: 0.75rem 1.25rem;
+  padding: 0.75rem 0.625rem;
   border-bottom: 1px solid rgba(40, 75, 106, 0.25);
   flex-shrink: 0;
   position: relative;
@@ -296,7 +296,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.65rem 1.25rem;
+  padding: 0.65rem 0.625rem;
   border-bottom: 1px solid #ddd9cd;
   background: #f7f5f0;
   flex-shrink: 0;
@@ -377,7 +377,7 @@
   font-size: var(--font-size-sm);
   letter-spacing: 0.02em;
   margin: 0;
-  padding: 0.4rem 1.25rem 0;
+  padding: 0.4rem 0.625rem 0;
 }
 
 .container {
@@ -398,7 +398,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  padding: 0.5rem 1.25rem;
+  padding: 0.5rem 0.625rem;
   border-bottom: 1px solid rgba(40, 75, 106, 0.25);
   flex-shrink: 0;
 }
@@ -422,7 +422,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  padding: 0.5rem 1.25rem;
+  padding: 0.5rem 0.625rem;
   border-bottom: 1px solid rgba(40, 75, 106, 0.25);
   flex-shrink: 0;
 }
@@ -456,7 +456,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  padding: 0.5rem 1.25rem;
+  padding: 0.5rem 0.625rem;
   border-bottom: 1px solid rgba(40, 75, 106, 0.25);
   flex-shrink: 0;
 }
@@ -503,7 +503,7 @@
   background-position: left center;
   background-repeat: no-repeat;
   background-size: 1px calc(100% - 3rem);
-  padding: 1rem 1.5rem;
+  padding: 1rem 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -1139,7 +1139,7 @@
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  margin: 0 1.5rem 1.25rem;
+  margin: 0 0.75rem 1.25rem;
   padding: 0.3rem 0.4rem 0.3rem 0.75rem;
   background: #f2efe4;
   border-radius: 999px;
@@ -1223,7 +1223,7 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  margin: 0 1.5rem;
+  margin: 0 0.75rem;
   padding: 0.4rem 0.75rem;
   background: #f7f5f0;
   border: 1px solid #ddd9cd;
@@ -1460,16 +1460,16 @@
    Recommission (last in the row) pushes past the card edge off-screen. */
 @media (max-width: 520px) {
   .inputRow {
-    margin: 0 0.6rem 1rem;
+    margin: 0 0.3rem 1rem;
     padding: 0.3rem 0.35rem 0.3rem 0.6rem;
     gap: 0.2rem;
   }
 
   /* Match .inputRow's shrunk side margin so the attachment chip sitting
-     directly above it doesn't stay wider (1.5rem margin) than the composer
+     directly above it doesn't stay wider (0.75rem margin) than the composer
      row underneath it once the row itself narrows its margin below 520px. */
   .attachmentChip {
-    margin: 0 0.6rem;
+    margin: 0 0.3rem;
   }
 
   .stopBtn,

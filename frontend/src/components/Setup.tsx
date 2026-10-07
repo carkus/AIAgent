@@ -1160,6 +1160,53 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 <span className={styles.modelLinerIcon} aria-hidden="true">🧠</span>
                 <span>{describeModel(provider, ollamaModel)}</span>
               </button>
+              <div className={styles.resetToolbar}>
+                <button
+                  type="button"
+                  className={styles.profileResetBtn}
+                  onClick={() => {
+                    setKeywords([])
+                    setDraft('')
+                    setActiveToggles([])
+                    setSelectedTraits([])
+                    setPurposeImage(null)
+                    onNewAgent()
+                    inputRef.current?.focus()
+                  }}
+                  disabled={bootstrapping}
+                >
+                  CLEAR
+                </button>
+                <button
+                  type="button"
+                  className={styles.profileSaveBtn}
+                  onClick={saveAgentDraft}
+                  disabled={bootstrapping}
+                  title="Save Agent profile — name, type, location and focus areas"
+                  aria-label="Save agent"
+                >
+                  <span aria-hidden="true"><SaveIcon /></span>
+                </button>
+                <button
+                  type="button"
+                  className={styles.characterGenBtn}
+                  onClick={ev => { ev.stopPropagation(); setCharacterGenOpen(true) }}
+                  disabled={bootstrapping}
+                >
+                  OPEN AGENT
+                </button>
+                {onOpenAdvanced && (
+                  <button
+                    type="button"
+                    className={styles.characterGenBtn}
+                    onClick={ev => { ev.stopPropagation(); onOpenAdvanced() }}
+                    disabled={bootstrapping}
+                    title="Define the agent with a structured spec, hard tool limits and a review step"
+                  >
+                    ADVANCED
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1392,37 +1439,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               )}
             </div>
 
-            <div className={styles.resetToolbar}>
-              <HelpTip
-                text="Clears every change made in this form — focus, behavior, personality — and starts a fresh, blank agent."
-                label="Clear agent help"
-              />
-              <button
-                type="button"
-                className={styles.profileResetBtn}
-                onClick={() => {
-                  setKeywords([])
-                  setDraft('')
-                  setActiveToggles([])
-                  setSelectedTraits([])
-                  setPurposeImage(null)
-                  onNewAgent()
-                  inputRef.current?.focus()
-                }}
-                disabled={bootstrapping}
-              >
-                Clear Agent
-              </button>
-              <button
-                type="button"
-                className={styles.characterGenBtn}
-                onClick={ev => { ev.stopPropagation(); setCharacterGenOpen(true) }}
-                disabled={bootstrapping}
-              >
-                Open Agent Files
-              </button>
-            </div>
-
           </div>
 
           {/* Brief lives in its own subsection, outside the editable-fields
@@ -1538,7 +1554,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               )}
               <div className={styles.commissionGroup}>
                 <HelpTip
-                  text="Agent type decides which primitive tools and default behavior this agent gets — e.g. only a Job search agent can call the live job-listings tool. Switching types also swaps the personality traits on offer above. The save icon stores this whole profile for later; Deploy bootstraps it and starts the chat."
+                  text="Agent type decides which primitive tools and default behavior this agent gets — e.g. only a Job search agent can call the live job-listings tool. Switching types also swaps the personality traits on offer above. Deploy bootstraps it and starts the chat."
                   label="Commission bar help"
                   direction="up"
                 />
@@ -1565,16 +1581,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   <span className={styles.agentTypeLabel}>{getTemplate(agentType).label}</span>
                 </div>
                 <button
-                  type="button"
-                  className={`${styles.profileSaveBtn} ${styles.profileSaveBtnCommission}`}
-                  onClick={saveAgentDraft}
-                  disabled={bootstrapping}
-                  title="Save Agent profile — name, type, location and focus areas"
-                  aria-label="Save agent"
-                >
-                  <span aria-hidden="true"><SaveIcon /></span>
-                </button>
-                <button
                   type="submit"
                   form="agentSetupForm"
                   className={`${styles.profileCommissionBtn} ${keywords.length === 0 ? styles.profileCommissionBtnBlocked : ''}`}
@@ -1583,16 +1589,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 >
                   {bootstrapping ? 'Configuring…' : 'Deploy >'}
                 </button>
-                {onOpenAdvanced && !bootstrapping && (
-                  <button
-                    type="button"
-                    className={styles.advancedLink}
-                    onClick={onOpenAdvanced}
-                    title="Define the agent with a structured spec, hard tool limits and a review step"
-                  >
-                    Advanced…
-                  </button>
-                )}
                 {bootstrapping && (
                   <button
                     type="button"
