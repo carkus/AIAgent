@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
-import { bootstrap, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, fetchModelInfo, listAgentDrafts, listPublishedAgents, listSavedSearches, unpublishAgent } from '../api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { bootstrap, buildBriefRelic, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, fetchModelInfo, listAgentDrafts, listPublishedAgents, listSavedSearches, unpublishAgent, updateAgentDraft } from '../api'
 import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
-import { hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat, setLastOpenedPointer } from '../chatStorage'
-import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
+import { getLastOpenedPointer, hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat, setLastOpenedPointer } from '../chatStorage'
+import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, Relic, RelicKind, RelicSuggestion, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
 import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, DEFAULT_AGENT_SPEC, MAX_FOCUS_CHARS, shortFocus, type BehaviorToggle } from '../agentTypes'
 import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
 import { buildAgentBrief, joinNatural } from '../agentBrief'
@@ -16,6 +16,10 @@ import CharacterGenerator from './CharacterGenerator'
 import HelpTip from './HelpTip'
 import BehaviorIcon from './BehaviorIcon'
 import FeedbackStatusBar from './FeedbackStatusBar'
+import RelicPreviewModal from './RelicPreviewModal'
+import ToolbarBuilder from './ToolbarBuilder'
+import { useToolbarDrag, useToolbarLayout, type ToolbarItem } from '../toolbarLayout'
+import { downloadRelic, RELIC_LABELS, relicFilename } from '../relicFiles'
 
 // Mono line icons matching the app's stroke-based visual style — plain
 // geometric shapes (magnifier / briefcase / compass), not emoji, so they
@@ -63,6 +67,82 @@ function SaveIcon() {
       <path d="M5 3h11l3 3v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
       <path d="M8 3v5h8V3" />
       <path d="M7 21v-8h10v8" />
+    </svg>
+  )
+}
+
+// Toolbar icon per output kind (the Brief's offered relics).
+// The Setup toolbar's buttons for the toolbar builder (ToolbarBuilder):
+// the default order is the order listed here. Save Agent is locked on (it
+// must always be visible). Outputs only appear when the Brief offers them.
+const SETUP_TOOLBAR_ITEMS: ToolbarItem[] = [
+  { id: 'clear', label: 'Clear', group: 'controls' },
+  { id: 'save', label: 'Save agent', group: 'controls', locked: true },
+  { id: 'open', label: 'Open agent', group: 'controls' },
+  { id: 'advanced', label: 'Advanced setup', group: 'controls' },
+  ...(['pdf', 'docx', 'markdown', 'slides', 'diagram', 'chart', 'csv', 'json'] as RelicKind[])
+    .map(kind => ({ id: kind, label: RELIC_LABELS[kind], group: 'outputs' })),
+]
+
+const SETUP_TOOLBAR_GROUPS = [
+  { id: 'controls', label: 'Agent' },
+  { id: 'outputs', label: 'Outputs (when the Brief offers them)' },
+]
+
+function ClearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14" />
+    </svg>
+  )
+}
+
+function OpenAgentIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </svg>
+  )
+}
+
+function AdvancedIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" />
+      <circle cx="16" cy="6" r="2" />
+      <circle cx="10" cy="12" r="2" />
+      <circle cx="18" cy="18" r="2" />
+    </svg>
+  )
+}
+
+function setupToolbarIcon(id: string) {
+  switch (id) {
+    case 'clear': return <ClearIcon />
+    case 'save': return <SaveIcon />
+    case 'open': return <OpenAgentIcon />
+    case 'advanced': return <AdvancedIcon />
+    default: return id in RELIC_LABELS ? <RelicIcon kind={id as RelicKind} /> : null
+  }
+}
+
+function RelicIcon({ kind }: { kind: RelicKind }) {
+  const paths: Record<RelicKind, React.ReactNode> = {
+    pdf: <><path d="M6 3h9l4 4v14H6Z" /><path d="M14 3v5h5" /><path d="M9 13h6M9 17h4" /></>,
+    docx: <><path d="M6 3h9l4 4v14H6Z" /><path d="M14 3v5h5" /><path d="M9 12l1.5 6 1.5-4 1.5 4 1.5-6" /></>,
+    markdown: <><path d="M6 3h9l4 4v14H6Z" /><path d="M14 3v5h5" /><path d="M9 12h6M9 15h6M9 18h4" /></>,
+    diagram: <><rect x="3" y="3" width="7" height="5" rx="1" /><rect x="14" y="16" width="7" height="5" rx="1" /><path d="M6.5 8v5h11v3" /></>,
+    chart: <><path d="M4 20h16" /><path d="M7 16v-5M12 16V6M17 16v-8" /></>,
+    slides: <><rect x="3" y="4" width="18" height="12" rx="1" /><path d="M12 16v4M8 20h8" /></>,
+    csv: <><rect x="3" y="4" width="18" height="16" rx="1" /><path d="M3 10h18M3 15h18M9 4v16" /></>,
+    json: <><path d="M9 4H8a2 2 0 0 0-2 2v4l-2 2 2 2v4a2 2 0 0 0 2 2h1" /><path d="M15 4h1a2 2 0 0 1 2 2v4l2 2-2 2v4a2 2 0 0 1-2 2h-1" /></>,
+  }
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {paths[kind]}
     </svg>
   )
 }
@@ -339,6 +419,18 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // bootstrapped agent with real conversation history) — see
   // backend/src/agent_drafts.py.
   const [drafts, setDrafts] = useState<AgentDraft[]>([])
+  // Which saved profile or job the form was loaded from, so Save edits that
+  // entry in place instead of adding a new one next to it (otherwise a
+  // removed Focus survives in the original and comes back on reload).
+  // Cleared by CLEAR / the logo / a generated character: a fresh agent.
+  const [editing, setEditing] = useState<{ kind: 'draft' | 'chat'; id: string } | null>(null)
+  const hasAdvanced = onOpenAdvanced !== undefined
+  const toolbarItems = useMemo(
+    () => SETUP_TOOLBAR_ITEMS.filter(i => i.id !== 'advanced' || hasAdvanced),
+    [hasAdvanced],
+  )
+  const toolbarLayout = useToolbarLayout('setup', toolbarItems)
+  const toolbarDrag = useToolbarDrag(toolbarLayout)
   useEffect(() => {
     listAgentDrafts().then(setDrafts)
   }, [])
@@ -431,6 +523,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [aiBrief, setAiBrief] = useState<AgentBrief | null>(null)
   const [briefLoading, setBriefLoading] = useState(false)
   const [briefAnswer, setBriefAnswer] = useState('')
+  // Media the Brief offered (aiBrief.relics) that the user has built. Tied
+  // to the brief they came from, so a redrafted brief starts empty.
+  const [briefRelics, setBriefRelics] = useState<Relic[]>([])
+  const [briefRelicBusy, setBriefRelicBusy] = useState<RelicKind | null>(null)
+  const [briefRelicError, setBriefRelicError] = useState<string | null>(null)
+  const [briefRelicPreview, setBriefRelicPreview] = useState<RelicKind | null>(null)
   const [answeringBrief, setAnsweringBrief] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const locationDebounceRef = useRef<number | undefined>(undefined)
@@ -484,6 +582,50 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     } catch {
       // Aborted (superseded by a newer keystroke) or offline — free-text
       // location still works fine without a suggestion.
+    }
+  }
+
+  useEffect(() => {
+    setBriefRelics([])
+    setBriefRelicError(null)
+    setBriefRelicPreview(null)
+  }, [aiBrief])
+
+  // The Brief's offered outputs, in the user's toolbar order, minus any
+  // they've hidden in the toolbar builder.
+  const outputOrder = toolbarLayout.visible('outputs')
+  const briefOutputs = (aiBrief?.relics ?? [])
+    .filter(s => outputOrder.includes(s.kind))
+    .sort((a, b) => outputOrder.indexOf(a.kind) - outputOrder.indexOf(b.kind))
+
+  // Builds one of the Brief's offered media from the case and the agent on
+  // board (relic.py's case mode), then opens its preview. An already-built
+  // one just reopens unless `regenerate`.
+  async function handleBriefRelic(suggestion: RelicSuggestion, regenerate = false) {
+    if (!aiBrief || aiBrief.type !== 'brief') return
+    if (!regenerate && briefRelics.some(r => r.kind === suggestion.kind)) {
+      setBriefRelicPreview(suggestion.kind)
+      return
+    }
+    if (briefRelicBusy) return
+    setBriefRelicBusy(suggestion.kind)
+    setBriefRelicError(null)
+    try {
+      const content = await buildBriefRelic(suggestion, aiBrief.text, {
+        agentType,
+        keywords: [...keywords],
+        location: location.trim(),
+        traits: (PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research).filter(t => selectedTraits.includes(t.id)).map(t => t.label),
+        behaviors: BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.label),
+        warning: aiBrief.warning,
+      }, agentName, provider, ollamaModel)
+      const relic: Relic = { kind: suggestion.kind, content, createdAt: new Date().toISOString() }
+      setBriefRelics(prev => [...prev.filter(r => r.kind !== suggestion.kind), relic])
+      setBriefRelicPreview(suggestion.kind)
+    } catch (err) {
+      setBriefRelicError(err instanceof Error ? err.message : 'Could not build that file')
+    } finally {
+      setBriefRelicBusy(null)
     }
   }
 
@@ -620,6 +762,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // explicitly instead of relying on a remount that isn't going to happen.
   function resetSearch() {
     if (bootstrapping) return
+    setEditing(null)
     setKeywords([])
     setDraft('')
     setActiveToggles([])
@@ -771,13 +914,20 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       setTimeout(() => setSaveFeedback(null), 2500)
       return
     }
+    if (editing?.kind === 'chat' && saveChatEdits(editing.id)) return
     const traitPool = PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research
     const traits = traitPool.filter(t => selectedTraits.includes(t.id)).map(t => t.label)
     try {
-      const entry = await createAgentDraft(agentName, agentType, [...keywords], location.trim(), traits, [...activeToggles])
+      let updated: AgentDraft | null = null
+      if (editing?.kind === 'draft') {
+        // A profile deleted elsewhere 404s here; fall through and create it.
+        updated = await updateAgentDraft(editing.id, agentName, agentType, [...keywords], location.trim(), traits, [...activeToggles]).catch(() => null)
+      }
+      const entry = updated ?? await createAgentDraft(agentName, agentType, [...keywords], location.trim(), traits, [...activeToggles])
+      setEditing({ kind: 'draft', id: entry.id })
       setDrafts(prev => [
         entry,
-        ...prev.filter(d => !(
+        ...prev.filter(d => d.id !== entry.id && !(
           d.agentName === entry.agentName &&
           d.agentType === entry.agentType &&
           d.location === entry.location &&
@@ -785,15 +935,39 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         )),
       ])
       setOpenSavedSections(prev => ({ ...prev, drafts: true }))
-      setSaveFeedback('Saved to Saved Agent Profiles ✓')
+      setSaveFeedback(updated ? 'Saved changes to this agent profile ✓' : 'Saved to Saved Agent Profiles ✓')
     } catch {
       setSaveFeedback('Save failed — backend unreachable')
     }
     setTimeout(() => setSaveFeedback(null), 2500)
   }
 
+  // Writes the form back into a saved job's agent config (localStorage,
+  // chatStorage.ts), keeping its id and conversation. The bootstrapped
+  // system prompt and tools are left as they were; Focus, location, type,
+  // traits and behaviours are what the agent loop reads from the config.
+  // False when the job no longer exists, so Save falls back to a profile.
+  function saveChatEdits(id: string): boolean {
+    const chat = loadSavedChats().find(c => c.id === id)
+    if (!chat) return false
+    const agentConfig: AgentConfig = {
+      ...chat.agentConfig,
+      template: agentType,
+      keywords: [...keywords],
+      location: location.trim(),
+      active_toggles: [...activeToggles],
+      active_traits: [...selectedTraits],
+    }
+    setSavedChats(saveChat({ ...chat, agentName, agentConfig, savedAt: Date.now() }))
+    setOpenSavedSections(prev => ({ ...prev, chats: true }))
+    setSaveFeedback('Saved changes to this job ✓')
+    setTimeout(() => setSaveFeedback(null), 2500)
+    return true
+  }
+
   function loadDraft(d: AgentDraft) {
     if (bootstrapping) return
+    setEditing({ kind: 'draft', id: d.id })
     const type = d.agentType ?? 'research'
     setAgentType(type)
     setKeywords([...d.keywords])
@@ -815,6 +989,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   }
 
   function deleteDraft(id: string) {
+    if (editing?.kind === 'draft' && editing.id === id) setEditing(null)
     setDrafts(prev => prev.filter(d => d.id !== id))
     deleteAgentDraft(id).catch(() => {})
   }
@@ -869,6 +1044,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // Actually resuming the conversation is the arrow button's job (resumeChat).
   function loadChatDetails(chat: SavedChat) {
     if (bootstrapping) return
+    setEditing({ kind: 'chat', id: chat.id })
     applyAgentConfigToForm(chat.agentConfig, chat.agentName)
     setFocusPanel('setup')
     inputRef.current?.focus()
@@ -882,7 +1058,17 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // remounts on every phase transition (App.tsx's phase-conditional render),
   // so this only ever needs to run once, on mount.
   useEffect(() => {
-    if (activeAgentConfig) applyAgentConfigToForm(activeAgentConfig, agentName)
+    if (!activeAgentConfig) return
+    applyAgentConfigToForm(activeAgentConfig, agentName)
+    // The open job, if it's been saved: Save then edits it rather than
+    // leaving its old Focus to be restored on the next reload. Matched on
+    // the system prompt too, since the pointer can still name an earlier
+    // job while a just-bootstrapped one hasn't been saved yet.
+    const pointer = getLastOpenedPointer()
+    const chat = pointer?.kind === 'savedChat' ? savedChats.find(c => c.id === pointer.id) : undefined
+    if (chat && chat.agentConfig.system_prompt === activeAgentConfig.system_prompt) {
+      setEditing({ kind: 'chat', id: chat.id })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -1222,7 +1408,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 </p>
               )}
               {specialtiesOpen && (
-                <div className={styles.chipArea} onClick={() => inputRef.current?.focus()}>
+                <div className={`${styles.chipArea} ${keywords.length > 0 ? styles.chipAreaWithSave : ''}`} onClick={() => inputRef.current?.focus()}>
                   {keywords.map(kw => (
                     <span key={kw} className={styles.chip} title={kw.length > MAX_FOCUS_CHARS ? kw : undefined}>
                       {shortFocus(kw)}
@@ -1248,6 +1434,18 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     disabled={bootstrapping || keywords.length >= MAX_SPECIALTIES}
                     maxLength={MAX_FOCUS_CHARS}
                   />
+                  {keywords.length > 0 && (
+                    <button
+                      type="button"
+                      className={`${styles.focusAttachBtn} ${styles.focusSaveBtn}`}
+                      onClick={ev => { ev.stopPropagation(); saveSearch() }}
+                      disabled={bootstrapping || !hasUnsavedSpecialties}
+                      title={hasUnsavedSpecialties ? 'Save Focus: add the focus items that aren\'t saved yet to Saved Focus' : 'All current focus items are already saved'}
+                      aria-label="Save Focus"
+                    >
+                      <span className={styles.focusSaveIcon} aria-hidden="true"><SaveIcon /></span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={styles.focusAttachBtn}
@@ -1293,19 +1491,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       </div>
                     )}
                   </div>
-                  {keywords.length > 0 && (
-                    <div className={styles.profileActions}>
-                      <button
-                        type="button"
-                        className={styles.profileSaveBtn}
-                        onClick={saveSearch}
-                        disabled={bootstrapping || !hasUnsavedSpecialties}
-                        title={hasUnsavedSpecialties ? 'Save the focus items above that aren\'t saved yet' : 'All current focus items are already saved'}
-                      >
-                        Save Focus
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
               {specialtiesOpen && (
@@ -1389,6 +1574,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       <p className={styles.briefWarningText}><span aria-hidden="true">⚠</span> {briefWarning}</p>
                     </div>
                   )}
+                  {briefRelicError && !briefRelicPreview && (
+                    <p className={styles.briefLoadingHint}>{briefRelicError}</p>
+                  )}
                 </>
               )
             )}
@@ -1433,51 +1621,111 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
 
           <div className={styles.resetToolbar}>
-            <button
-              type="button"
-              className={styles.profileResetBtn}
-              onClick={() => {
-                setKeywords([])
-                setDraft('')
-                setActiveToggles([])
-                setSelectedTraits([])
-                setPurposeImage(null)
-                onNewAgent()
-                inputRef.current?.focus()
-              }}
-              disabled={bootstrapping}
-            >
-              CLEAR
-            </button>
-            <button
-              type="button"
-              className={styles.profileSaveBtn}
-              onClick={saveAgentDraft}
-              disabled={bootstrapping}
-              title="Save Agent profile — name, type, location and focus areas"
-              aria-label="Save agent"
-            >
-              <span aria-hidden="true"><SaveIcon /></span>
-            </button>
-            <button
-              type="button"
-              className={styles.characterGenBtn}
-              onClick={ev => { ev.stopPropagation(); setCharacterGenOpen(true) }}
-              disabled={bootstrapping}
-            >
-              OPEN AGENT
-            </button>
-            {onOpenAdvanced && (
-              <button
-                type="button"
-                className={styles.characterGenBtn}
-                onClick={ev => { ev.stopPropagation(); onOpenAdvanced() }}
-                disabled={bootstrapping}
-                title="Define the agent with a structured spec, hard tool limits and a review step"
-              >
-                ADVANCED
-              </button>
+            {toolbarLayout.visible('controls').map(id => {
+              switch (id) {
+                case 'clear':
+                  return (
+                    <button
+                      key={id}
+                      {...toolbarDrag.dragProps(id)}
+                      type="button"
+                      className={`${styles.toolbarIconBtn} ${styles.toolbarIconDanger}`}
+                      onClick={() => {
+                        setEditing(null)
+                        setKeywords([])
+                        setDraft('')
+                        setActiveToggles([])
+                        setSelectedTraits([])
+                        setPurposeImage(null)
+                        onNewAgent()
+                        inputRef.current?.focus()
+                      }}
+                      disabled={bootstrapping}
+                      title="Clear: start a fresh agent"
+                      aria-label="Clear"
+                    >
+                      <ClearIcon />
+                    </button>
+                  )
+                case 'save':
+                  return (
+                    <button
+                      key={id}
+                      {...toolbarDrag.dragProps(id)}
+                      type="button"
+                      className={styles.toolbarIconBtn}
+                      onClick={saveAgentDraft}
+                      disabled={bootstrapping}
+                      title="Save Agent profile — name, type, location and focus areas"
+                      aria-label="Save agent"
+                    >
+                      <SaveIcon />
+                    </button>
+                  )
+                case 'open':
+                  return (
+                    <button
+                      key={id}
+                      {...toolbarDrag.dragProps(id)}
+                      type="button"
+                      className={styles.toolbarIconBtn}
+                      onClick={ev => { ev.stopPropagation(); setCharacterGenOpen(true) }}
+                      disabled={bootstrapping}
+                      title="Open Agent: generate a character"
+                      aria-label="Open agent"
+                    >
+                      <OpenAgentIcon />
+                    </button>
+                  )
+                case 'advanced':
+                  return onOpenAdvanced && (
+                    <button
+                      key={id}
+                      {...toolbarDrag.dragProps(id)}
+                      type="button"
+                      className={styles.toolbarIconBtn}
+                      onClick={ev => { ev.stopPropagation(); onOpenAdvanced() }}
+                      disabled={bootstrapping}
+                      title="Advanced: define the agent with a structured spec, hard tool limits and a review step"
+                      aria-label="Advanced setup"
+                    >
+                      <AdvancedIcon />
+                    </button>
+                  )
+                default:
+                  return null
+              }
+            })}
+            {briefOutputs.length > 0 && (
+              // Outputs the Brief offers: a different job from the agent
+              // controls beside them, so grouped on their own background.
+              <div className={styles.toolbarOutputs} role="group" aria-label="Outputs from the Brief">
+                {briefOutputs.map(s => {
+                  const built = briefRelics.some(r => r.kind === s.kind)
+                  const label = RELIC_LABELS[s.kind]
+                  return (
+                    <button
+                      key={s.kind}
+                      {...toolbarDrag.dragProps(s.kind)}
+                      type="button"
+                      className={`${styles.toolbarIconBtn} ${styles.toolbarOutputBtn} ${briefRelicBusy === s.kind ? styles.toolbarIconBusy : ''}`}
+                      title={briefRelicBusy === s.kind ? `Building ${label}…` : `${built ? 'Open' : 'Build'} ${label}: ${s.reason}`}
+                      aria-label={`${built ? 'Open' : 'Build'} ${label}`}
+                      disabled={briefRelicBusy !== null || bootstrapping}
+                      onClick={() => handleBriefRelic(s)}
+                    >
+                      <RelicIcon kind={s.kind} />
+                    </button>
+                  )
+                })}
+              </div>
             )}
+            <ToolbarBuilder
+              layout={toolbarLayout}
+              groups={SETUP_TOOLBAR_GROUPS}
+              renderIcon={setupToolbarIcon}
+              disabled={bootstrapping}
+            />
           </div>
 
           <div className={styles.profileCommissionRow}>
@@ -1976,6 +2224,24 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         onHire={hirePublishedAgent}
       />
 
+      {briefRelicPreview && aiBrief && (() => {
+        const relic = briefRelics.find(r => r.kind === briefRelicPreview)
+        const suggestion = aiBrief.relics?.find(s => s.kind === briefRelicPreview)
+        if (!relic || !suggestion) return null
+        return (
+          <RelicPreviewModal
+            relic={relic}
+            filename={relicFilename(relic, agentName)}
+            agentName={agentName}
+            busy={briefRelicBusy === relic.kind}
+            error={briefRelicError}
+            onDownload={() => downloadRelic(relic, agentName).catch(err => setBriefRelicError(err instanceof Error ? err.message : 'Download failed'))}
+            onRegenerate={() => handleBriefRelic(suggestion, true)}
+            onClose={() => { setBriefRelicPreview(null); setBriefRelicError(null) }}
+          />
+        )
+      })()}
+
       <CharacterGenerator
         isOpen={characterGenOpen}
         agentType={agentType}
@@ -1985,6 +2251,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           setAgentType(character.agentType)
           setSelectedTraits(character.traitIds)
           setActiveToggles(character.behaviorIds)
+          setEditing(null)
           setKeywords(character.specialties)
         }}
       />
