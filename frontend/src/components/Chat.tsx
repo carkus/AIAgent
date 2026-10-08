@@ -919,6 +919,9 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       `Finding: ${item.reason} ` +
       `Please refine your response to address this finding, taking the rest of our conversation into account.`
     void sendMessage(refinement, messages, undefined, `🚩 Reported: ${item.reason}`)
+    // Reported and handed back to the agent: it's resolved, so it leaves the
+    // self-check list (the new turn's own checks will flag it again if not).
+    setEvalResults(prev => prev.filter(r => r !== item))
   }
 
   // The pill under the agent's name should reflect what the user actually

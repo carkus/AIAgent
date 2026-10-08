@@ -232,9 +232,84 @@ def search_jobs(what: str, where: str = "", country: str = "au",
         return {"status": "error", "error": str(exc), "listings": []}
 
 
+def _search_image_tavily(query: str) -> dict:
+    """
+    Web image search via Tavily's REST search API with include_images — the
+    same TAVILY_API_KEY that enables the vetted Tavily MCP server
+    (mcp_registry.py). Called directly over HTTP rather than through the MCP
+    server, since search_image is a primitive and the MCP path only exists
+    for bootstrap-selected tools. Covers generic subjects ("a modern
+    kitchen") that have no Wikipedia article. Returns {"error": ...} when
+    not configured or nothing comes back.
+    """
+    key = os.environ.get("TAVILY_API_KEY")
+    if not key:
+        return {"error": "TAVILY_API_KEY is not configured."}
+
+    import requests
+    from urllib.parse import urlparse
+
+    try:
+        r = requests.post(
+            "https://api.tavily.com/search",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "query": query,
+                "max_results": 3,
+                "include_images": True,
+                "include_image_descriptions": True,
+            },
+            timeout=15,
+        )
+        if not r.ok:
+            return {"error": f"Tavily returned status {r.status_code}: {r.text[:200]}"}
+        images = r.json().get("images") or []
+    except Exception as exc:
+        return {"error": str(exc)}
+
+    # Strings without include_image_descriptions, {url, description} with it.
+    candidates = []
+    for image in images:
+        url = image.get("url") if isinstance(image, dict) else image
+        if not isinstance(url, str) or not url.startswith("http"):
+            continue
+        host = urlparse(url).netloc.lower()
+        # Social-media crawler/redirect links don't render as an <img>.
+        if any(s in host for s in ("instagram", "facebook", "fbcdn", "fbsbx", "tiktok")):
+            continue
+        description = image.get("description") if isinstance(image, dict) else None
+        candidates.append((url, description))
+    # Prefer a URL that is plainly an image file.
+    candidates.sort(key=lambda c: not urlparse(c[0]).path.lower().endswith(
+        (".jpg", ".jpeg", ".png", ".webp", ".gif")))
+    for url, description in candidates:
+        return {
+            "title": description or query,
+            "image_url": url,
+            "page_url": None,
+            "attribution": f"Web image ({urlparse(url).netloc}) via Tavily",
+        }
+    return {"error": f"No web image found for '{query}'."}
+
+
 def search_image(query: str) -> dict:
     """
-    Built-in primitive: find one real, freely-licensed illustrative image for
+    Built-in primitive: find one real existing image for a topic. Tries a
+    Tavily web image search first when TAVILY_API_KEY is set (any subject,
+    but web images aren't necessarily freely licensed), then falls back to
+    the Wikipedia lookup below (named topics only, freely licensed).
+    """
+    if os.environ.get("TAVILY_API_KEY"):
+        found = _search_image_tavily(query)
+        if "error" not in found:
+            return found
+        logger.warning("search_image: Tavily failed (%s), falling back to Wikipedia", found["error"])
+    return _search_image_wikipedia(query)
+
+
+def _search_image_wikipedia(query: str) -> dict:
+    """
+    Find one real, freely-licensed illustrative image for
     a topic via Wikipedia/Wikimedia's public REST API (no key required, same
     "free keyless lookup" shape as jobfit/ChattyPrayers.Api's Open-Meteo
     weather provider). Returns a single best-match thumbnail, not a gallery —
@@ -410,7 +485,52 @@ def generate_image(prompt: str) -> dict:
     else:
         logger.info("generate_image: GEMINI_API_KEY not set, using Hugging Face")
 
-    return _generate_image_huggingface(prompt)
+    hf = _generate_image_huggingface(prompt)
+    if "error" not in hf:
+        return hf
+    logger.warning("generate_image: Hugging Face failed (%s), falling back to Cloudflare", hf["error"])
+    cf = _generate_image_cloudflare(prompt)
+    if "error" not in cf:
+        return cf
+    # Both failed: report both, so the user sees e.g. "out of credits" and
+    # "not configured" rather than only the last one.
+    return {"error": f"Hugging Face: {hf['error']} | Cloudflare: {cf['error']}"}
+
+
+# Cloudflare Workers AI — third step of generate_image's cascade. Free daily
+# allowance on a Cloudflare account; needs CLOUDFLARE_ACCOUNT_ID and an API
+# token with the "Workers AI" permission (CLOUDFLARE_API_TOKEN). Skipped with
+# an error result when either is unset.
+_CF_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell"
+
+
+def _generate_image_cloudflare(prompt: str) -> dict:
+    account = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+    token = os.environ.get("CLOUDFLARE_API_TOKEN")
+    if not account or not token:
+        return {"error": "CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN are not configured."}
+
+    import requests
+
+    url = f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{_CF_IMAGE_MODEL}"
+    try:
+        r = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+            json={"prompt": prompt, "steps": 4},
+            timeout=60,
+        )
+        body = r.json()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+    image = (body.get("result") or {}).get("image") if isinstance(body, dict) else None
+    if r.ok and image:
+        # FLUX schnell on Workers AI returns a base64 JPEG.
+        return {"image_url": f"data:image/jpeg;base64,{image}", "prompt": prompt, "provider": "cloudflare"}
+    errors = body.get("errors") if isinstance(body, dict) else None
+    message = (errors[0].get("message") if errors and isinstance(errors[0], dict) else None)
+    return {"error": message or f"Cloudflare returned status {r.status_code}"}
 
 
 class _AttrDict(dict):

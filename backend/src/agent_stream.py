@@ -677,8 +677,8 @@ _PRIMITIVE_TOOLS = [
         "function": {
             "name": "search_image",
             "description": (
-                "Find one real, freely-licensed illustrative image for a topic via "
-                "Wikipedia/Wikimedia (no scraping, a real lookup API). Returns a single "
+                "Find one real, existing illustrative image for a topic: a web image "
+                "search (Tavily) when configured, otherwise Wikipedia. Returns a single "
                 "best-match thumbnail URL, never a gallery. Use sparingly, only when an "
                 "image would genuinely help illustrate a finding — your written analysis "
                 "is always the primary output, an image is supplementary polish on top of "
@@ -701,7 +701,7 @@ _PRIMITIVE_TOOLS = [
                 "Generate a brand-new image from a text description — for creating "
                 "imagery that doesn't exist as a real photo to find (use `search_image` "
                 "for that instead). Tries Gemini's image model first, then automatically "
-                "falls back to Hugging Face's free-tier Inference API if Gemini isn't "
+                "falls back to Hugging Face, then Cloudflare Workers AI, if Gemini isn't "
                 "configured or fails. Use sparingly, only when a generated image would genuinely help — "
                 "your written analysis is always the primary output, a generated image is "
                 "supplementary polish on top of it, never a substitute for discussing the "

@@ -53,6 +53,8 @@ Create this as the `aiagent` user, mode 600 — **not** inline `Environment=` li
 sudo -u aiagent tee /var/www/aiagent/.env > /dev/null <<'EOF'
 GEMINI_API_KEY=<real key>
 HF_API_TOKEN=<real huggingface token — free account, no billing>
+CLOUDFLARE_ACCOUNT_ID=<optional — generate_image's next fallback after Hugging Face>
+CLOUDFLARE_API_TOKEN=<optional — token with the Workers AI permission>
 ADZUNA_APP_ID=<real id>
 ADZUNA_APP_KEY=<real key>
 RATE_LIMIT_PER_MINUTE=5

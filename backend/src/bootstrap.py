@@ -584,8 +584,8 @@ def _build_prompt(
     # is treated as "not job search" so bootstrap doesn't tell a general/
     # research agent to lean on a tool it will never actually have.
     _image_primitive = (
-        "- `search_image` — finds one real, freely-licensed illustrative image for a "
-        "topic via Wikipedia (no key required, not scraping). Takes `query` (string, "
+        "- `search_image` — finds one real, existing illustrative image for a "
+        "topic (web image search via Tavily when configured, otherwise Wikipedia). Takes `query` (string, "
         "the topic). Returns {image_url, title, page_url, attribution} on success, or "
         "{error} if nothing matched or the topic has no image. An agent's own written "
         "analysis is always the primary output; this is supplementary illustration "
@@ -598,9 +598,9 @@ def _build_prompt(
         "for when no real photo exists to find (use `search_image` for that "
         "instead). Takes `prompt` (string, a clear description of the image to "
         "generate). Tries Gemini's image model first, then automatically falls "
-        "back to Hugging Face's free-tier Inference API if Gemini isn't "
+        "back to Hugging Face, then Cloudflare Workers AI, if Gemini isn't "
         "configured or fails — so it's available even with no GEMINI_API_KEY "
-        "set, as long as HF_API_TOKEN is configured. Returns {image_url, "
+        "set, as long as HF_API_TOKEN or the Cloudflare keys are configured. Returns {image_url, "
         "provider} on success (embed the url directly, "
         "no download/storage step needed) or {error} only if both attempts "
         "fail. An agent's own written analysis is always the primary output; "
