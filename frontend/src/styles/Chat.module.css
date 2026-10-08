@@ -501,7 +501,7 @@
   font-size: var(--font-size-xs);
   font-weight: 600;
   padding: 0.15rem 0.45rem;
-  margin-bottom: 0.35rem;
+  margin-top: 0.35rem;
 }
 
 .exportAsBtn:hover:not(:disabled) {
@@ -905,6 +905,9 @@
    overlay below hangs off it. */
 .mermaidDiagram {
   position: relative;
+  /* Drag pans the diagram; selecting its labels just got in the way. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* The svg is drawn at its own natural size (MermaidDiagram's

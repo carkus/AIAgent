@@ -39,7 +39,7 @@ from llm_client import create_chat_completion
 
 # Brief-sourced relics: nothing has been researched yet, so a chart (which
 # needs real numbers) isn't offered.
-BRIEF_RELIC_KINDS = ("slides", "pdf", "docx", "diagram", "markdown", "csv", "json")
+BRIEF_RELIC_KINDS = ("slides", "pdf", "docx", "diagram", "markdown", "json")
 
 
 def _relic_suggestions(raw) -> list[dict]:
@@ -85,7 +85,7 @@ Separately from the ambiguity check above, also assess whether commissioning thi
 - A specialty that is only meaningful with a location (e.g. "job openings", "weather", "local events") but no location was given.
 This is independent of the question/brief choice above — a warning can accompany either a brief or a question. Omit "warning" (or use null) when nothing is actually wrong; don't invent a warning just to have one.
 
-When you write a brief (not a question), also offer up to two pieces of media the user could take away from this commission before it runs, picked for what would genuinely help THIS case: "slides" (to pitch or present the commission), "pdf" (a polished case file to share), "docx" (an editable case file), "diagram" (how the work splits across the focus topics and any workers), "markdown" (a working brief to keep editing), "csv" or "json" (one row per line of inquiry, for tracking). Each reason is one short line naming what it would contain for this case specifically. Offer none ([]) when nothing would really add to the brief.
+When you write a brief (not a question), also offer up to two pieces of media the user could take away from this commission before it runs, picked for what would genuinely help THIS case: "slides" (to pitch or present the commission), "pdf" (a polished case file to share), "docx" (an editable case file), "diagram" (how the work splits across the focus topics and any workers), "markdown" (a working brief to keep editing), "json" (one entry per line of inquiry, for tracking). Each reason is one short line naming what it would contain for this case specifically. Offer none ([]) when nothing would really add to the brief.
 
 Respond with ONLY raw JSON, no markdown code fences, no other text, exactly one of:
 {{"type": "brief", "text": "...", "warning": "..." or null, "relics": [{{"kind": "...", "reason": "..."}}]}}

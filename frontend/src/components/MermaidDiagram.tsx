@@ -112,6 +112,33 @@ function fixReservedEndKeyword(chart: string): string {
     .join('\n')
 }
 
+// Confirmed against real repro output (create-screen diagram relic): the
+// model ends a flowchart with an inline `title "..."` line, which only pie/
+// xychart/gantt/journey/quadrant/timeline/sequence charts accept — in a
+// flowchart Mermaid parses `title` as a node id followed by a stray string
+// and fails the whole diagram. For the chart types without inline titles,
+// the line is moved into `---\ntitle: ...\n---` frontmatter (Mermaid's
+// supported form for every type), or just dropped if frontmatter exists.
+const NO_INLINE_TITLE_RE = /^\s*(flowchart|graph|classDiagram|stateDiagram(-v2)?|erDiagram|mindmap)\b/
+const INLINE_TITLE_RE = /^\s*title\s+(.+?)\s*;?\s*$/
+
+function hoistInlineTitle(chart: string): string {
+  const lines = chart.replace(/^\s*\n/, '').split('\n')
+  const hasFrontmatter = lines[0]?.trim() === '---'
+  const bodyStart = hasFrontmatter ? lines.findIndex((l, i) => i > 0 && l.trim() === '---') + 1 : 0
+  const header = lines.slice(bodyStart).find(l => l.trim() && !/^\s*%%/.test(l))
+  if (!header || !NO_INLINE_TITLE_RE.test(header)) return chart
+  let title: string | null = null
+  const kept = lines.filter((line, i) => {
+    const m = i >= bodyStart ? INLINE_TITLE_RE.exec(line) : null
+    if (!m) return true
+    title ??= m[1].replace(/^["']|["']$/g, '').replace(/"/g, "'")
+    return false
+  })
+  if (title === null) return chart
+  return hasFrontmatter ? kept.join('\n') : `---\ntitle: "${title}"\n---\n${kept.join('\n')}`
+}
+
 // Confirmed against real repro output: the model occasionally drops a stray
 // extra `]` inside a node's own label text (e.g. `B[Compare providers']]`),
 // almost always right after an apostrophe — the closing bracket of the
@@ -210,7 +237,7 @@ interface Props {
 let standaloneSeq = 0
 export async function renderMermaidSvg(chart: string): Promise<string> {
   ensureInitialized()
-  const adapted = fixUnbalancedBrackets(quoteParenLabels(fixReservedEndKeyword(adaptChartForWidth(chart, 1200))))
+  const adapted = fixUnbalancedBrackets(quoteParenLabels(fixReservedEndKeyword(hoistInlineTitle(adaptChartForWidth(chart, 1200)))))
   const result = await mermaid.render(`mermaid-standalone-${++standaloneSeq}`, adapted)
   return withExplicitSvgSize(result.svg)
 }
@@ -232,7 +259,7 @@ export default function MermaidDiagram({ chart, label, caption }: Props) {
       return
     }
     let cancelled = false
-    const adapted = fixUnbalancedBrackets(quoteParenLabels(fixReservedEndKeyword(adaptChartForWidth(chart, window.innerWidth))))
+    const adapted = fixUnbalancedBrackets(quoteParenLabels(fixReservedEndKeyword(hoistInlineTitle(adaptChartForWidth(chart, window.innerWidth)))))
     mermaid.render(`mermaid-${id}`, adapted)
       .then(result => { if (!cancelled) setSvg(withExplicitSvgSize(result.svg)) })
       .catch(err => { if (!cancelled) setError(err instanceof Error ? err.message : 'Diagram failed to render') })

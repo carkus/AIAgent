@@ -81,6 +81,12 @@ export default function ImageViewer({ svg, src, onClose }: Props) {
       if (svgEl) {
         svgEl.style.width = '100%'
         svgEl.style.height = '100%'
+        // Mermaid writes an inline max-width (its natural width) onto the
+        // svg, which capped it there: zooming in grew the wrapper but the
+        // diagram stayed the same size. Clear it so the svg follows the
+        // wrapper both ways.
+        svgEl.style.maxWidth = 'none'
+        svgEl.style.maxHeight = 'none'
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

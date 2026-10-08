@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { fetchFile } from '../api'
@@ -22,6 +22,9 @@ interface Props {
   toolCalls: ToolCall[]
   live?: boolean
   location?: string
+  // Rendered right after the worker reports (completed view only) — Chat's
+  // "Export as…" control.
+  afterWorkers?: ReactNode
 }
 
 // ─── Parsers & helpers ────────────────────────────────────────────────────────
@@ -995,7 +998,7 @@ function LiveToolRow({ tc, location }: { tc: ToolCall; location?: string }) {
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export default function ToolActivity({ toolCalls, live = false, location }: Props) {
+export default function ToolActivity({ toolCalls, live = false, location, afterWorkers }: Props) {
   const [open, setOpen] = useState(true)
   const [viewerSrc, setViewerSrc] = useState<string | null>(null)
 
@@ -1083,6 +1086,7 @@ export default function ToolActivity({ toolCalls, live = false, location }: Prop
             {extractCompletedWorkers(toolCalls).map((data, i) => (
               <WorkerResultCard key={i} data={data} />
             ))}
+            {afterWorkers}
 
             {savedFromOther.map(filename => (
               <SavedFileViewer key={filename} filename={filename} />

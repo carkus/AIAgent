@@ -1,9 +1,10 @@
-/* Square graph holder (GraphFrame.tsx): half the screen wide, never wider
-   than its column, never taller than most of the viewport. Narrow screens
-   get the full column (20rem floor) rather than a tiny half-width square. */
+/* Graph holder (GraphFrame.tsx): always the full chat width; height stays
+   square but never past 85vh, so a wide column gives a wide rectangle
+   rather than a box taller than the screen. */
 .frame {
   position: relative;
-  width: min(100%, max(50vw, 20rem), 85vh);
+  width: 100%;
+  max-height: 85vh;
   aspect-ratio: 1 / 1;
   margin: 0.6rem 0;
   background: #f5f6f4;
@@ -11,13 +12,6 @@
   border-radius: 6px;
   overflow: hidden;
   touch-action: none;
-}
-
-/* Full chat width; height stays square but never past 85vh, so a wide
-   column gives a wide rectangle rather than a box taller than the screen. */
-.wide {
-  width: 100%;
-  max-height: 85vh;
 }
 
 .pannable {

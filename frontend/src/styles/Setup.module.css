@@ -760,6 +760,112 @@
   border-color: #3f7ea0;
 }
 
+/* The Brief's one or two picks for this job — same palette, just a
+   stronger fill so they stand out from the fixed set. */
+.toolbarOutputSuggested {
+  background: #eaf3f7;
+  border-color: #3f7ea0;
+}
+
+.toolbarIconBtn.toolbarToolsBtn {
+  display: none;
+}
+
+/* Tools overlay (narrow screens): the output list, one tap runs one. */
+.toolsOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(22, 50, 74, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.toolsSheet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 0.75rem;
+  background: var(--color-surface);
+  border-radius: 10px;
+  box-shadow: 0 20px 48px rgba(28, 40, 51, 0.28);
+}
+
+.toolsNote {
+  margin: 0 0 0.2rem;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.toolsItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  background: var(--color-surface);
+  border: 1px solid #d9e9ef;
+  border-radius: var(--radius-control);
+  color: #3f7ea0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.toolsItem svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex-shrink: 0;
+}
+
+.toolsItem:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolsItemSuggested {
+  background: #eaf3f7;
+  border-color: #3f7ea0;
+}
+
+.toolsItemText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.toolsItemLabel {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.toolsItemReason {
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.toolsClose {
+  margin-top: 0.2rem;
+  padding: 0.6rem;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-muted);
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
 .toolbarIconBtn.toolbarIconBusy:disabled {
   opacity: 1;
   cursor: progress;
@@ -2347,6 +2453,24 @@
    them — and the group scrolls horizontally as a last resort if it still
    doesn't fit at the very narrowest widths. */
 @media (max-width: 520px) {
+  /* Outputs collapse into the Tools button + overlay. */
+  .toolbarOutputs {
+    display: none;
+  }
+
+  /* Same light blue as the outputs group it stands in for. */
+  .toolbarIconBtn.toolbarToolsBtn {
+    display: inline-flex;
+    margin-left: 0.6rem;
+    background: #d9eaf2;
+    border-color: #b4d2df;
+  }
+
+  .toolbarIconBtn.toolbarToolsBtn:hover:not(:disabled) {
+    background: #3f7ea0;
+    border-color: #3f7ea0;
+  }
+
   /* Logo moves into the top-left corner beside the icon row instead of
      taking its own centered 160px row, so the panels start higher. Taken
      out of flow, so .focusStack (flex: 1) just grows upward into the freed

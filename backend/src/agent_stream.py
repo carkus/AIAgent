@@ -125,6 +125,26 @@ def _is_degenerate_reply(text: str) -> bool:
     return text.strip().strip("\"'").lower() in _DEGENERATE_REPLIES
 
 
+# Confirmed live against qwen2.5 via Ollama: after a meta-heavy turn (a
+# self-check finding handed back as the user message) the whole reply came
+# back in Chinese to an English-speaking user. Rule 7c asks for the user's
+# language; this is the code-side check behind it. Han, kana and Hangul only,
+# so accented Latin text never trips it.
+_CJK_RE = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯]")
+
+
+def _cjk_share(text: str) -> float:
+    letters = sum(1 for ch in text if ch.isalpha())
+    return len(_CJK_RE.findall(text)) / letters if letters else 0.0
+
+
+def _is_wrong_language(reply: str, user_text: str) -> bool:
+    """True when the user wrote in a non-CJK script but the reply is mostly
+    CJK. Code blocks are ignored so a quoted snippet can't trigger it."""
+    prose = re.sub(r"```.*?```", "", reply, flags=re.DOTALL)
+    return _cjk_share(user_text) < 0.05 and _cjk_share(prose) > 0.3
+
+
 def _is_raw_json_dump(text: str) -> bool:
     """Rule 4b in the system prompt tells the model never to paste a tool's
     raw output as its reply, but that's prompt-following only — confirmed
@@ -977,7 +997,10 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
         f"\n\nUser location: {_location}. Assume this location for anything "
         "genuinely location-dependent (local context, \"near me\"/\"nearby\" "
         "phrasing, search_jobs' `where`, weather or time-of-day framing) "
-        "without asking the user to repeat it. Do NOT work this location into "
+        "without asking the user to repeat it. Job, salary and job-market "
+        "research is location-dependent: unless the user names another place, "
+        "it is about this location, so put it in the search query rather than "
+        "searching (or reporting) for some other city or country. Do NOT work this location into "
         "a `generate_image`/`search_image` prompt or any other creative, "
         "generative, or general-knowledge request unless the user explicitly "
         f"asked for that location in it — e.g. a request for \"clown images\" "
@@ -1176,6 +1199,10 @@ clarifying question only belongs AFTER you've already produced real findings
    in your prose: the user sees it as a button, and nothing is built unless
    they click it. Skip it for short answers, greetings, follow-up
    questions, or anything that reads fine as a chat message.
+
+7c. ALWAYS REPLY IN THE USER'S LANGUAGE: English unless the user writes in
+   another language. Never switch language partway through, even when the
+   last message is feedback or instructions rather than a question.
 """ + (f"""
 8. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [], max_delegations)}
 9. Once your workers report back, do NOT restate or re-summarize each one's
@@ -1358,6 +1385,7 @@ clarifying question only belongs AFTER you've already produced real findings
     # still stuck after two corrections is treated as genuinely done.
     nudge_retries = 0
     degenerate_retries = 0
+    language_retries = 0
     scope_retries = 0
     last_user_message = next(
         (m.get("content") for m in reversed(messages) if m.get("role") == "user"), ""
@@ -1540,6 +1568,21 @@ clarifying question only belongs AFTER you've already produced real findings
                             "That reply was not a real answer — just a stray schema word, "
                             "not actual content. Present your complete findings now in full "
                             "detail, in plain language, not a fragment of a tool schema."
+                        ),
+                    })
+                    continue
+
+                # Reply in the wrong script (rule 7c): one retry asking for
+                # the same answer in the user's language.
+                if language_retries < 1 and _is_wrong_language(final_text, last_user_message):
+                    language_retries += 1
+                    yield _status("Rewriting the reply in your language…")
+                    current_messages.append({
+                        "role": "user",
+                        "content": (
+                            "Your reply was not in the language I wrote in. Give the same "
+                            "answer again, in full, in my language (English unless I wrote "
+                            "in another one). Do not mention this request."
                         ),
                     })
                     continue
@@ -1818,6 +1861,7 @@ clarifying question only belongs AFTER you've already produced real findings
                             model=model,
                             search_defaults=search_defaults,
                             agent_type=agent_config.get("template"),
+                            location=agent_config.get("location"),
                         )
                         pending_workers[idx] = (future, tc, tool_name, tool_inputs, source)
                     continue

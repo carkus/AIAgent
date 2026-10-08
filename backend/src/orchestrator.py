@@ -24,7 +24,8 @@ import eval_log
 
 
 def run_worker(task: str, context: str, provider: str | None, model: str | None,
-                search_defaults: dict | None = None, agent_type: str | None = None) -> dict:
+                search_defaults: dict | None = None, agent_type: str | None = None,
+                location: str | None = None) -> dict:
     """
     Bootstrap and run one worker agent to completion for `task`.
 
@@ -104,6 +105,12 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None,
     # over rather than letting a worker silently fall back to "au"/20/none.
     if search_defaults:
         worker_config["search_defaults"] = search_defaults
+    # Same for the user's location: without it a worker researching jobs or
+    # salaries had no idea where the user was and picked a city itself
+    # (e.g. Boston for a Melbourne user). run_agent_stream's location note
+    # reads it from the config.
+    if location:
+        worker_config["location"] = location
     user_content = task if not context else f"{task}\n\nContext:\n{context}"
 
     final_response = ""

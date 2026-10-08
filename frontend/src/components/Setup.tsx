@@ -70,17 +70,31 @@ function SaveIcon() {
   )
 }
 
+// Narrow screens: one button that opens the output list (see .toolbarTools).
+function ToolsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="4" width="6" height="6" rx="1" />
+      <rect x="14" y="4" width="6" height="6" rx="1" />
+      <rect x="4" y="14" width="6" height="6" rx="1" />
+      <rect x="14" y="14" width="6" height="6" rx="1" />
+    </svg>
+  )
+}
+
 // Toolbar icon per output kind (the Brief's offered relics).
 // The Setup toolbar's buttons (toolbarLayout.ts): the default order is the
 // order listed here; dragging a button on the toolbar reorders its group.
-// Save Agent is locked on (it must always be visible). Outputs only appear
-// when the Brief offers them.
+// Save Agent is locked on (it must always be visible). The outputs are a
+// fixed set (hide/reorder them in the toolbar builder); the Brief's picks
+// only mark one or two of them as suggested. No chart: the Brief comes
+// before any research, so there are no numbers to chart.
 const SETUP_TOOLBAR_ITEMS: ToolbarItem[] = [
   { id: 'clear', label: 'Clear', group: 'danger' },
   { id: 'save', label: 'Save agent', group: 'controls', locked: true },
   { id: 'open', label: 'Open agent', group: 'controls' },
   { id: 'advanced', label: 'Advanced setup', group: 'controls' },
-  ...(['pdf', 'docx', 'markdown', 'slides', 'diagram', 'chart', 'csv', 'json'] as RelicKind[])
+  ...(['pdf', 'docx', 'markdown', 'slides', 'diagram', 'json'] as RelicKind[])
     .map(kind => ({ id: kind, label: RELIC_LABELS[kind], group: 'outputs' })),
 ]
 
@@ -577,12 +591,24 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setBriefRelicPreview(null)
   }, [aiBrief])
 
-  // The Brief's offered outputs, in the user's toolbar order, minus any
-  // they've hidden in the toolbar builder.
-  const outputOrder = toolbarLayout.visible('outputs')
-  const briefOutputs = (aiBrief?.relics ?? [])
-    .filter(s => outputOrder.includes(s.kind))
-    .sort((a, b) => outputOrder.indexOf(a.kind) - outputOrder.indexOf(b.kind))
+  // Every output the user hasn't hidden, in their toolbar order — a fixed
+  // set, so the toolbar doesn't reshuffle each time the Brief is rewritten.
+  // The Brief's own picks (aiBrief.relics) carry its reason and are marked.
+  const briefReady = aiBrief?.type === 'brief'
+  // Narrow screens only: the outputs collapse into one Tools button, and
+  // this is its overlay list (tap an output to run it and close the list).
+  const [toolsOpen, setToolsOpen] = useState(false)
+  useEffect(() => {
+    if (!toolsOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setToolsOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [toolsOpen])
+  const outputsDisabled = !briefReady || briefRelicBusy !== null || bootstrapping
+  const briefOutputs = (toolbarLayout.visible('outputs') as RelicKind[]).map(kind => {
+    const offered = aiBrief?.relics?.find(s => s.kind === kind)
+    return { kind, reason: offered?.reason ?? '', suggested: !!offered }
+  })
 
   // Builds one of the Brief's offered media from the case and the agent on
   // board (relic.py's case mode), then opens its preview. An already-built
@@ -1681,21 +1707,26 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               }
             })}
             {briefOutputs.length > 0 && (
-              // Outputs the Brief offers: a different job from the agent
-              // controls beside them, so grouped on their own background.
-              <div className={styles.toolbarOutputs} role="group" aria-label="Outputs from the Brief">
+              // Output buttons: a different job from the agent controls
+              // beside them, so grouped on their own background.
+              <div className={styles.toolbarOutputs} role="group" aria-label="Outputs">
                 {briefOutputs.map(s => {
                   const built = briefRelics.some(r => r.kind === s.kind)
                   const label = RELIC_LABELS[s.kind]
+                  const title = briefRelicBusy === s.kind
+                    ? `Building ${label}…`
+                    : !briefReady
+                      ? `${label}: available once the Brief is generated`
+                      : `${built ? 'Open' : 'Build'} ${label}${s.suggested ? ` (suggested): ${s.reason}` : ''}`
                   return (
                     <button
                       key={s.kind}
                       {...toolbarDrag.dragProps(s.kind)}
                       type="button"
-                      className={`${styles.toolbarIconBtn} ${styles.toolbarOutputBtn} ${briefRelicBusy === s.kind ? styles.toolbarIconBusy : ''}`}
-                      title={briefRelicBusy === s.kind ? `Building ${label}…` : `${built ? 'Open' : 'Build'} ${label}: ${s.reason}`}
-                      aria-label={`${built ? 'Open' : 'Build'} ${label}`}
-                      disabled={briefRelicBusy !== null || bootstrapping}
+                      className={`${styles.toolbarIconBtn} ${styles.toolbarOutputBtn} ${s.suggested ? styles.toolbarOutputSuggested : ''} ${briefRelicBusy === s.kind ? styles.toolbarIconBusy : ''}`}
+                      title={title}
+                      aria-label={`${built ? 'Open' : 'Build'} ${label}${s.suggested ? ' (suggested)' : ''}`}
+                      disabled={outputsDisabled}
                       onClick={() => handleBriefRelic(s)}
                     >
                       <RelicIcon kind={s.kind} />
@@ -1703,6 +1734,21 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   )
                 })}
               </div>
+            )}
+            {briefOutputs.length > 0 && (
+              // Narrow screens: stands in for the outputs group above
+              // (CSS shows one or the other).
+              <button
+                type="button"
+                className={`${styles.toolbarIconBtn} ${styles.toolbarOutputBtn} ${styles.toolbarToolsBtn} ${briefRelicBusy ? styles.toolbarIconBusy : ''}`}
+                title={briefRelicBusy ? `Building ${RELIC_LABELS[briefRelicBusy]}…` : 'Tools'}
+                aria-label="Tools"
+                aria-haspopup="dialog"
+                disabled={bootstrapping || briefRelicBusy !== null}
+                onClick={() => setToolsOpen(true)}
+              >
+                <ToolsIcon />
+              </button>
             )}
             {/* Clear is destructive, so it sits apart, after the outputs. */}
             {toolbarLayout.visible('danger').map(id => (
@@ -2203,10 +2249,45 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         onHire={hirePublishedAgent}
       />
 
+      {toolsOpen && (
+        <div className={styles.toolsOverlay} onClick={() => setToolsOpen(false)}>
+          <div
+            className={styles.toolsSheet}
+            role="dialog"
+            aria-label="Tools"
+            onClick={e => e.stopPropagation()}
+          >
+            {!briefReady && <p className={styles.toolsNote}>Available once the Brief is generated.</p>}
+            {briefOutputs.map(s => {
+              const built = briefRelics.some(r => r.kind === s.kind)
+              return (
+                <button
+                  key={s.kind}
+                  type="button"
+                  className={`${styles.toolsItem} ${s.suggested ? styles.toolsItemSuggested : ''}`}
+                  disabled={outputsDisabled}
+                  onClick={() => { setToolsOpen(false); handleBriefRelic(s) }}
+                >
+                  <RelicIcon kind={s.kind} />
+                  <span className={styles.toolsItemText}>
+                    <span className={styles.toolsItemLabel}>
+                      {built ? 'Open' : 'Build'} {RELIC_LABELS[s.kind]}{s.suggested ? ' · suggested' : ''}
+                    </span>
+                    {s.suggested && s.reason && <span className={styles.toolsItemReason}>{s.reason}</span>}
+                  </span>
+                </button>
+              )
+            })}
+            <button type="button" className={styles.toolsClose} onClick={() => setToolsOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
       {briefRelicPreview && aiBrief && (() => {
         const relic = briefRelics.find(r => r.kind === briefRelicPreview)
         const suggestion = aiBrief.relics?.find(s => s.kind === briefRelicPreview)
-        if (!relic || !suggestion) return null
+          ?? { kind: briefRelicPreview, reason: '' }
+        if (!relic) return null
         return (
           <RelicPreviewModal
             relic={relic}

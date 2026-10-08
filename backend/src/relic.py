@@ -42,7 +42,8 @@ _FORMAT_RULES = {
         "process or relationship, `mindmap` for a grouped breakdown, `pie` or "
         "`xychart-beta` for numbers (bare numeric values only, units in the "
         "title). Node labels are plain text with no brackets or quotes inside. "
-        "Output the Mermaid source only, no fence."
+        "Never add a `title` line to a flowchart or mindmap (only pie and "
+        "xychart-beta accept one). Output the Mermaid source only, no fence."
     ),
     "markdown": (
         "a standalone markdown document: a `#` title, a one-paragraph summary, "

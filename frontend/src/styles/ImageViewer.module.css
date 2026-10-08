@@ -68,6 +68,8 @@
 }
 
 .image svg {
+  user-select: none;
+  -webkit-user-select: none;
   display: block;
   width: auto;
   height: auto;

@@ -1,4 +1,4 @@
-// One square holder for every graph in the app — Mermaid diagrams in replies,
+// One full-width holder for every graph in the app — Mermaid diagrams in replies,
 // the plan preview, diagram relics and the React Flow trace (GraphView) — so
 // they all get the same size and the same zoom in / zoom out / fit controls
 // instead of each being squeezed into its own small box.
@@ -42,15 +42,6 @@ export default function GraphFrame({ children, zoom, onExpand, className, conten
   const userMoved = useRef(false)
   const drag = useRef<{ id: number; startX: number; startY: number; x: number; y: number } | null>(null)
   const external = zoom !== undefined
-  // Square (half screen) by default; the toggle stretches it to the full
-  // chat width and back.
-  const [wide, setWide] = useState(false)
-  const toggleWide = () => {
-    setWide(w => !w)
-    // React Flow doesn't refit on resize by itself; own-zoom content is
-    // refitted by the ResizeObserver below unless the user has zoomed.
-    if (external) requestAnimationFrame(() => zoom.fit())
-  }
 
   const fit = useCallback(() => {
     const frame = frameRef.current
@@ -129,7 +120,7 @@ export default function GraphFrame({ children, zoom, onExpand, className, conten
   return (
     <div
       ref={frameRef}
-      className={`${styles.frame} ${wide ? styles.wide : ''} ${external ? '' : styles.pannable} ${className ?? ''}`}
+      className={`${styles.frame} ${external ? '' : styles.pannable} ${className ?? ''}`}
       role="group"
       aria-label={label}
       onPointerDown={onPointerDown}
@@ -152,16 +143,6 @@ export default function GraphFrame({ children, zoom, onExpand, className, conten
         <button type="button" className={styles.controlBtn} onClick={doZoomIn} aria-label="Zoom in" title="Zoom in">+</button>
         <button type="button" className={styles.controlBtn} onClick={doZoomOut} aria-label="Zoom out" title="Zoom out">−</button>
         <button type="button" className={styles.controlBtn} onClick={doFit} aria-label="Fit to frame" title="Fit to frame">⤢</button>
-        <button
-          type="button"
-          className={styles.controlBtn}
-          onClick={toggleWide}
-          aria-pressed={wide}
-          aria-label={wide ? 'Back to square' : 'Full chat width'}
-          title={wide ? 'Back to square' : 'Full chat width'}
-        >
-          {wide ? '⇥' : '⇔'}
-        </button>
         {onExpand && (
           <button type="button" className={styles.controlBtn} onClick={onExpand} aria-label="Open full view" title="Open full view">⛶</button>
         )}

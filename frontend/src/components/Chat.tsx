@@ -495,6 +495,49 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     }
   }
 
+  // Whether this message offers outputs at all (the relic row under it).
+  function offersRelics(msg: ChatMessage) {
+    return msg.role === 'assistant' && msg.durationSeconds !== undefined &&
+      !!(msg.relicSuggestions || msg.relics || msg.content.length >= 200)
+  }
+
+  // "Export as…" sits inside the Tool activity box, after the worker
+  // reports, whenever that box is showing; otherwise in the relic row.
+  function exportInToolActivity(msg: ChatMessage, i: number) {
+    return offersRelics(msg) && !!msg.toolCalls?.length && !graphViewMessages.has(i)
+  }
+
+  function exportControls(msg: ChatMessage, i: number) {
+    const isBuilt = (kind: RelicKind) => (msg.relics ?? []).some(r => r.kind === kind)
+    return (
+      <div>
+        <button
+          type="button"
+          className={styles.exportAsBtn}
+          disabled={relicBusy !== null}
+          onClick={() => setExportMenuFor(exportMenuFor === i ? null : i)}
+        >
+          {exportMenuFor === i ? '✕ Close export' : '⬇ Export as…'}
+        </button>
+        {exportMenuFor === i && (
+          <div>
+            {RELIC_KINDS.map(kind => (
+              <button
+                key={`export-${kind}`}
+                type="button"
+                className={styles.viewToggleBtn}
+                disabled={relicBusy !== null}
+                onClick={() => handleBuildRelic(i, kind)}
+              >
+                {isBuilt(kind) ? '📎' : '⬇'} {RELIC_LABELS[kind]}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   function handleExportPdf() {
     if (messages.length === 0 || exporting) return
     setExporting(true)
@@ -913,11 +956,14 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     const last = messages[messages.length - 1]
     if (!last || last.role !== 'assistant') return
     const label = evalTargetLabel(item)
+    // Worded as "redo the answer", not "address this finding": a local model
+    // given the finding and asked to refine answered with a critique of its
+    // own toolset (in Chinese) instead of a better answer.
     const refinement =
-      `A self-check flagged your previous response. ` +
-      `Target: ${label}. Check: ${item.check.replace(/_/g, ' ')}. ` +
-      `Finding: ${item.reason} ` +
-      `Please refine your response to address this finding, taking the rest of our conversation into account.`
+      `Rewrite your previous answer to me (${label}) so it fixes this problem: ${item.reason} ` +
+      `Give me the improved answer itself, in full, in English unless I wrote in another language, ` +
+      `using your tools again if you need more information. ` +
+      `Do not describe or critique your tools or this request, and do not mention this check.`
     void sendMessage(refinement, messages, undefined, `🚩 Reported: ${item.reason}`)
     // Reported and handed back to the agent: it's resolved, so it leaves the
     // self-check list (the new turn's own checks will flag it again if not).
@@ -1250,6 +1296,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                     toolCalls={msg.toolCalls}
                     live={false}
                     location={agentConfig.location}
+                    afterWorkers={exportInToolActivity(msg, i) ? exportControls(msg, i) : null}
                   />
                 )}
               </>
@@ -1284,29 +1331,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                       ✨ {RELIC_LABELS[s.kind]}
                     </button>
                   ))}
-                  <button
-                    type="button"
-                    className={styles.exportAsBtn}
-                    disabled={relicBusy !== null}
-                    onClick={() => setExportMenuFor(exportMenuFor === i ? null : i)}
-                  >
-                    {exportMenuFor === i ? '✕ Close export' : '⬇ Export as…'}
-                  </button>
-                  {exportMenuFor === i && (
-                    <div>
-                      {RELIC_KINDS.map(kind => (
-                        <button
-                          key={`export-${kind}`}
-                          type="button"
-                          className={styles.viewToggleBtn}
-                          disabled={relicBusy !== null}
-                          onClick={() => handleBuildRelic(i, kind)}
-                        >
-                          {isBuilt(kind) ? '📎' : '⬇'} {RELIC_LABELS[kind]}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {!exportInToolActivity(msg, i) && exportControls(msg, i)}
                   {busyKind && <p className={styles.duration}>Building {RELIC_LABELS[busyKind]}…</p>}
                   {relicError && relicError.key.startsWith(`${i}-`) && !relicPreview && (
                     <p className={styles.duration}>{relicError.message}</p>

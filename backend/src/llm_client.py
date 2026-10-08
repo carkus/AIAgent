@@ -113,6 +113,13 @@ def create_chat_completion(provider: str | None = None, model: str | None = None
     """
     forced = (provider or os.environ.get("LLM_PROVIDER", "")).strip().lower()
     providers = [p for p in _PROVIDERS if p[0] == forced] if forced else _PROVIDERS
+    # A browser can keep "gemini" saved in Settings after the key is removed
+    # (local dev has none; production turned it off). Forcing it then failed
+    # every call — the Setup Brief silently fell back to its template, with
+    # no output buttons. Fall back to Ollama instead: never costs money.
+    if forced == "gemini" and not os.environ.get("GEMINI_API_KEY"):
+        logger.warning("gemini requested but GEMINI_API_KEY not set; using ollama")
+        providers = [p for p in _PROVIDERS if p[0] == "ollama"]
 
     last_error = None
     for name, client, default_model in providers:
