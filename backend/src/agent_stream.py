@@ -922,6 +922,45 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
     ) or "no built-in tools"
     _findings_desc = "listing counts, job titles, salary ranges, company names" if is_job_search_agent else "key facts, figures, names, and comparisons"
 
+    # General/Research agents (and their workers, which inherit `template`)
+    # always get Tavily web search when it's configured, rather than only when
+    # bootstrap happened to pick it. Without it the only way to the web is
+    # fetch_page on a URL the model already knows, and small models guess
+    # (microsoft.com, example.com). Added at run time so saved agents get it
+    # too; respects an Advanced Setup MCP allow-list.
+    _agent_tools = list(agent_config.get("tools") or [])
+    _search_ref = {"source": "mcp", "mcp_server": "search", "mcp_tool": "tavily_search"}
+    if (
+        agent_config.get("template") in ("general", "research")
+        and not any(t.get("mcp_server") == "search" and t.get("mcp_tool") == "tavily_search" for t in _agent_tools)
+        and not any(t.get("name") == "tavily_search" for t in _agent_tools)
+        and agent_spec.tool_def_allowed(_search_ref, spec)
+    ):
+        real = next((c for c in mcp_client.list_tools("search") if c["tool_name"] == "tavily_search"), None)
+        if real:
+            _agent_tools.append({
+                **_search_ref,
+                "name": "tavily_search",
+                "description": real["description"],
+                "input_schema": real["input_schema"],
+            })
+    _web_search_name = next(
+        (t["name"] for t in _agent_tools
+         if t.get("source") == "mcp" and t.get("mcp_server") == "search" and t.get("mcp_tool") == "tavily_search"
+         and agent_spec.tool_def_allowed(t, spec)),
+        None,
+    )
+    _search_rule = (
+        f"1. To find pages on a topic, call `{_web_search_name}` with a search query FIRST, then "
+        "`fetch_page` the real URLs it returns if you need more detail. NEVER guess or invent a URL "
+        "(no example.com, no homepage you hope has the answer) — only fetch a URL that a search "
+        "result, the user, or an earlier tool result actually gave you. Do not call `web_search` or "
+        "any other search tool name; it does not exist."
+    ) if _web_search_name else (
+        "1. DO NOT call `web_search` or any generic search tool. There is no search engine connected. "
+        "Every call returns 0 results and wastes a turn."
+    )
+
     # Setup's location field (default "Melbourne, Australia", auto-detected via
     # browser geolocation) is already baked into the bootstrap purpose text for
     # a freshly-commissioned agent, but that's only a one-time hint buried in
@@ -968,7 +1007,7 @@ what to work on. Make a real attempt with your tools first; a genuine
 clarifying question only belongs AFTER you've already produced real findings
 (see the final rule below), never as a substitute for making the attempt.
 
-1. DO NOT call `web_search` or any generic search tool. There is no search engine connected. Every call returns 0 results and wastes a turn.
+""" + _search_rule + """
 """ + ("""
 2. For job search, salary research, or job-market questions, USE `search_jobs` — it calls a real
    job search API and returns structured listings (title, company, location, salary, apply URL).
@@ -1044,7 +1083,7 @@ clarifying question only belongs AFTER you've already produced real findings
    never compress a real finding down to a diagram plus a one-line caption.
    Only AFTER that discussion, if the findings ALSO involve a numeric
    comparison, distribution, or breakdown by category with several distinct
-   values (e.g. salary ranges across many roles, counts by location or
+   values (e.g. prices across many options, counts by location or
    company), you may additionally draw a Mermaid diagram in a ```mermaid
    fenced code block as a visual aid alongside your discussion — use `pie` or
    `xychart-beta` for distributions/comparisons, `flowchart`/`graph` for a
@@ -1090,10 +1129,10 @@ clarifying question only belongs AFTER you've already produced real findings
    that fence, on its own line, write ONE short plain-language sentence
    summarizing what you're about to do — this is the only context the user
    sees for the plan diagram, so it MUST always be there, e.g. "I'll look up
-   listings for each role and compare their pay." Then the fence. It MUST
+   costs for each option and compare them." Then the fence. It MUST
    start with `flowchart LR` (or `flowchart TD`) on its own line, then the
    actual steps you're about to take, e.g.:
-   I'll look up listings for each role and compare their pay.
+   I'll look up costs for each option and compare them.
    ```mermaid-plan
    flowchart LR
      Start --> A[Search X] --> B[Search Y] --> C[Compare] --> Answer
@@ -1124,7 +1163,7 @@ clarifying question only belongs AFTER you've already produced real findings
    standalone artifact, add a ```relic fenced block as the very LAST thing
    in your final answer, holding a JSON list of one or two suggestions:
    ```relic
-   [{{"kind": "csv", "reason": "Compare all 12 listings side by side in a spreadsheet"}}]
+   [{{"kind": "csv", "reason": "Compare all 12 options side by side in a spreadsheet"}}]
    ```
    Kinds: "csv" (tabular data: listings, prices, side-by-side comparisons),
    "json" (the same kind of records, for feeding into another tool or
@@ -1164,7 +1203,7 @@ clarifying question only belongs AFTER you've already produced real findings
     # Filtered again at runtime, not just at bootstrap: the config came back
     # from the browser and could have been edited to re-add a tool the spec
     # forbids.
-    tool_definitions = [t for t in agent_config["tools"] if agent_spec.tool_def_allowed(t, spec)]
+    tool_definitions = [t for t in _agent_tools if agent_spec.tool_def_allowed(t, spec)]
 
     primitive_tools = [
         t for t in _PRIMITIVE_TOOLS if t["function"]["name"] in _allowed_primitive_names
@@ -1640,7 +1679,7 @@ clarifying question only belongs AFTER you've already produced real findings
                 try:
                     for eval_result in eval_checks.check_chat_response(
                         last_user_message, final_text, tool_calls_log, stripped_link_count, provider, model,
-                        agent_id=agent_id,
+                        agent_id=agent_id, focus_topics=agent_config.get("keywords"),
                     ):
                         eval_log.record(eval_result)
                         yield {"type": "eval_result", **eval_result}

@@ -198,7 +198,7 @@ def check_bootstrap(
 def check_chat_response(
     user_message: str, final_text: str, tool_calls_log: list[dict],
     stripped_link_count: int, provider: str | None, model: str | None,
-    agent_id: str | None = None,
+    agent_id: str | None = None, focus_topics: list[str] | None = None,
 ) -> list[dict]:
     results = []
     non_empty = bool(final_text and final_text.strip())
@@ -242,11 +242,20 @@ def check_chat_response(
 
     if non_empty:
         tool_names = ", ".join(sorted({tc.get("tool", "?") for tc in tool_calls_log})) or "none"
+        # A message like "Produce your standard output across your full focus
+        # pool" doesn't name the subject, so without the topics the judge
+        # passed a reply about an unrelated subject as "a clear plan".
+        topics = [t for t in (focus_topics or []) if isinstance(t, str) and t.strip()]
+        topics_block = (
+            "The agent's focus topics (what the user means by its 'focus pool'): "
+            + "; ".join(topics) + "\n\n"
+        ) if topics else ""
         verdict = _judge(
             provider, model,
-            f"A user asked:\n{user_message}\n\nTools called this turn: {tool_names}\n\n"
+            f"A user asked:\n{user_message}\n\n{topics_block}Tools called this turn: {tool_names}\n\n"
             f"The agent replied:\n{final_text[:2000]}\n\n"
-            "Does this reply substantively address what the user asked?",
+            "Does this reply substantively address what the user asked"
+            + (", and is it actually about the focus topics rather than some other subject?" if topics else "?"),
         )
         if verdict is not None:
             passed, reason = verdict

@@ -72,7 +72,7 @@ Rules:
 - Do NOT generate an image-generation or image-creation tool — use the built-in `generate_image` primitive instead
 {jobsearch_rule}{search_rule}
 {save_output_rule}- Inside every `implementation` string, write Python string/dict literals with SINGLE quotes only (e.g. {{'status': 'saved'}}, not {{"status": "saved"}}). The `implementation` value itself is a double-quoted JSON string — an unescaped double quote inside your Python code ends that JSON string early and breaks the whole response. Single-quoting your Python avoids this entirely; it is not optional style, it is what keeps your own JSON valid.
-- The system_prompt you generate MUST instruct the agent that after all tool calls are done it must present the actual findings (listings, data, analysis) in its reply — not list tool names, not say "search complete"
+- The system_prompt you generate MUST instruct the agent that after all tool calls are done it must present the actual findings (facts, data, analysis) in its reply — not list tool names, not say "search complete"
 - Search/fetch tools MUST filter results for relevance: only include items where the search keyword appears in the title or description/snippet (case-insensitive). Discard unrelated results returned by the API.
 - Return ONLY valid JSON — no markdown fences, no explanation
 """
