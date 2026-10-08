@@ -6,8 +6,11 @@
 }
 
 .logo {
-  height: 240px;
+  height: 360px;
   width: auto;
+  /* Keeps the larger logo inside a phone-width screen without distorting it. */
+  max-width: calc(100vw - 2rem);
+  object-fit: contain;
   border-radius: 16px;
   animation: fadeIn 0.6s ease-out;
 }
