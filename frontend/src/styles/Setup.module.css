@@ -1287,7 +1287,7 @@
   background: none;
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  color: var(--color-accent);
+  color: var(--color-accent-secondary);
   cursor: pointer;
   font-size: var(--font-size-lg);
   line-height: 1;
@@ -1300,8 +1300,8 @@
 }
 
 .topIconBtn:hover {
-  border-color: var(--color-accent);
-  background: rgba(40, 75, 106, 0.08);
+  border-color: var(--color-accent-secondary);
+  background: rgba(63, 126, 160, 0.08);
 }
 
 .topIconBtn:disabled {

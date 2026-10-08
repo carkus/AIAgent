@@ -6,7 +6,8 @@
 // Two modes:
 // - Own zoom (default): the children are drawn at their natural size and the
 //   frame scales/pans them itself (buttons, drag to pan, Ctrl+wheel to zoom).
-//   Fits the content to the square until the user zooms or pans.
+//   Fits the content to the width and collapses the frame height to it
+//   (85vh at most) until the user zooms or pans.
 // - External zoom (`zoom` prop): for content that already owns a viewport
 //   (React Flow). The frame only draws the square and the controls, and the
 //   buttons call the given handlers.
@@ -32,12 +33,17 @@ interface Props {
 const MIN_SCALE = 0.1
 const MAX_SCALE = 8
 const STEP = 1.25
-const FIT_PADDING = 0.92
+// Fixed inset (px) left around fitted content, rather than a percentage that
+// grew into a wide empty margin on a full-width frame.
+const FIT_PAD = 12
 
 export default function GraphFrame({ children, zoom, onExpand, className, contentClassName, label = 'Graph' }: Props) {
   const frameRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ scale: 1, x: 0, y: 0 })
+  // Own-zoom mode: the frame's height collapses to the fitted content
+  // (null until first measured, when the CSS square applies).
+  const [height, setHeight] = useState<number | null>(null)
   // Keep re-fitting as the content/frame resizes until the user takes over.
   const userMoved = useRef(false)
   const drag = useRef<{ id: number; startX: number; startY: number; x: number; y: number } | null>(null)
@@ -48,11 +54,16 @@ export default function GraphFrame({ children, zoom, onExpand, className, conten
     const content = contentRef.current
     if (!frame || !content) return
     const fw = frame.clientWidth
-    const fh = frame.clientHeight
     const cw = content.offsetWidth
     const ch = content.offsetHeight
-    if (!fw || !fh || !cw || !ch) return
-    const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min(fw / cw, fh / ch) * FIT_PADDING))
+    if (!fw || !cw || !ch) return
+    // Fit to the width, capped at 85vh tall (same cap as the CSS), and make
+    // the frame exactly that tall so a wide diagram doesn't sit in a square
+    // of empty space.
+    const maxH = window.innerHeight * 0.85
+    const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((fw - 2 * FIT_PAD) / cw, (maxH - 2 * FIT_PAD) / ch)))
+    const fh = Math.min(maxH, ch * scale + 2 * FIT_PAD)
+    setHeight(fh)
     setView({ scale, x: (fw - cw * scale) / 2, y: (fh - ch * scale) / 2 })
   }, [])
 
@@ -121,6 +132,7 @@ export default function GraphFrame({ children, zoom, onExpand, className, conten
     <div
       ref={frameRef}
       className={`${styles.frame} ${external ? '' : styles.pannable} ${className ?? ''}`}
+      style={!external && height !== null ? { height } : undefined}
       role="group"
       aria-label={label}
       onPointerDown={onPointerDown}

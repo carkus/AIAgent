@@ -194,26 +194,22 @@
   background: transparent;
   border: none;
   border-radius: 50%;
-  /* Darker than the app's usual #3f7ea0 secondary accent, blended toward
-     the splash logo's navy wordmark (#16324a) — this toolbar reads as the
-     app's primary menu of actions, so it carries more of that navy tone
-     than the lighter steel-blue used for badges/borders elsewhere. Sourced
-     from --color-menu-bg (index.css) so every menu-blue surface in the app,
-     including the user's own chat bubble below, stays bound to one value. */
-  color: var(--color-menu-bg);
+  /* Steel-blue secondary accent, matching the Recommission button and
+     Setup's top icons. */
+  color: var(--color-accent-secondary);
   cursor: pointer;
   transition: background-color 0.12s, color 0.12s, opacity 0.12s, transform 0.12s;
 }
 
 .headerActions button:hover:not(:disabled) {
-  background: var(--color-menu-bg-tint);
-  color: #05384b;
+  background: rgba(63, 126, 160, 0.1);
+  color: #33688a;
   transform: translateY(-1px);
 }
 
 .headerActions button:active:not(:disabled) {
-  background: var(--color-menu-bg-tint-strong);
-  color: #05384b;
+  background: rgba(63, 126, 160, 0.16);
+  color: #33688a;
   transform: translateY(0);
 }
 
@@ -238,18 +234,18 @@
    one) so these actually win over the shared base/hover/active rules above
    instead of being silently shadowed by them. */
 .headerActions .resetBtn {
-  background: var(--color-accent);
+  background: var(--color-accent-secondary);
   color: #ffffff;
 }
 
 .headerActions .resetBtn:hover:not(:disabled) {
-  background: var(--color-accent-hover);
+  background: #33688a;
   color: #ffffff;
   transform: translateY(-1px);
 }
 
 .headerActions .resetBtn:active:not(:disabled) {
-  background: var(--color-accent-hover);
+  background: #33688a;
   color: #ffffff;
   transform: translateY(0);
 }
@@ -480,7 +476,7 @@
   font-size: var(--font-size-xs);
   font-weight: 600;
   padding: 0.2rem 0.55rem;
-  margin-bottom: 0.35rem;
+  margin-top: 0.35rem;
 }
 
 .viewToggleBtn:hover {
@@ -492,7 +488,8 @@
    (ToolActivity.module.css .imageViewBtn). */
 .exportAsBtn {
   composes: btn-base from global;
-  background: rgba(22, 50, 74, 0.75);
+  /* Same navy as the user's chat bubble (.userBubble). */
+  background: linear-gradient(135deg, var(--color-menu-bg) 0%, var(--color-menu-bg-active) 100%);
   border: none;
   border-radius: var(--radius-control);
   color: #ffffff;
@@ -505,7 +502,7 @@
 }
 
 .exportAsBtn:hover:not(:disabled) {
-  background: rgba(22, 50, 74, 0.9);
+  background: var(--color-menu-bg-active);
 }
 
 .messageList {
