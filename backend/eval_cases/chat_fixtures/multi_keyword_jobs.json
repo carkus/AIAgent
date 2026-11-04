@@ -1,0 +1,94 @@
+{
+ "config": {
+  "persona": {
+   "name": "Eliot",
+   "traits": [
+    "detail-oriented",
+    "curious",
+    "efficient"
+   ],
+   "rationale": "Eliot is detail-oriented, always eager to understand the nuances and present efficient solutions."
+  },
+  "intro": "Welcome! I'm here to help you find job listings for AI Engineer, Data Engineer, and Software Engineer roles in Melbourne, Australia. Just start by telling me which role you're looking for, and I'll sort through the latest job postings for you.",
+  "system_prompt": "You are a job search agent for AI Engineer, Data Engineer, and Software Engineer roles in Melbourne, Australia. Use the 'search_jobs' tool to find job listings. After gathering all relevant information, provide clear, ranked findings for each role or skill.",
+  "tools": [],
+  "purpose": "Job search agent for the following roles or skills: ai engineer, data engineer, software engineer in Melbourne, Australia. Search live job listings, compare requirements and salary across postings, and present clear, ranked findings for each role or skill.",
+  "provider": "ollama",
+  "ollama_model": "qwen2.5-coder:7b",
+  "agent_config_id": "81c46aa37ea6423e9ad5ae523e2bc8e7",
+  "spec": null,
+  "keywords": [
+   "ai engineer",
+   "data engineer",
+   "software engineer"
+  ],
+  "location": "Melbourne, Australia",
+  "template": "job_search"
+ },
+ "tape": [
+  {
+   "tool": "delegate_to_worker",
+   "inputs": {
+    "task": "data engineer: search live job listings via the Adzuna Job Search API for current openings as data engineer",
+    "context": ""
+   },
+   "inputs_canon": "{\"context\": \"\", \"task\": \"data engineer: search live job listings via the Adzuna Job Search API for current openings as data engineer\"}",
+   "result": {
+    "worker_name": "Worker",
+    "worker_traits": [],
+    "task": "data engineer: search live job listings via the Adzuna Job Search API for current openings as data engineer",
+    "response": "Could not assemble a worker for this subtask: Bootstrap response was not valid JSON after one retry. Error at char 1085: Expecting ',' delimiter. Try a simpler purpose description, or a different model if running local-only.",
+    "tools_used": [],
+    "tool_sources": [],
+    "tool_results": [],
+    "fewshot_count": 0
+   }
+  },
+  {
+   "tool": "delegate_to_worker",
+   "inputs": {
+    "task": "software engineer: search live job listings via the Adzuna Job Search API for current openings as software engineer",
+    "context": ""
+   },
+   "inputs_canon": "{\"context\": \"\", \"task\": \"software engineer: search live job listings via the Adzuna Job Search API for current openings as software engineer\"}",
+   "result": {
+    "worker_name": "TechSeeker",
+    "worker_traits": [
+     "curious",
+     "detail-oriented",
+     "timely"
+    ],
+    "task": "software engineer: search live job listings via the Adzuna Job Search API for current openings as software engineer",
+    "response": "",
+    "tools_used": [],
+    "tool_sources": [],
+    "tool_results": [],
+    "fewshot_count": 0
+   }
+  },
+  {
+   "tool": "delegate_to_worker",
+   "inputs": {
+    "task": "ai engineer: search live job listings via the Adzuna Job Search API for current openings as ai engineer",
+    "context": ""
+   },
+   "inputs_canon": "{\"context\": \"\", \"task\": \"ai engineer: search live job listings via the Adzuna Job Search API for current openings as ai engineer\"}",
+   "result": {
+    "worker_name": "Nathaniel",
+    "worker_traits": [
+     "proactive",
+     "diligent",
+     "knowledgeable"
+    ],
+    "task": "ai engineer: search live job listings via the Adzuna Job Search API for current openings as ai engineer",
+    "response": "**Location?**",
+    "tools_used": [],
+    "tool_sources": [],
+    "tool_results": [],
+    "fewshot_count": 0
+   }
+  }
+ ],
+ "recorded_with": "ollama:qwen2.5-coder:7b",
+ "recorded_at": "20261104-233225"
+}

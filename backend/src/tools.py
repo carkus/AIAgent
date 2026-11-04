@@ -1,61 +1,15 @@
 import logging
 import os
-import traceback
-import builtins
 
 import llm_client
 
 logger = logging.getLogger(__name__)
 
-# Generated tool implementations get the raw `requests` module (see
-# execute_tool below) and the bootstrap prompt doesn't mandate a timeout on
-# every call a model writes — unlike fetch_page/search_jobs/search_image
-# above, which all hardcode one. A generated `requests.get(url)` with no
-# timeout against an unresponsive host previously hung this exec() call, and
-# with it the whole synchronous agent loop, forever — indistinguishable from
-# the agent simply never responding. _TimeoutRequests defaults `timeout=` to
-# this value on every HTTP-verb call the generated code makes, only when it
-# didn't already pass its own.
+# Generated tool code runs in sandbox_runner.py, whose `requests` proxy
+# defaults `timeout=` to this on every HTTP-verb call that didn't pass its
+# own. Without it, a generated `requests.get(url)` against an unresponsive
+# host hung the whole synchronous agent loop.
 DEFAULT_TOOL_HTTP_TIMEOUT_SECONDS = float(os.environ.get("TOOL_HTTP_TIMEOUT_SECONDS", "20"))
-_HTTP_METHODS = ("get", "post", "put", "delete", "patch", "head", "options", "request")
-
-
-class _TimeoutRequests:
-    """Proxy over the `requests` module for exec()'d generated tool code —
-    same module surface (requests.get, requests.exceptions.Timeout, etc.),
-    except the HTTP-verb functions get a default timeout injected."""
-
-    def __init__(self, module, default_timeout):
-        self._module = module
-        self._default_timeout = default_timeout
-
-    def __getattr__(self, name):
-        attr = getattr(self._module, name)
-        if name in _HTTP_METHODS and callable(attr):
-            def wrapped(*args, **kwargs):
-                kwargs.setdefault("timeout", self._default_timeout)
-                return attr(*args, **kwargs)
-            return wrapped
-        return attr
-
-
-# Allowlist of safe builtins for tool execution.
-# open is included so save_output tools can write to /tmp.
-# __import__ is included so tool code can import standard-library modules;
-# requests, json, and os are pre-injected and don't need importing.
-_SAFE_BUILTINS = {
-    name: getattr(builtins, name)
-    for name in (
-        "print", "len", "range", "enumerate", "zip", "map", "filter",
-        "sorted", "reversed", "list", "dict", "set", "tuple", "str",
-        "int", "float", "bool", "type", "isinstance", "hasattr", "getattr",
-        "min", "max", "sum", "abs", "round", "repr", "format",
-        "any", "all", "next", "iter", "hash", "id",
-        "open", "__import__", "dir", "vars", "globals", "locals", "callable",
-        "Exception", "ValueError", "KeyError", "TypeError", "IOError",
-        "StopIteration", "RuntimeError", "IndexError", "AttributeError",
-    )
-}
 
 
 def fetch_page(url: str) -> dict:
@@ -533,70 +487,19 @@ def _generate_image_cloudflare(prompt: str) -> dict:
     return {"error": message or f"Cloudflare returned status {r.status_code}"}
 
 
-class _AttrDict(dict):
-    """dict that also supports attribute access (inputs.topic as well as
-    inputs['topic']). Generated tool implementations inconsistently use both
-    styles for the injected inputs dict despite the bootstrap prompt showing
-    bracket notation — this makes both work instead of the attribute form
-    crashing with AttributeError: 'dict' object has no attribute '...'."""
-
-    def __getattr__(self, name):
-        try:
-            return self[name]
-        except KeyError:
-            raise AttributeError(name)
-
-    def __setattr__(self, name, value):
-        self[name] = value
-
-
 def execute_tool(implementation: str, inputs: dict) -> object:
-    """Execute a Claude-generated tool implementation in a restricted namespace.
+    """Execute a generated tool implementation in an isolated child process
+    (sandbox.py / sandbox_runner.py): scrubbed environment (no API keys),
+    timeout, rlimits, and no network unless the code uses an HTTP client.
 
-    The implementation string must assign its result to `result`.
-    inputs are injected both as the `inputs` dict AND as top-level names,
-    so generated code can use either inputs['query'] or just query directly.
-    """
-    import requests
-    import json
-    import os
-    import re
-    import math
-    import datetime
-    import collections
-    import urllib.parse
-    import tempfile
+    The implementation string must assign its result to `result`. inputs are
+    injected both as the `inputs` dict (attribute access works too) AND as
+    top-level names, so generated code can use inputs['query'] or query.
+    Errors keep the "Tool execution error:" prefix eval_checks looks for."""
+    import sandbox
 
-    inputs = _AttrDict(inputs)
-
-    namespace = {
-        "__builtins__": _SAFE_BUILTINS,
-        "inputs": inputs,
-        "input_data": inputs,   # alias — Claude sometimes generates this name
-        "input": inputs,        # alias — Claude sometimes generates this name too (singular, not the builtin)
-        **inputs,               # bare names: query, location, filename, etc.
-        "requests": _TimeoutRequests(requests, DEFAULT_TOOL_HTTP_TIMEOUT_SECONDS),
-        "json": json,
-        "os": os,
-        "re": re,
-        "math": math,
-        "datetime": datetime,
-        "collections": collections,
-        "urllib": urllib,
-        "TEMP_DIR": tempfile.gettempdir(),  # platform-correct temp dir
-        # Generated implementations sometimes assume these primitives are
-        # callable Python functions (bootstrap tells the model they're
-        # "always available to the agent", which is true at the tool-call
-        # level but not automatically true inside this exec() sandbox) —
-        # expose the real functions so that code doesn't crash with a
-        # NameError when it does this.
-        "search_jobs": search_jobs,
-        "fetch_page": fetch_page,
-        "result": None,
-    }
-
-    try:
-        exec(compile(implementation, "<tool>", "exec"), namespace)
-        return namespace.get("result", "No result returned.")
-    except Exception:
-        return f"Tool execution error:\n{traceback.format_exc()}"
+    reply = sandbox.run(implementation, inputs, http_timeout=DEFAULT_TOOL_HTTP_TIMEOUT_SECONDS)
+    if reply.get("ok"):
+        result = reply.get("result")
+        return "No result returned." if result is None else result
+    return "Tool execution error:\n" + (reply.get("error") or "unknown error")

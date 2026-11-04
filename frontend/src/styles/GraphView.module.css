@@ -57,6 +57,13 @@
   flex: 1;
 }
 
+.nodeMeta {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #6b7785;
+}
+
 .nodeSubtitle {
   margin: 0.4rem 0 0;
   font-size: 0.92rem;

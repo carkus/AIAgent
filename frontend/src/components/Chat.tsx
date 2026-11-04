@@ -7,6 +7,7 @@ import { buildChatPdf, type PdfAgentContext, type PdfMessage } from '../chatPdf'
 import { BEHAVIOR_TOGGLES, PERSONALITY_TRAITS } from '../agentTypes'
 import ToolActivity from './ToolActivity'
 import GraphView from './GraphView'
+import CaseFile from './CaseFile'
 import { appendTimelineNode, nextSeq, type TimelineNode } from '../graphTimeline'
 import MermaidDiagram from './MermaidDiagram'
 import JsonTree from './JsonTree'
@@ -16,7 +17,7 @@ import RelicPreviewModal from './RelicPreviewModal'
 import { downloadRelic, RELIC_KINDS, RELIC_LABELS, relicFilename } from '../relicFiles'
 import ImageViewer from './ImageViewer'
 import FeedbackStatusBar from './FeedbackStatusBar'
-import type { AgentConfig, EvalResultItem, Relic, RelicKind, RelicSuggestion, ResultFeedback, SavedChat, SavedChatMessage, StreamEvent, ToolCall } from '../types'
+import type { AgentConfig, EvalResultItem, Relic, RelicKind, RelicSuggestion, ResultFeedback, SavedChat, SavedChatMessage, StreamEvent, ToolCall, TraceSpan } from '../types'
 import { describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
 import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate, getDateFormat } from '../dateFormat'
@@ -250,6 +251,9 @@ interface ChatMessage {
   // reloaded from a saved chat (SavedChatMessage carries no trace), in
   // which case GraphView just shows its own "no trace recorded" fallback.
   timeline?: TimelineNode[]
+  // Timed spans for this turn (TraceSpan) — the "Case file" view's data.
+  // Unlike timeline, saved with the chat so a reloaded turn keeps its trace.
+  trace?: TraceSpan[]
   // The agent's own step-by-step plan for this turn (agent_stream.py's
   // ```mermaid-plan fence) — distinct from the tool-call trace and from any
   // ```mermaid diagram embedded in `content` itself. Rendered at the top of
@@ -388,6 +392,16 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // log stays the default view per the confirmed scope). Keyed by message
   // index, which is stable for the lifetime of one chat session's array.
   const [graphViewMessages, setGraphViewMessages] = useState<Set<number>>(new Set())
+  const [showBootstrapTrace, setShowBootstrapTrace] = useState(false)
+  const [caseFileMessages, setCaseFileMessages] = useState<Set<number>>(new Set())
+  function toggleCaseFile(i: number) {
+    setCaseFileMessages(prev => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i)
+      else next.add(i)
+      return next
+    })
+  }
   function toggleGraphView(i: number) {
     setGraphViewMessages(prev => {
       const next = new Set(prev)
@@ -438,8 +452,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       id: chatIdRef.current,
       agentName,
       agentConfig: { ...agentConfig, keywords: focusPool },
-      messages: messages.map(({ role, content, feedback, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics }) => ({
-        role, content, feedback, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics,
+      messages: messages.map(({ role, content, feedback, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics, trace }) => ({
+        role, content, feedback, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics, trace,
       })),
       savedAt: Date.now(),
     }
@@ -900,6 +914,10 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             setStatusMessage(null)
             break
 
+          case 'trace':
+            updateLastMessage(msg => ({ ...msg, trace: [...(msg.trace ?? []), event.span] }))
+            break
+
           case 'eval_result':
             setEvalResults(prev => [
               ...prev.slice(-49),
@@ -1140,6 +1158,18 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       </div>
 
       <div className={styles.messageList}>
+        {agentConfig.bootstrap_trace && agentConfig.bootstrap_trace.length > 0 && (
+          <div>
+            <button
+              type="button"
+              className={styles.viewToggleBtn}
+              onClick={() => setShowBootstrapTrace(v => !v)}
+            >
+              {showBootstrapTrace ? '🗂️ Hide how this agent was made' : '🗂️ How this agent was made'}
+            </button>
+            {showBootstrapTrace && <CaseFile spans={agentConfig.bootstrap_trace} />}
+          </div>
+        )}
         {messages.length === 0 && !thinking && (
           <p className={styles.emptyHint}>Send a message to start.</p>
         )}
@@ -1168,7 +1198,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                   {graphViewMessages.has(i) ? '📋 Log view' : '🕸️ Graph view'}
                 </button>
                 {graphViewMessages.has(i) ? (
-                  <GraphView timeline={msg.timeline ?? []} live evalResults={evalResults} />
+                  <GraphView timeline={msg.timeline ?? []} live evalResults={evalResults} trace={msg.trace} />
                 ) : (
                   <ToolActivity
                     toolCalls={msg.liveToolCalls.map(tc => ({
@@ -1290,6 +1320,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                   <GraphView
                     timeline={msg.timeline ?? []}
                     evalResults={i === messages.length - 1 ? evalResults : []}
+                    trace={msg.trace}
                   />
                 ) : (
                   <ToolActivity
@@ -1298,6 +1329,20 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                     location={agentConfig.location}
                     afterWorkers={exportInToolActivity(msg, i) ? exportControls(msg, i) : null}
                   />
+                )}
+              </>
+            )}
+            {msg.role === 'assistant' && msg.trace && msg.trace.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  className={styles.viewToggleBtn}
+                  onClick={() => toggleCaseFile(i)}
+                >
+                  {caseFileMessages.has(i) ? '🗂️ Hide case file' : '🗂️ Case file'}
+                </button>
+                {caseFileMessages.has(i) && (
+                  <CaseFile spans={msg.trace} live={msg.durationSeconds === undefined} />
                 )}
               </>
             )}

@@ -55,7 +55,7 @@ def screen(text: str, user_message: str, spec: dict | None, provider, model) -> 
         "redirecting to in-scope help is passed = true. Merely mentioning a topic "
         "while declining it is passed = true."
     )
-    verdict = _judge(provider, model, rubric)
+    verdict = _judge(provider, model, rubric, label="Scope guard")
     if verdict is None:
         return {"verdict": "unavailable", "reason": "scope guard judge call failed; reply let through unscreened"}
     passed, reason = verdict

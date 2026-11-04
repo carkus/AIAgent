@@ -12,6 +12,7 @@ import splashLogo from '../assets/favicon.png'
 import SettingsModal from './SettingsModal'
 import ThemePicker from './ThemePicker'
 import AgentStableModal from './AgentStableModal'
+import ScoreboardModal from './ScoreboardModal'
 import CharacterGenerator from './CharacterGenerator'
 import HelpTip from './HelpTip'
 import BehaviorIcon from './BehaviorIcon'
@@ -482,6 +483,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [themePickerOpen, setThemePickerOpen] = useState(false)
   const [stableModalOpen, setStableModalOpen] = useState(false)
+  const [scoreboardOpen, setScoreboardOpen] = useState(false)
   const [characterGenOpen, setCharacterGenOpen] = useState(false)
   // The setup form and the dossier are both too tall to show fully at once
   // without crowding the page, so tapping into either one expands it to
@@ -1259,6 +1261,17 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             title="Agents"
           >
             ♞
+          </button>
+          <button
+            type="button"
+            className={styles.topIconBtn}
+            onClick={() => setScoreboardOpen(true)}
+            disabled={bootstrapping}
+            aria-haspopup="dialog"
+            aria-label="Scoreboard"
+            title="Scoreboard"
+          >
+            ▤
           </button>
           <button
             type="button"
@@ -2247,6 +2260,11 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         isOpen={stableModalOpen}
         onClose={() => setStableModalOpen(false)}
         onHire={hirePublishedAgent}
+      />
+
+      <ScoreboardModal
+        isOpen={scoreboardOpen}
+        onClose={() => setScoreboardOpen(false)}
       />
 
       {toolsOpen && (

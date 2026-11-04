@@ -21,9 +21,29 @@ Scope of this first pass, deliberately kept small:
 from bootstrap import generate_agent_config
 import eval_checks
 import eval_log
+import run_trace
 
 
 def run_worker(task: str, context: str, provider: str | None, model: str | None,
+                search_defaults: dict | None = None, agent_type: str | None = None,
+                location: str | None = None) -> dict:
+    """
+    _run_worker with its run trace attached. Workers run in agent_stream's
+    thread pool, which doesn't see the parent's span sink, so this opens one
+    for the worker's own bootstrap and self-checks, merges in the spans its
+    inner agent loop streamed back, and returns them all as result["trace"]
+    — which agent_stream pops off before the main agent sees the result.
+    """
+    prev_sink = run_trace.open_sink()
+    try:
+        result = _run_worker(task, context, provider, model, search_defaults, agent_type, location)
+    finally:
+        spans = run_trace.close_sink(prev_sink)
+    result["trace"] = spans + result.pop("_loop_trace", [])
+    return result
+
+
+def _run_worker(task: str, context: str, provider: str | None, model: str | None,
                 search_defaults: dict | None = None, agent_type: str | None = None,
                 location: str | None = None) -> dict:
     """
@@ -115,6 +135,7 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None,
 
     final_response = ""
     tool_calls: list[dict] = []
+    loop_trace: list[dict] = []
     try:
         for event in run_agent_stream(
             [{"role": "user", "content": user_content}],
@@ -126,6 +147,8 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None,
                 tool_calls = event["tool_calls"]
             elif event["type"] == "error":
                 final_response = f"Worker failed: {event['message']}"
+            elif event["type"] == "trace":
+                loop_trace.append(event["span"])
             elif event["type"] == "eval_result":
                 # Already recorded by run_agent_stream itself (the same
                 # eval_checks.check_tool_call call sites fire regardless of
@@ -163,4 +186,5 @@ def run_worker(task: str, context: str, provider: str | None, model: str | None,
         "tool_results": [tc["result"] for tc in tool_calls],
         "fewshot_count": fewshot_count,
         "eval_results": eval_results,
+        "_loop_trace": loop_trace,
     }

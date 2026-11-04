@@ -1,0 +1,244 @@
+/* Dossier chrome copied from AgentStableModal.module.css (CSS Modules scoping). */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(22, 50, 74, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 40px;
+}
+
+/* Same manila-folder "dossier" chrome as SettingsModal.module.css's
+   .modal/.dossierTab/.header — kept as its own copy per CSS Modules scoping,
+   sized a little wider than the settings panel since agent rows carry more
+   text (name + tool_name + description + stats badge per row). */
+.modal {
+  position: relative;
+  background: var(--color-bg);
+  border: 1px solid var(--color-dossier-border);
+  border-radius: 3px 10px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 720px;
+  max-height: min(680px, 100%);
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 var(--color-dossier-shadow-light),
+    0 8px 0 -3px var(--color-dossier-shadow-mid),
+    0 8px 1px -3px var(--color-dossier-border),
+    0 20px 48px rgba(28, 40, 51, 0.28);
+}
+
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-dossier);
+  border-bottom: 1px solid var(--color-dossier-border);
+  padding: 1.35rem 1.1rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.letterhead {
+  margin: 0.9rem 1.1rem 0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.dossierTab {
+  position: absolute;
+  top: -1.05rem;
+  left: 0.75rem;
+  z-index: 1;
+  background: var(--color-dossier);
+  clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%);
+  color: var(--color-dossier-text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.95rem 0.35rem;
+  filter:
+    drop-shadow(0 -1px 0 var(--color-dossier-border))
+    drop-shadow(-1px 0 0 var(--color-dossier-border))
+    drop-shadow(1px 0 0 var(--color-dossier-border));
+}
+
+.title {
+  color: var(--color-dossier-text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-lg);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.closeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-dossier-text-a35);
+  color: var(--color-dossier-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.closeBtn:hover {
+  background: var(--color-dossier-text-a10);
+  color: var(--color-text);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem 1.1rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.hint {
+  color: var(--color-dossier-muted);
+  font-size: var(--font-size-sm);
+  margin: 0.25rem 0;
+}
+
+.intro {
+  margin: 0.9rem 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.intro code,
+.hint code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.meta {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-dossier-muted);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.tab,
+.tabActive {
+  font: inherit;
+  font-size: var(--font-size-sm);
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.tabActive {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: var(--font-size-sm);
+}
+
+.verdict p {
+  margin: 0;
+}
+
+.verdictLabel {
+  display: inline-block;
+  min-width: 8.5rem;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-dossier-muted);
+}
+
+.tableWrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-xs);
+}
+
+.table th,
+.table td {
+  padding: 0.35rem 0.5rem;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table th[scope='row'],
+.table thead th:first-child {
+  text-align: left;
+  font-weight: 500;
+  white-space: normal;
+}
+
+.table thead th {
+  font-weight: 700;
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.totalRow th,
+.totalRow td {
+  font-weight: 700;
+}
+
+.sectionRow th,
+.sectionRow td {
+  border-top: 2px solid var(--color-border);
+}
+
+.low {
+  color: #b91c1c;
+}
+
+@media (max-width: 600px) {
+  .overlay {
+    padding: 16px;
+  }
+  .verdictLabel {
+    display: block;
+  }
+}

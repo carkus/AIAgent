@@ -80,12 +80,17 @@ expecting it to reach production.
 | `backend/src/eval_checks.py` | Self-evaluation checks (bootstrap/chat-response/tool-call/worker-delegation) — every recorded result carries the `provider`/`model` that produced the thing being graded, which is what makes `bandit.py` possible |
 | `backend/src/eval_log.py` | Store of `eval_checks.py` results (`eval_results` table in `db.py`, capped at 500); `list_all()` returns the full retained history (unordered, uncapped-per-call) for `bandit.py`'s per-arm aggregation, alongside the pre-existing `list_recent()` used for display |
 | `backend/src/bandit.py` | UCB1 multi-armed-bandit ranking over `eval_log.py` history — `recommend(candidates)` scores each `(provider, model)` arm and returns the top pick plus per-arm stats; advisory only, consumed by `/models` |
-| `backend/eval_harness.py`, `backend/eval_cases/bootstrap.jsonl` | Offline eval harness — runs fixed bootstrap cases × model arms × N repeats, scores with `eval_checks` plus per-case expectations, writes `eval_runs/<stamp>.jsonl` + `.md` report; isolated from live `eval_log`/`bootstrap_memory` |
+| `backend/eval_harness.py`, `backend/eval_cases/bootstrap.jsonl`, `backend/eval_cases/chat.jsonl` | Offline eval harness — `--suite bootstrap` or `--suite chat` × model arms × N repeats, scores with `eval_checks` plus per-case expectations, writes `eval_runs/<suite>-<stamp>.jsonl` + `.md` report; `--publish` merges a summary into `frontend/public/eval-scoreboard.json`; isolated from live `eval_log`/`bootstrap_memory` |
+| `backend/eval_replay.py`, `backend/eval_cases/chat_fixtures/` | Chat-suite tool tape: patches every tool entry point `agent_stream.py` uses (primitives, MCP, generated `exec()`, whole delegated workers) to answer from a recorded tape; one committed fixture per case = frozen `AgentConfig` + tape |
+| `frontend/src/components/ScoreboardModal.tsx` | "▤ Scoreboard" in Setup's top icon bar — renders `eval-scoreboard.json` per suite (pass rate per check per model, median time, tokens, cost/task, replay stats) beside the live bandit pick and live pass rates from `GET /models` |
 | `backend/src/agent_spec.py` | Advanced Setup's structured spec — `normalize()` (re-run at every trust boundary), `bootstrap_prompt_block()`, `enforce_on_config()` (post-bootstrap pins/drops), `runtime_scope_note()`, and the allow-list predicates `agent_stream.py` enforces |
 | `backend/src/scope_guard.py` | Output guard for `spec.out_of_scope` — separate narrow judge call screens final replies and worker responses; one regenerate, then a code-authored decline; fail-open |
+| `backend/src/run_trace.py` | Run-trace spans (Showcase Goal 1): a per-run ContextVar sink that `llm_client.create_chat_completion` (via `_trace=` labels), `agent_stream.py` tool/worker paths and `orchestrator.run_worker` record timed spans into; streamed as `{"type":"trace","span":...}` events and logged to stderr (logger `run_trace`) for journalctl timing |
 | `backend/src/db.py` | Shared SQLite database (`DATA_DIR/agentone.db`) behind every server-side store — WAL mode, `BEGIN IMMEDIATE` write transactions, so gunicorn workers and the MCP server process can all write safely at once; one-time import of each legacy `data/*.json` file (renamed to `*.json.migrated` afterwards) |
 | `backend/src/rate_limit.py` | Per-IP rate limiting (hits stored in `db.py`, so the limit holds across all gunicorn workers) |
-| `backend/src/tools.py` | `execute_tool()` — runs Gemini-generated Python via `exec()`; also the primitive tools (`fetch_page`, `search_jobs`) |
+| `backend/src/tools.py` | `execute_tool()` — hands Gemini-generated Python to `sandbox.run()`; also the primitive tools (`fetch_page`, `search_jobs`) |
+| `backend/src/sandbox.py` | Per-call process isolation for generated tools (Showcase Goal 3): scrubbed env (no secrets), wall-clock timeout, `uses_network()` AST check that decides whether the child gets network, parent marked non-dumpable on Linux |
+| `backend/src/sandbox_runner.py` | The child process (`python -I`): rlimits, network namespace or socket block, import allowlist, `open()`/`os` confined to `TEMP_DIR`; owns `SAFE_BUILTIN_NAMES`/`INJECTED_NAMES`, which bootstrap's static check imports |
 | `backend/src/handler.py`, `backend/src/agent.py`, `template.yaml` | AWS SAM/Lambda path — dev-only (`sam local`), not deployed |
 | `frontend/src/api.ts` | Typed `fetch` wrappers for `/bootstrap` and `/agent` |
 | `frontend/src/types.ts` | Shared types: `AgentConfig`, `ToolDefinition`, `Message`, etc. |
@@ -94,6 +99,7 @@ expecting it to reach production.
 | `frontend/src/components/Chat.tsx` | Chat UI; owns message history and calls `runAgent()`; overrides `ReactMarkdown`'s `code` renderer so a ` ```mermaid ` fence renders as `MermaidDiagram` instead of a code block |
 | `frontend/src/components/AdvancedSetup.tsx` | Advanced agent creation: define a structured spec (each field labelled with the layer that enforces it) → stream bootstrap → review/edit the generated config, re-checked via `POST /validate-config` before launch |
 | `frontend/src/components/ToolActivity.tsx` | Renders tool call log inline under each assistant message; top-level container and every nested keyword/worker section are independently collapsible |
+| `frontend/src/components/CaseFile.tsx` | The "Case file" toggle under each assistant turn: waterfall of that turn's `TraceSpan`s (model calls, self-checks, tools, workers with their own nested spans) with wall time, reasoning/check/tool totals, tokens and models; spans are saved with the chat (`SavedChatMessage.trace`) |
 | `frontend/src/components/MermaidDiagram.tsx` | Renders one Mermaid chart string to SVG via the `mermaid` package, themed to match the app's dark-cyan palette; used by `Chat.tsx` for ` ```mermaid ` fences in assistant replies |
 
 ---
@@ -125,7 +131,7 @@ After a config is generated, `_resolve_mcp_tools()` overwrites any `source: "mcp
 
 **A generated tool calling a primitive/MCP tool name as a bare function is a distinct, deterministically-catchable bug, not just a prompt-following problem.** Live traffic surfaced a model writing a `"generated"` tool whose `implementation` called `tavily_search(query=...)` directly, as though it were pre-injected — it isn't; the sandbox only exposes `inputs`/`requests`/`json`/`os`/etc. — so it compiled fine at bootstrap time and threw `NameError` the first time a chat turn actually executed it. The prompt's existing warning against calling `search_jobs`/`fetch_page`/`search_image` this way (`_build_prompt()`'s `primitives_block` paragraph) now explicitly extends to every name in the live MCP catalog too. As a safety net beyond the prompt, `_forbidden_call_errors()` (next to `_tool_syntax_errors()`) regex-scans every non-MCP tool's `implementation` for a call to any primitive name or any `mcp_client.catalog_summary()` tool name, and its results are merged into the exact same one-retry/then-drop flow `_tool_syntax_errors()` already used for outright syntax errors — both `generate_agent_config` and `generate_agent_config_stream` run both checks together now, not just the compile check. The regex also matches the attribute-qualified variant (`tools.search_image(...)`, imagining a pre-injected `tools` module that doesn't exist) — live traffic surfaced that shape too, failing with `NameError: name 'tools' is not defined` at the same point a bare call would fail on the name itself. A third variant, `_local_endpoint_errors()`, catches a generated implementation POSTing/GETing a hallucinated `127.0.0.1`/`localhost` "tool-invocation proxy" instead of calling a name directly — same guaranteed-failure-at-execution-time bug class, same retry/drop treatment.
 
-**A fixed forbidden-name list can't catch every hallucinated name, so there's also a general, AST-based check.** Live traffic surfaced a model calling `tas_search(...)` — not `search_jobs`, not a real vetted MCP tool name, just an invented helper that was never defined anywhere — which no fixed list could have anticipated in advance. `_undefined_call_errors()` statically parses each non-MCP `implementation` with `ast` and flags any bare `name(...)` call where `name` isn't actually injected into the `tools.py` sandbox (mirrored in `_SANDBOX_INJECTED_NAMES`/`_SANDBOX_BUILTIN_NAMES` — keep these in sync with `tools.py:execute_tool()`'s namespace if that ever changes), isn't one of the tool's own declared `input_schema` properties, and isn't something the implementation defines for itself (`def`/`class`/import/assignment/walrus/for/with/except-as — `_locally_bound_names()` walks the AST for all of these). It runs alongside `_forbidden_call_errors()` in the same retry/drop flow, passed that function's `forbidden_names` set so a name already reported with the more specific "that's a primitive/MCP tool" message isn't also reported here as a generic undefined-name error.
+**A fixed forbidden-name list can't catch every hallucinated name, so there's also a general, AST-based check.** Live traffic surfaced a model calling `tas_search(...)` — not `search_jobs`, not a real vetted MCP tool name, just an invented helper that was never defined anywhere — which no fixed list could have anticipated in advance. `_undefined_call_errors()` statically parses each non-MCP `implementation` with `ast` and flags any bare `name(...)` call where `name` isn't actually injected into the sandbox (`_SANDBOX_INJECTED_NAMES`/`_SANDBOX_BUILTIN_NAMES`, imported straight from `sandbox_runner.py`'s own lists so they can't drift), isn't one of the tool's own declared `input_schema` properties, and isn't something the implementation defines for itself (`def`/`class`/import/assignment/walrus/for/with/except-as — `_locally_bound_names()` walks the AST for all of these). It runs alongside `_forbidden_call_errors()` in the same retry/drop flow, passed that function's `forbidden_names` set so a name already reported with the more specific "that's a primitive/MCP tool" message isn't also reported here as a generic undefined-name error.
 
 **The bootstrap prompt itself can teach the model to produce invalid JSON — check the prompt's own examples first, not just the model's reliability.** A `Bootstrap JSON parse failed` report (`Expecting ',' delimiter`) traced back to `_BOOTSTRAP_PROMPT`'s own `save_output` example, which showed a *double-quoted* Python dict literal (`{"status": "saved"}`) — the model copied that pattern verbatim into a JSON string value, producing an unescaped inner quote that broke `json.loads` partway through. Fixed at the source: the example and an explicit accompanying rule now require single-quoting every Python string/dict literal inside an `implementation` value, since the JSON wrapper around it is double-quoted. A blind post-hoc regex/character-walking repair for this class of corruption was tried and deliberately rejected — tested against the actual reported payload, it didn't even fix that case, and more importantly a local scan can't reliably tell a real closing quote from an embedded `"key": "value"`-shaped fragment (both look identical), so a "successful" repair on some other input could silently splice one field's content into another with no compile-check to catch it (unlike `implementation`, `system_prompt` isn't Python). Instead, `_json_correction_message()` gives the model's own existing one-shot correction retry a specific, example-driven hint whenever the `JSONDecodeError` shape (`Expecting ',' delimiter`, `Expecting property name enclosed in double quotes`, `Unterminated string`) looks like this exact quote-collision bug, used by both `generate_agent_config()` and `generate_agent_config_stream()`.
 
@@ -238,11 +244,23 @@ Limits of the guard, stated deliberately:
 
 ### Tool execution
 
-`tools.py:execute_tool()` compiles and runs the implementation string with:
-- `inputs` — dict of the tool's arguments as passed by Claude
-- `requests` — the `requests` library
-- `json`, `os` — standard library modules
-- A restricted `__builtins__` allowlist (no `open`, no `__import__`, no `exec`/`eval`)
+`tools.py:execute_tool()` passes the implementation to `sandbox.run()`, which
+runs it in a fresh `python -I sandbox_runner.py` child process per call (job
+as JSON on stdin, one JSON reply line on stdout). The code sees:
+- `inputs` (also `input_data`, `input`, and each input by name)
+- `json`, `os` (a proxy confined to `TEMP_DIR`), `re`, `math`, `datetime`, `collections`, `urllib`, `TEMP_DIR`
+- `requests` (with a default timeout) only when the code uses the network
+- `sandbox_runner.SAFE_BUILTIN_NAMES`, with a guarded `__import__` (allowlist) and `open()` (`TEMP_DIR` only); no `exec`/`eval`/`compile`/`globals`
+
+Hard layers (OS-enforced): environment rebuilt from an allowlist, so no API
+key is in the child; 30 s wall-clock kill; on Linux, CPU/memory/file-size
+rlimits and an empty network namespace for tools that don't use the network;
+parent marked non-dumpable so the child can't read its `/proc/<pid>/environ`.
+Soft layers (Python-level, escapable): the import allowlist, path
+confinement, and a socket block when the namespace isn't available (e.g.
+Ubuntu's AppArmor userns restriction). Network is "declared" by the code
+itself: `sandbox.uses_network()` looks for `requests`/`socket`/`http`/`bs4`/
+`urllib.request` in the AST.
 
 The implementation must assign its result to a variable named `result`.
 
@@ -342,9 +360,35 @@ python backend/eval_harness.py --models ollama:qwen2.5-coder:7b --only url_summa
   row, median latency, mean calls/tokens (judge excluded, totalled
   separately), a warning if any run was served by a cascade fallback rather
   than the requested arm, and a failure table. `eval_runs/` is gitignored.
-- **Scope** — bootstrap only so far. Chat-turn cases (`run_agent_stream` +
-  `check_chat_response`) are the natural next step; live tool calls make
-  those non-repeatable unless tool responses are recorded and replayed.
+- **Chat suite (`--suite chat`)** — scores one real chat turn:
+  `run_agent_stream` plus the `eval_result` checks it already yields
+  (`check_chat_response`, tool checks, scope guard), plus per-case `expect`
+  keys (`tools_called_any`/`_none`, `min_`/`max_tool_calls`,
+  `delegated_min`, `response_contains_any`, `mermaid`, `max_chars`).
+  - Every arm answers as the **same agent**: each case's fixture
+    (`eval_cases/chat_fixtures/<id>.json`) holds an `AgentConfig`
+    bootstrapped once while recording, then frozen. Only
+    `provider`/`ollama_model` are swapped per arm.
+  - Tools come off a **tape** (`eval_replay.py`). `--record` (one arm, one
+    repeat) runs tools live and rewrites the tape; the default is replay.
+    Matching is exact inputs first, then "fuzzy" (first unused entry for the
+    same tool, since models phrase queries differently), else an error
+    result. The report counts exact/fuzzy/miss so a run that leaned on
+    fuzzy matches is visible. A delegated worker is taped as one unit; its
+    inner calls run in pool threads and aren't taped.
+  - Usage comes from the run-trace spans (`llm` = the arm, `check` = judge).
+    A replayed worker costs nothing, so multi-worker cases understate cost.
+  - `--price gemini=IN,OUT` (USD per 1M tokens) gives cost per task; Ollama
+    is 0, unpriced providers show "—" rather than a guess.
+  - `--publish` merges the suite's aggregates (no response text) into
+    `frontend/public/eval-scoreboard.json`, which Vite ships as a static file
+    and `ScoreboardModal.tsx` reads. A `--record` run is never published.
+  - Fixed judge for both modules: `--judge` patches `eval_checks._judge`
+    *and* `scope_guard._judge` (scope_guard imported its own reference).
+  - First live finding: qwen2.5-coder:7b called the time tool correctly on
+    the `timezone` case, then answered with an invented, unrelated form;
+    its own `response_relevance_judge` passed it and the case check failed
+    it — the self-judge leniency that `--judge` exists for.
 
 ### Live status updates during the agent loop
 
@@ -675,8 +719,14 @@ Run from the repo root; requires SSH access to the droplet (no git or CI there �
 ### 1. ~~API Gateway 29-second timeout~~ — resolved in production
 Production doesn't go through API Gateway at all (see Deployment) — gunicorn's `--timeout 300` covers the longest expected agent loop. Only the dev-only `sam local` path still has this ceiling.
 
-### 2. Tool execution security (`exec()` in-process)
-Gemini-generated code runs in-process (Lambda in dev, the `aiagent` gunicorn worker in prod). A builtins allowlist is in place but is not a full sandbox. **Next step:** process isolation per tool call, or adopt RestrictedPython.
+### 2. Tool execution security — partially addressed
+Generated code now runs in a short-lived child process with no secrets in its
+environment, a timeout, and (Linux) rlimits and no network unless the code
+uses it (see Tool execution). Still open: code that escapes the Python-level
+layer runs as the service's uid, so it can *read* files that uid can read
+(not the root-owned `.env`), and a network tool can reach any host. **Next
+step:** a separate low-privilege uid or a container per call, and an egress
+allowlist.
 
 ### 3. No server-side conversation persistence
 Chat history lives in React state; a "Save chat" button (`chatStorage.ts`) persists finished/in-progress conversations to the browser's `localStorage` so a refresh doesn't lose them, but nothing is stored server-side — saved chats don't follow the user across browsers/devices. **Next step, if needed:** a session table server-side.
@@ -709,6 +759,93 @@ Output relics (`relic.py`, agent_stream.py rule 7b, the Export menu and
 relics list in `Chat.tsx`) are the first step. When adding UI or naming
 things, lean toward outputs/deliverables over "chat" wording, and treat
 the agent proactively proposing the right outputs as the core behaviour.
+
+---
+
+## Showcase Goals — next level (agreed 2026-11-04)
+
+The project's purpose is to **showcase the user's work with AI agents**. The
+"dossier"/agent-as-spy theming is a deliberate private joke on the word
+"agent" — keep it. The gap today is that a visitor sees a polished chat, not
+the system underneath. These goals close that gap, in priority order. The
+user especially likes goal 1.
+
+### 1. Make the agent visible — run trace view (top priority)
+Every run renders its own execution trace: bootstrap → plan → each tool call
+→ each worker → each self-check / scope-guard verdict, with provider/model,
+latency, tokens and pass/fail per step, drawn as a graph (reuse the existing
+React Flow graph view). Frame it as the agent's **case file**.
+- Backend: add timing + token usage to every LLM and tool event in
+  `agent_stream.py`/`bootstrap.py`/`orchestrator.py` (the `status`/
+  `tool_start`/`tool_result`/`eval_result` vocabulary already exists — extend
+  it, don't replace it). Also emit timing to the server log, which answers
+  "why is production slow" with data.
+- Frontend: a trace view per assistant turn, built from the streamed events.
+  Stays stateless — the trace travels with the turn like the rest of history.
+
+**Status: done (first version).**
+- `run_trace.py` collects spans: every LLM call (automatic in
+  `create_chat_completion`, labelled via `_trace=`), each tool call and each
+  worker. A worker's own spans nest under its span. All of them also go to
+  stderr (journalctl).
+- `agent_stream.run_agent_stream` streams them as `trace` events.
+  `generate_agent_config_stream` puts them on the config as
+  `bootstrap_trace`. Its streamed design call is timed by hand and asks for
+  `stream_options.include_usage`, retrying without it if rejected.
+- Frontend:
+  - `CaseFile.tsx` draws the waterfall, behind a "🗂️ Case file" toggle per
+    turn and "🗂️ How this agent was made" above the messages.
+  - GraphView tool/worker nodes show their duration.
+  - Spans are saved with the chat.
+- `call_index` is now unique across the whole turn, not per tool round.
+  Before, round 2's first call overwrote round 1's in liveToolCalls and the
+  graph.
+
+### 2. Publish numbers, not claims — evals scoreboard
+Extend `eval_harness.py` from bootstrap-only to chat turns, with tool
+responses recorded once and replayed so runs are repeatable. Publish a
+scoreboard page: pass rate per check per model, median latency, cost per
+task, and bandit pick vs. eval result.
+
+**Status: done (first version).** `eval_harness.py --suite chat` with
+`eval_replay.py` tapes, five cases in `eval_cases/chat.jsonl`, `--publish`
+to `frontend/public/eval-scoreboard.json`, and `ScoreboardModal.tsx` (▤ in
+Setup's top bar) comparing eval leader vs. live bandit pick. See the eval
+harness section under Backend Patterns. Fixtures were recorded on
+`ollama:qwen2.5-coder:7b`; a Gemini comparison needs `GEMINI_API_KEY`
+locally.
+
+### 3. Real sandbox for generated tool code
+Replace in-process `exec()` + builtins allowlist (Limitation #2) with
+per-call isolation: short-lived container or WASM runtime, no network unless
+the tool declares it, CPU/memory/time caps. Turns the riskiest feature into
+the security story (Roadmap item 4 below).
+
+**Status: done (first version), as a subprocess rather than a container.**
+`sandbox.py` + `sandbox_runner.py`, see Tool execution. A container or WASM
+runtime wasn't used: the 1 GB droplet can't spare a container daemon, and
+most generated tools need `requests`, which WASM Python doesn't support well.
+Each call costs one Python start (~100-300 ms). Tested locally: an
+introspection escape of the soft layer reached the real `os` but found only
+`PATH`/temp/system variables in the environment, no keys. Residual risks are
+listed under Limitation #2. Not yet verified on the droplet (whether
+unprivileged user namespaces are allowed there decides netns vs. socket
+block; the reply's `isolation` list says which applied).
+
+### 4. Deliverables, not chat — planned, resumable jobs
+A planner phase turns a job ("research AI engineering roles in Melbourne")
+into a finished dossier: report + charts + spreadsheet. Runs as a background
+job the user can return to. Builds on Product Direction above and output
+relics. Note the standing "prefer stateless" preference — a job store is a
+deliberate, scoped exception to raise with the user before building.
+
+### 5. Cross-project agents — jobfit as AIAgent's MCP client
+Close root `CLAUDE.md` priority 8(c): jobfit calls `jobfit_fit_assessor` over
+MCP, with `Fallbacks.cs` as the safety net.
+
+### 6. A2A
+Two generated agents negotiating a task over A2A (Roadmap item 2 below).
+Eye-catching, lowest priority of the six.
 
 ---
 

@@ -13,6 +13,7 @@ import scope_guard
 import eval_checks
 import eval_log
 import mcp_client
+import run_trace
 
 logger = logging.getLogger(__name__)
 
@@ -893,6 +894,26 @@ def _job_continuity_note(messages: list) -> str:
 
 def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool = True, agent_id: str | None = None):
     """
+    The agent loop (_run_agent_stream below) with its run trace attached:
+    opens a span sink for the turn (run_trace.py) and, before each event the
+    loop yields, yields any spans recorded since the last event as
+    {"type": "trace", "span": {...}}. Consumers that don't know the trace
+    event (orchestrator, mcp_server) just ignore it.
+    """
+    prev_sink = run_trace.open_sink()
+    try:
+        for event in _run_agent_stream(messages, agent_config, allow_delegation, agent_id):
+            for span in run_trace.drain():
+                yield {"type": "trace", "span": span}
+            yield event
+        for span in run_trace.drain():
+            yield {"type": "trace", "span": span}
+    finally:
+        run_trace.close_sink(prev_sink)
+
+
+def _run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool = True, agent_id: str | None = None):
+    """
     Generator that yields event dicts as the agent loop runs.
 
     Event shapes:
@@ -903,6 +924,7 @@ def run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool 
       {"type": "tool_result", "tool": "name", "result": "..."}
       {"type": "done",        "response": "...", "tool_calls": [...], "duration_seconds": N}
       {"type": "error",       "message": "..."}
+      {"type": "trace",       "span": {...}}  # added by the run_agent_stream wrapper, see run_trace.py
 
     allow_delegation gates the delegate_to_worker primitive (see _DELEGATE_TOOL
     above) — False when this call itself IS a worker's loop, to keep
@@ -1428,6 +1450,11 @@ clarifying question only belongs AFTER you've already produced real findings
             )
         else:
             yield _status("Thinking through your request…")
+        # call_index is unique across the whole turn, not per round: the UI
+        # (Chat.tsx liveToolCalls, graphTimeline.ts) and the run trace match
+        # results and spans to calls by it, and a per-round index made round
+        # 2's first call overwrite round 1's.
+        call_base = 0
         for iteration in range(max_iterations):
             call_meta: dict = {}
             try:
@@ -1438,6 +1465,7 @@ clarifying question only belongs AFTER you've already produced real findings
                     tools=tools,
                     messages=current_messages,
                     _meta=call_meta,
+                    _trace=f"Agent reasoning (round {iteration + 1})",
                     **sampling,
                 )
             except Exception:
@@ -1761,6 +1789,19 @@ clarifying question only belongs AFTER you've already produced real findings
             tool_result_messages = []
             pending_workers: dict[int, tuple] = {}  # idx -> (future, tc, tool_name, tool_inputs, source)
             executor = None
+            # Run-trace bookkeeping: when each call started, and the span id
+            # reserved for each delegated worker so its own spans can be
+            # parented under it.
+            tool_started: dict[int, int] = {}
+            worker_span_ids: dict[int, str] = {}
+
+            def _tool_span(idx, tool_name, source, result):
+                failed = isinstance(result, dict) and bool(result.get("error"))
+                run_trace.record(
+                    "tool", tool_name, tool_started.get(idx, run_trace.now_ms()),
+                    status="error" if failed else "ok", call_index=idx,
+                    detail=f"{source}" + (f": {str(result.get('error'))[:200]}" if failed else ""),
+                )
 
             def _finish(tc, tool_name, tool_inputs, result, source):
                 try:
@@ -1791,14 +1832,14 @@ clarifying question only belongs AFTER you've already produced real findings
                 except Exception as e:
                     logger.info("tool_call eval checks skipped: %s", e)
 
-            for idx, tc in enumerate(effective_tool_calls):
+            for idx, tc in enumerate(effective_tool_calls, start=call_base):
                 tool_name = tc.function.name
                 try:
                     tool_inputs = json.loads(tc.function.arguments)
                 except json.JSONDecodeError:
                     tool_inputs = {}
 
-                if idx >= max_calls_per_step:
+                if idx - call_base >= max_calls_per_step:
                     result_str = json.dumps({
                         "error": (
                             f"Tool-call limit for this turn ({max_calls_per_step}) "
@@ -1818,6 +1859,7 @@ clarifying question only belongs AFTER you've already produced real findings
                     "primitive" if tool_name in ("fetch_page", "search_jobs", "search_image", "generate_image", "delegate_to_worker") else "generated"
                 )
                 yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs, "source": source, "call_index": idx}
+                tool_started[idx] = run_trace.now_ms()
 
                 # Dispatch is by name, so leaving a tool out of `tools` only
                 # hides it — a model can still emit a call to a name it was
@@ -1826,6 +1868,7 @@ clarifying question only belongs AFTER you've already produced real findings
                 if tool_name not in tool_names and tool_name not in _SEARCH_TOOL_NAMES:
                     result = {"error": f"Tool '{tool_name}' is not available to this agent. Use only the tools you were given."}
                     result_str = _finish(tc, tool_name, tool_inputs, result, source)
+                    _tool_span(idx, tool_name, source, result)
                     yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source, "call_index": idx}
                     yield from _tool_call_eval_events(tool_name, tool_inputs, tool_def, result_str, source, idx)
                     continue
@@ -1840,6 +1883,7 @@ clarifying question only belongs AFTER you've already produced real findings
                             )
                         }
                         result_str = _finish(tc, tool_name, tool_inputs, result, source)
+                        _tool_span(idx, tool_name, source, result)
                         yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source, "call_index": idx}
                         yield from _tool_call_eval_events(tool_name, tool_inputs, tool_def, result_str, source, idx)
                     else:
@@ -1864,6 +1908,7 @@ clarifying question only belongs AFTER you've already produced real findings
                             location=agent_config.get("location"),
                         )
                         pending_workers[idx] = (future, tc, tool_name, tool_inputs, source)
+                        worker_span_ids[idx] = run_trace.new_id()
                     continue
 
                 if tool_name == "fetch_page":
@@ -1903,6 +1948,7 @@ clarifying question only belongs AFTER you've already produced real findings
                     result = execute_tool(implementation, tool_inputs)
 
                 result_str = _finish(tc, tool_name, tool_inputs, result, source)
+                _tool_span(idx, tool_name, source, result)
                 yield {"type": "tool_result", "tool": tool_name, "result": result_str, "source": source, "call_index": idx}
                 yield from _tool_call_eval_events(tool_name, tool_inputs, tool_def, result_str, source, idx)
 
@@ -1919,6 +1965,18 @@ clarifying question only belongs AFTER you've already produced real findings
                         result = future.result()
                     except Exception as e:
                         result = {"error": f"Worker crashed: {e}"}
+                    # The worker's own spans (its bootstrap, reasoning rounds,
+                    # tools, checks) came back in its result — take them out
+                    # before the result is shown to the main agent, and file
+                    # them under this worker's span.
+                    worker_spans = result.pop("trace", []) if isinstance(result, dict) else []
+                    run_trace.extend(run_trace.adopt(worker_spans, worker_span_ids[idx]))
+                    run_trace.record(
+                        "worker", (result.get("worker_name") if isinstance(result, dict) else None) or "Worker",
+                        tool_started.get(idx, run_trace.now_ms()), span_id=worker_span_ids[idx],
+                        status="error" if isinstance(result, dict) and result.get("error") else "ok",
+                        call_index=idx, detail=str(tool_inputs.get("task") or "")[:300],
+                    )
                     # Workers are bootstrapped from their task alone and never
                     # see the spec, and their response is shown to the user as
                     # its own card — so screen it here, before either the
@@ -1949,6 +2007,7 @@ clarifying question only belongs AFTER you've already produced real findings
                             yield {"type": "eval_result", **eval_result}
                 executor.shutdown(wait=False)
 
+            call_base += len(effective_tool_calls)
             current_messages.extend(tool_result_messages)
             yield _status("Reviewing tool results…")
 

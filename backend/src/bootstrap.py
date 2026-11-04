@@ -3,6 +3,9 @@ import json
 import logging
 import re
 import uuid
+
+import run_trace
+import sandbox_runner
 from llm_client import create_chat_completion
 import bootstrap_memory
 import agent_spec
@@ -48,7 +51,8 @@ Design and configure this agent. Return a single JSON object with exactly these 
 Execution environment for tool implementations:
 - The following are pre-injected and ready to use WITHOUT importing: `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`
 - Do NOT write import statements for any of the above — they are already available as module objects
-- You MAY import other standard-library modules if needed (e.g. `import csv`, `import hashlib`)
+- You MAY import these modules if needed: `csv`, `statistics`, `random`, `string`, `itertools`, `functools`, `time`, `hashlib`, `base64`, `textwrap`, `html`, `decimal`, `uuid`, `calendar`, `zoneinfo`, `difflib`, `xml`, `bs4`. Any other import (e.g. `subprocess`, `sys`, `pathlib`, `io`, `shutil`) is blocked and fails the tool
+- File access is limited to `TEMP_DIR`; reading or writing anywhere else fails
 - File writes: use `open(os.path.join(TEMP_DIR, filename), 'w')` — `TEMP_DIR` is pre-injected and resolves to the correct platform temp directory. Never hardcode /tmp/
 - Always assign the final result to a variable named `result`
 - Tool inputs are available as: `inputs` (dict), `input_data` (alias for `inputs`), or directly by name (e.g. if the tool has a `keyword` param, you can write `keyword` directly)
@@ -306,23 +310,10 @@ def _local_endpoint_errors(config: dict) -> list[tuple[str, _UndefinedCallError]
     return errors
 
 
-# Mirrors tools.py's execute_tool() namespace exactly — keep in sync with
-# that function if the sandbox's injected names or allowed builtins change.
-_SANDBOX_BUILTIN_NAMES = frozenset({
-    "print", "len", "range", "enumerate", "zip", "map", "filter",
-    "sorted", "reversed", "list", "dict", "set", "tuple", "str",
-    "int", "float", "bool", "type", "isinstance", "hasattr", "getattr",
-    "min", "max", "sum", "abs", "round", "repr", "format",
-    "any", "all", "next", "iter", "hash", "id",
-    "open", "__import__", "dir", "vars", "globals", "locals", "callable",
-    "Exception", "ValueError", "KeyError", "TypeError", "IOError",
-    "StopIteration", "RuntimeError", "IndexError", "AttributeError",
-})
-_SANDBOX_INJECTED_NAMES = frozenset({
-    "inputs", "input_data", "input", "requests", "json", "os", "re", "math",
-    "datetime", "collections", "urllib", "TEMP_DIR", "search_jobs",
-    "fetch_page", "result",
-})
+# The sandbox's own lists (sandbox_runner.py runs every generated tool), so
+# this static check can't drift from what the code will actually see.
+_SANDBOX_BUILTIN_NAMES = frozenset(sandbox_runner.SAFE_BUILTIN_NAMES)
+_SANDBOX_INJECTED_NAMES = frozenset(sandbox_runner.INJECTED_NAMES)
 
 
 def _locally_bound_names(tree: ast.AST) -> set[str]:
@@ -719,6 +710,7 @@ def generate_agent_config(
     prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type, has_image=bool(image), spec=spec)
     user_content = _build_user_content(prompt, image, provider)
     response = create_chat_completion(
+        _trace="Design agent (bootstrap)",
         provider=provider,
         model=model,
         max_tokens=16000,
@@ -738,6 +730,7 @@ def generate_agent_config(
         # the type checker, even though exactly one is ever None).
         assert error is not None
         correction_response = create_chat_completion(
+            _trace="Bootstrap: fix malformed JSON",
             provider=provider,
             model=model,
             max_tokens=16000,
@@ -786,6 +779,7 @@ def generate_agent_config(
     )
     if tool_errors:
         correction_response = create_chat_completion(
+            _trace="Bootstrap: fix tool code",
             provider=provider,
             model=model,
             max_tokens=16000,
@@ -856,6 +850,30 @@ def generate_agent_config_stream(
     agent_type: str | None = None, image: str | None = None, spec: dict | None = None,
 ):
     """
+    _generate_agent_config_stream (below) with its run trace attached: every
+    model call bootstrap makes (the streamed design call, any JSON/tool-code
+    fix retries, the purpose-fit self-check) is collected and put on the
+    finished config as `bootstrap_trace`, so the chat screen can show how
+    this agent was made (CaseFile.tsx). It travels with the config like the
+    rest of AgentConfig; no server state.
+    """
+    prev_sink = run_trace.open_sink()
+    try:
+        for event in _generate_agent_config_stream(
+            purpose, provider, model, is_worker, agent_type, image, spec,
+        ):
+            if event.get("type") == "done" and isinstance(event.get("config"), dict):
+                event["config"]["bootstrap_trace"] = run_trace.drain()
+            yield event
+    finally:
+        run_trace.close_sink(prev_sink)
+
+
+def _generate_agent_config_stream(
+    purpose: str, provider: str | None = None, model: str | None = None, is_worker: bool = False,
+    agent_type: str | None = None, image: str | None = None, spec: dict | None = None,
+):
+    """
     Streaming counterpart to generate_agent_config, used only by server.py's
     /bootstrap (not the Lambda handler, which has no streaming response type
     to use it with). Bootstrap is a single LLM call with nothing to report
@@ -888,17 +906,43 @@ def generate_agent_config_stream(
     buffer = ""
 
     meta: dict = {}
+    # Streamed calls aren't timed by llm_client (it returns at first byte),
+    # so the design call's span is recorded here once the stream is consumed.
+    stream_started = run_trace.now_ms()
+    stream_usage = None
+
+    def _record_stream_span(status: str = "ok", detail: str | None = None) -> None:
+        used = meta.get("used") or {}
+        run_trace.record(
+            "llm", "Design agent (bootstrap)", stream_started, status=status,
+            provider=used.get("provider"), model=used.get("model"),
+            input_tokens=getattr(stream_usage, "prompt_tokens", None),
+            output_tokens=getattr(stream_usage, "completion_tokens", None),
+            detail=detail,
+        )
+
     try:
-        stream = create_chat_completion(
+        stream_kwargs = dict(
             provider=provider,
             model=model,
             max_tokens=16000,
             stream=True,
-            _meta=meta,
             messages=[{"role": "user", "content": user_content}],
         )
+        # Ask for token usage on the final chunk (for the run trace). If a
+        # provider rejects the option, retry once without it, so tracing
+        # never costs a bootstrap — same fallback as eval_harness.py.
+        try:
+            stream = create_chat_completion(
+                _meta=meta, stream_options={"include_usage": True}, **stream_kwargs,
+            )
+        except RuntimeError:
+            meta.clear()
+            stream = create_chat_completion(_meta=meta, **stream_kwargs)
         yield _model_event(meta)
         for chunk in stream:
+            if getattr(chunk, "usage", None):
+                stream_usage = chunk.usage
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta.content
@@ -928,9 +972,12 @@ def generate_agent_config_stream(
                         seen_tools.add(name)
                         yield {"type": "tool", "name": name}
     except Exception as e:
+        if meta.get("used"):
+            _record_stream_span("error", str(e)[:300])
         yield _model_event(meta)
         yield {"type": "error", "message": f"Bootstrap failed: {e}"}
         return
+    _record_stream_span()
 
     text = buffer.strip()
     if text.startswith("```"):
@@ -948,6 +995,7 @@ def generate_agent_config_stream(
         correction_meta: dict = {}
         try:
             correction_response = create_chat_completion(
+                _trace="Bootstrap: fix malformed JSON",
                 provider=provider,
                 model=model,
                 max_tokens=16000,
@@ -1002,6 +1050,7 @@ def generate_agent_config_stream(
         tool_fix_meta: dict = {}
         try:
             correction_response = create_chat_completion(
+                _trace="Bootstrap: fix tool code",
                 provider=provider,
                 model=model,
                 max_tokens=16000,

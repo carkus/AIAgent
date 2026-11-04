@@ -19,7 +19,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { TimelineNode } from '../graphTimeline'
-import type { EvalResultItem } from '../types'
+import type { EvalResultItem, TraceSpan } from '../types'
 import JsonTree from './JsonTree'
 import GraphFrame from './GraphFrame'
 import styles from '../styles/GraphView.module.css'
@@ -28,6 +28,14 @@ interface Props {
   timeline: TimelineNode[]
   live?: boolean
   evalResults?: EvalResultItem[]
+  // The turn's run-trace spans (CaseFile.tsx's data) — tool and worker
+  // nodes show their duration from the top-level span with the same
+  // call_index.
+  trace?: TraceSpan[]
+}
+
+function fmtDuration(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`
 }
 
 const COL_WIDTH = 360
@@ -86,11 +94,12 @@ interface TraceNodeData {
   pending: boolean
   isLast: boolean
   evalSummary?: { passed: number; failed: number }
+  span?: TraceSpan
   onOpen: (node: TimelineNode) => void
 }
 
 function TraceNode({ data }: { data: TraceNodeData }) {
-  const { node, pending, evalSummary, onOpen } = data
+  const { node, pending, evalSummary, span, onOpen } = data
   const { icon, title, subtitle, variant } = nodeDisplay(node, pending)
 
   return (
@@ -108,6 +117,13 @@ function TraceNode({ data }: { data: TraceNodeData }) {
         {pending && <span className={styles.liveDot} />}
       </div>
       {subtitle && <p className={styles.nodeSubtitle}>{subtitle}</p>}
+      {span && (
+        <p className={styles.nodeMeta}>
+          {fmtDuration(span.duration_ms)}
+          {span.kind === 'worker' && ' · worker'}
+          {span.status === 'error' && <span className={styles.evalFail}> · failed</span>}
+        </p>
+      )}
       {evalSummary && (evalSummary.passed > 0 || evalSummary.failed > 0) && (
         <p className={styles.nodeEval}>
           {evalSummary.passed > 0 && <span className={styles.evalPass}>✓ {evalSummary.passed}</span>}
@@ -174,7 +190,11 @@ function NodeDetailModal({ node, onClose }: { node: TimelineNode; onClose: () =>
   )
 }
 
-function buildGraph(timeline: TimelineNode[], live: boolean, evalResults: EvalResultItem[], onOpen: (node: TimelineNode) => void): { nodes: Node[]; edges: Edge[] } {
+function buildGraph(timeline: TimelineNode[], live: boolean, evalResults: EvalResultItem[], trace: TraceSpan[], onOpen: (node: TimelineNode) => void): { nodes: Node[]; edges: Edge[] } {
+  const spanByCall = new Map<number, TraceSpan>()
+  for (const s of trace) {
+    if (!s.parent && s.call_index != null && (s.kind === 'tool' || s.kind === 'worker')) spanByCall.set(s.call_index, s)
+  }
   // Rank assignment: 'plan'/'status'/'done'/'error' always start a fresh
   // column; a run of 'tool' nodes following the same status/plan shares one
   // column (parallel delegate_to_worker waves stack within that column) —
@@ -224,7 +244,7 @@ function buildGraph(timeline: TimelineNode[], live: boolean, evalResults: EvalRe
       id: node.id,
       type: 'trace',
       position: { x: r * COL_WIDTH, y },
-      data: { node, pending, isLast: node === lastNode, evalSummary: node.kind === 'done' ? evalSummary : undefined, onOpen },
+      data: { node, pending, isLast: node === lastNode, evalSummary: node.kind === 'done' ? evalSummary : undefined, span: node.kind === 'tool' ? spanByCall.get(node.callIndex) : undefined, onOpen },
       draggable: false,
       connectable: false,
     }
@@ -266,9 +286,9 @@ export default function GraphView(props: Props) {
 
 const FIT_OPTIONS = { padding: 0.25, maxZoom: 1 }
 
-function GraphViewInner({ timeline, live = false, evalResults = [] }: Props) {
+function GraphViewInner({ timeline, live = false, evalResults = [], trace = [] }: Props) {
   const [openNode, setOpenNode] = useState<TimelineNode | null>(null)
-  const { nodes, edges } = useMemo(() => buildGraph(timeline, live, evalResults, setOpenNode), [timeline, live, evalResults])
+  const { nodes, edges } = useMemo(() => buildGraph(timeline, live, evalResults, trace, setOpenNode), [timeline, live, evalResults, trace])
   const flow = useReactFlow()
   const { zoom } = useViewport()
 

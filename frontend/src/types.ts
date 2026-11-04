@@ -66,6 +66,10 @@ export interface AgentSpec {
 
 export interface AgentConfig {
   purpose: string;
+  // Timed spans of the bootstrap that generated this config (bootstrap.py's
+  // generate_agent_config_stream) — shown as "How this agent was made" in
+  // Chat.tsx. Absent on configs bootstrapped before tracing existed.
+  bootstrap_trace?: TraceSpan[];
   system_prompt: string;
   tools: ToolDefinition[];
   // Stable identity assigned by bootstrap.py, independent of name/description —
@@ -177,6 +181,27 @@ export interface EvalResultItem {
   agent_id?: string | null
 }
 
+// One timed step of a run (backend/src/run_trace.py) — an LLM call, a
+// self-check/scope-guard judge call, a tool call or a delegated worker.
+// start_ms is epoch ms; parent links a worker's own spans under its
+// 'worker' span. Streamed as 'trace' events and kept on the turn, so the
+// "Case file" view (CaseFile.tsx) can draw the run without any server state.
+export interface TraceSpan {
+  id: string
+  parent: string | null
+  kind: 'llm' | 'check' | 'tool' | 'worker'
+  label: string
+  start_ms: number
+  duration_ms: number
+  status: 'ok' | 'error'
+  provider?: string | null
+  model?: string | null
+  input_tokens?: number | null
+  output_tokens?: number | null
+  call_index?: number | null
+  detail?: string | null
+}
+
 // Stream events emitted by the agent loop
 export type StreamEvent =
   // The agent's own step-by-step plan for this turn (agent_stream.py's
@@ -206,6 +231,7 @@ export type StreamEvent =
   | { type: 'tool_start'; tool: string; inputs: Record<string, unknown>; source?: ToolCall['source']; call_index: number }
   | { type: 'tool_result'; tool: string; result: string; source?: ToolCall['source']; call_index: number }
   | ({ type: 'eval_result' } & EvalResultItem)
+  | { type: 'trace'; span: TraceSpan }
   | {
       type: 'done';
       response: string;
@@ -282,6 +308,7 @@ export interface SavedChatMessage {
   };
   relicSuggestions?: RelicSuggestion[];
   relics?: Relic[];
+  trace?: TraceSpan[];
 }
 
 // A whole saved conversation: everything needed to drop straight back into

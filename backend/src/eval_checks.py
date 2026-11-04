@@ -76,7 +76,7 @@ def _result(check, target, target_id, passed, reason, method, severity="info", p
     }
 
 
-def _judge(provider, model, rubric_prompt: str) -> tuple[bool, str] | None:
+def _judge(provider, model, rubric_prompt: str, label: str = "Self-check") -> tuple[bool, str] | None:
     """One LLM call asking for a strict-JSON {"passed": bool, "reason": str}
     verdict. Retries once with a correction message on unparseable output;
     returns None (never a fabricated result) if it's still broken or the
@@ -91,7 +91,7 @@ def _judge(provider, model, rubric_prompt: str) -> tuple[bool, str] | None:
         try:
             response = create_chat_completion(
                 provider=provider, model=model, max_tokens=_JUDGE_MAX_TOKENS,
-                messages=messages,
+                messages=messages, _trace=("check", label),
             )
             content = (response.choices[0].message.content or "").strip()
             if content.startswith("```"):
@@ -183,6 +183,7 @@ def check_bootstrap(
             "Do these tools plausibly serve the stated purpose? Answer false only "
             "if the toolset is clearly mismatched or missing something obviously "
             "essential to the purpose.",
+            label="Self-check: tools fit purpose",
         )
         if verdict is not None:
             passed, reason = verdict
@@ -256,6 +257,7 @@ def check_chat_response(
             f"The agent replied:\n{final_text[:2000]}\n\n"
             "Does this reply substantively address what the user asked"
             + (", and is it actually about the focus topics rather than some other subject?" if topics else "?"),
+            label="Self-check: reply answers the question",
         )
         if verdict is not None:
             passed, reason = verdict
@@ -364,6 +366,7 @@ def check_worker_delegation(
             f"A worker agent was delegated this task:\n{task}\n\n"
             f"It responded:\n{(final_response or '')[:2000]}\n\n"
             "Did the worker's response actually accomplish the delegated task?",
+            label="Self-check: worker did its task",
         )
         if verdict is not None:
             passed, reason = verdict

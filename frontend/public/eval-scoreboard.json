@@ -1,0 +1,88 @@
+{
+ "suites": {
+  "chat": {
+   "generated_at": "20261104-233339",
+   "cases": 5,
+   "repeats": 2,
+   "judge": null,
+   "arms": [
+    {
+     "arm": "ollama:qwen2.5-coder:7b",
+     "provider": "ollama",
+     "model": "qwen2.5-coder:7b",
+     "runs": 10,
+     "pass_all": {
+      "passed": 2,
+      "total": 10
+     },
+     "checks": {
+      "turn_completed": {
+       "passed": 10,
+       "total": 10
+      },
+      "tool_execution_error": {
+       "passed": 14,
+       "total": 23
+      },
+      "non_empty_response": {
+       "passed": 10,
+       "total": 10
+      },
+      "unverified_links_stripped": {
+       "passed": 10,
+       "total": 10
+      },
+      "raw_output_not_pasted": {
+       "passed": 10,
+       "total": 10
+      },
+      "response_relevance_judge": {
+       "passed": 2,
+       "total": 10
+      },
+      "case:tools_called_any": {
+       "passed": 4,
+       "total": 4
+      },
+      "case:response_contains_any": {
+       "passed": 1,
+       "total": 6
+      },
+      "tool_input_schema": {
+       "passed": 17,
+       "total": 17
+      },
+      "case:mermaid": {
+       "passed": 0,
+       "total": 2
+      },
+      "case:delegated_min": {
+       "passed": 1,
+       "total": 2
+      },
+      "scope_guard": {
+       "passed": 2,
+       "total": 2
+      },
+      "case:max_chars": {
+       "passed": 2,
+       "total": 2
+      }
+     },
+     "median_seconds": 6.0,
+     "mean_tokens_in": 9020,
+     "mean_tokens_out": 358,
+     "cost_per_task": 0.0,
+     "fallback_runs": 0,
+     "replay": {
+      "exact": 11,
+      "fuzzy": 3,
+      "miss": 9,
+      "live": 0
+     }
+    }
+   ]
+  }
+ },
+ "updated": "20261104-233339"
+}

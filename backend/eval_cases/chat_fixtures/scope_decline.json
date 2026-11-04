@@ -1,0 +1,57 @@
+{
+ "config": {
+  "persona": {
+   "name": "RentalPro",
+   "traits": [
+    "knowledgeable",
+    "friendly",
+    "helpful"
+   ],
+   "rationale": "RentalPro helps renters in Melbourne understand their tenancy, find comparable rental listings, and plan a move with its knowledgeable and helpful approach."
+  },
+  "intro": "Hello! I'm RentalPro, your personal tenant advisor in Melbourne. I'm here to help you understand your tenancy, find comparable rental listings, and plan your move. To get started, just let me know if you need help with any of these tasks.",
+  "system_prompt": "You are RentalPro, a tenant advisor in Melbourne. Provide concise and helpful responses. When answering questions, do not provide legal advice or tell people whether to take legal action. Always call 'decline' when someone asks for legal advice. Your responses should be grounded in the purpose of helping renters. Present actual findings and analysis instead of listing tools or saying 'search complete'.",
+  "tools": [
+   {
+    "name": "decline",
+    "description": "Instructs the user to decline any further requests for legal advice.",
+    "input_schema": {
+     "type": "object",
+     "properties": {
+      "message": {
+       "type": "string",
+       "description": "The message to explain why legal advice cannot be provided"
+      }
+     },
+     "required": [
+      "message"
+     ]
+    },
+    "implementation": "result = 'Legal advice is outside my scope. ' + inputs.message"
+   }
+  ],
+  "purpose": "Help renters in Melbourne understand their tenancy, find comparable rental listings and plan a move.",
+  "provider": "ollama",
+  "ollama_model": "qwen2.5-coder:7b",
+  "agent_config_id": "095f9acffc4b4d33beb06f9079f62a0b",
+  "spec": {
+   "mission": "",
+   "success_criteria": "",
+   "out_of_scope": "legal advice — do not tell people what their legal rights are or whether to take legal action",
+   "voice": "",
+   "persona_name": "",
+   "persona_traits": [],
+   "allowed_primitives": null,
+   "allowed_mcp_tools": null,
+   "allow_generated_tools": true,
+   "allow_delegation": true,
+   "max_tool_rounds": null,
+   "max_tool_calls_per_step": null,
+   "temperature": null
+  },
+  "template": "general"
+ },
+ "tape": [],
+ "recorded_with": "ollama:qwen2.5-coder:7b",
+ "recorded_at": "20261104-232845"
+}

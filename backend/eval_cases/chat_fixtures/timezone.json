@@ -1,0 +1,119 @@
+{
+ "config": {
+  "persona": {
+   "name": "Ella",
+   "traits": [
+    "competent",
+    "sympathetic",
+    "proactive"
+   ],
+   "rationale": "Ella is organized and thoughtful, ensuring her colleagues are never missed with her strategic approach to scheduling."
+  },
+  "intro": "Hi there! I'm Ella, your assistant for seamless scheduling across different cities. Get the most out of your workday by staying in sync with your colleagues in Melbourne, London, and San Francisco.",
+  "system_prompt": "You are Ella, my assistant for scheduling calls with colleagues in different cities. You will need to fetch the current time in each city and suggest overlapping working hours. After all tool calls are complete, present the actual findings in your reply — not list tool names or say 'search complete'. Always call the necessary tools and avoid duplicative work.",
+  "tools": [
+   {
+    "name": "get_current_time",
+    "source": "mcp",
+    "mcp_server": "time",
+    "mcp_tool": "get_current_time",
+    "description": "Get current time in a specific timezone",
+    "input_schema": {
+     "type": "object",
+     "properties": {
+      "timezone": {
+       "type": "string",
+       "description": "IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use 'Australia/Sydney' as local timezone if no timezone provided by the user."
+      }
+     },
+     "required": [
+      "timezone"
+     ]
+    }
+   },
+   {
+    "name": "convert_time",
+    "source": "mcp",
+    "mcp_server": "time",
+    "mcp_tool": "convert_time",
+    "description": "Convert time between timezones",
+    "input_schema": {
+     "type": "object",
+     "properties": {
+      "source_timezone": {
+       "type": "string",
+       "description": "Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use 'Australia/Sydney' as local timezone if no source timezone provided by the user."
+      },
+      "time": {
+       "type": "string",
+       "description": "Time to convert in 24-hour format (HH:MM)"
+      },
+      "target_timezone": {
+       "type": "string",
+       "description": "Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use 'Australia/Sydney' as local timezone if no target timezone provided by the user."
+      }
+     },
+     "required": [
+      "source_timezone",
+      "time",
+      "target_timezone"
+     ]
+    }
+   },
+   {
+    "name": "save_output",
+    "description": "Writes the final result to a file.",
+    "input_schema": {
+     "type": "object",
+     "properties": {
+      "filename": {
+       "type": "string"
+      },
+      "output_data": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "filename",
+      "output_data"
+     ]
+    },
+    "implementation": "import os\n\nfilename = inputs['filename']\noutput_data = inputs['output_data']\n\nwith open(os.path.join(TEMP_DIR, filename), 'w') as f:\n    f.write(output_data)\n\nresult = {'status': 'saved', 'filename': filename, 'path': os.path.join(TEMP_DIR, filename)}"
+   }
+  ],
+  "purpose": "Help me schedule calls with colleagues in Melbourne, London and San Francisco by telling me the current time in each city and suggesting overlapping working hours.",
+  "provider": "ollama",
+  "ollama_model": "qwen2.5-coder:7b",
+  "agent_config_id": "64dd9d5baf624e2e9fb9d06119786fb0",
+  "spec": null,
+  "template": "general"
+ },
+ "tape": [
+  {
+   "tool": "mcp:time/get_current_time",
+   "inputs": {
+    "timezone": "Australia/Sydney"
+   },
+   "inputs_canon": "{\"timezone\": \"Australia/Sydney\"}",
+   "result": "{\n  \"timezone\": \"Australia/Sydney\",\n  \"datetime\": \"2026-11-04T23:27:45+11:00\",\n  \"day_of_week\": \"Wednesday\",\n  \"is_dst\": true\n}"
+  },
+  {
+   "tool": "mcp:time/get_current_time",
+   "inputs": {
+    "timezone": "Europe/London"
+   },
+   "inputs_canon": "{\"timezone\": \"Europe/London\"}",
+   "result": "{\n  \"timezone\": \"Europe/London\",\n  \"datetime\": \"2026-11-04T12:27:45+00:00\",\n  \"day_of_week\": \"Wednesday\",\n  \"is_dst\": false\n}"
+  },
+  {
+   "tool": "mcp:search/tavily_search",
+   "inputs": {
+    "query": "user request details"
+   },
+   "inputs_canon": "{\"query\": \"user request details\"}",
+   "result": "{\"query\":\"user request details\",\"follow_up_questions\":null,\"answer\":null,\"images\":[],\"results\":[{\"url\":\"https://www.miniorange.com/blog/access-request\",\"title\":\"What Is Access Request? A Detailed Guide\",\"content\":\"User Access Request: User access requests are the most common and typically involve access to systems or applications required for daily work. These requests are closely tied to a user’s role and responsibilities and usually follow standard approval workflows. They help ensure that users have the access they need to perform their tasks without unnecessary delays. [...] | Aspect | Access Request | Access Provisioning | Access Certification |\\n ---  --- |\\n| Definition | User requests access to a system or resource | Access is granted based on approval | Existing access is reviewed for relevance |\\n| Purpose | Capture and validate access need | Deliver approved access | Ensure access is still required |\\n| Stage | Initial stage | Execution stage | Review stage |\\n| Trigger | User request | Post-approval | Periodic review | [...] ## What is an Access Request?\\n\\nAn access request is a formal request made by a user to gain access to a system, application, or resource. In the context of IAM, it is the starting point of the access lifecycle. It ensures that access is not granted arbitrarily but follows a defined process.\\n\\nAccess requests are also referred to as:\\n\\n Access Request Management\\n User Access Request\\n Access Control Requests\",\"score\":0.73891455,\"raw_content\":null,\"id\":\"bcc8a1-00\"},{\"url\":\"https://www.infowisesolutions.com/solutions/3467-user-access-request-sharepoint-solution\",\"title\":\"User Access Request - Pre-built SharePoint Template | Infowise Ultimate Forms\",\"content\":\"The User Access Request template for SharePoint, built with Infowise Ultimate Forms, provides a formal access request form that captures the request date, employee identity and employment details, the type and name of the system or application, the purpose and type of access, justification, sensitivity level, the access period, the specific privileges required, three compliance declaration columns, and an employee e-signature. Every request is stored as a complete, auditable record in [...] SHAREPOINT SITE TEMPLATE\\n\\n# User Access Request\\n\\nUser access requests capturing system details, access type, privileges, sensitivity level, access period, and a three-part compliance declaration [...] User access requests submitted through email or informal channels give IT and security teams an inconsistent record of what access is being requested, for what system, for what business purpose, and for how long. Sensitivity level and the specific access privileges required are not captured in a structured format. The employee's acknowledgment of confidentiality and security obligations is not recorded in a signed, structured document. Without a centralized, formal access request process,\",\"score\":0.7244226,\"raw_content\":null,\"id\":\"ebf528-01\"},{\"url\":\"https://www.jotform.com/form-templates/new-user-form\",\"title\":\"New User Request Form Template\",\"content\":\"A New User Request Form is a form template designed to streamline the process of requesting access to company systems or software for new employees.\",\"score\":0.6636041,\"raw_content\":null,\"id\":\"36f7e2-02\"},{\"url\":\"https://lookbook365.com/it-user-access-request-form\",\"title\":\"IT User Access Request Form - Microsoft Forms | LookBook 365\",\"content\":\"The design includes a New User IT Access form with questions that capture employee details, department, and the access level requested, covering system, application, and network access. Confirmation and approval notifications are sent via email, every request is kept as an auditable record, and a built-in report summarizes submissions for the IT team.\\n\\n Does this design use any custom code or third-party tools? [...] Access requests in one place: employees submit requests for system, application, or network access through a simple form\\n Key details captured: employee information, department, and the access level being requested\\n Email notifications: confirmation and approval notifications are sent automatically via email\\n Auditable record: every access request is stored for review, with built-in reporting on submissions\\n 100% out-of-the-box: a standard Microsoft 365 solution with no custom code required [...] LookBook 365\\n\\n Home\\n Examples\\n  + Intranet\\n  + Departments\\n  + Documents\\n  + Trackers\\n  + Copilot\\n  + Dashboards\\n Resources\\n  + Applications\\n  + Web Parts\\n  + Features\\n  + Build Notes\\n About\\n  + About\\n  + Contact\\n\\n# Help Desk Access Request (Form)\\n\\nThe IT User Access Request Form turns email back-and-forth over system access into an out-of-the-box Microsoft Forms form where employees request application or network access and IT keeps an auditable record of every request.\\n\\nBuilt with\",\"score\":0.5712171,\"raw_content\":null,\"id\":\"66aa4c-03\"},{\"url\":\"https://views.cira.colostate.edu/wiki/wiki/1017/data-request-procedure\",\"title\":\"Data Request Procedure\",\"content\":\"1. Register for a user account\\n2. Access the Data Request Form\\n3. Provide Basic Parameters\\n4. Provide Details regarding intended use\\n5. Select Data\\n6. Submit Request. Request submission does not need to happen right away. Progress is saved and a user may return to their request at any time.\\n7. Await request approval and contact from the warehouse team.\\n\\n## Data Request Form\\n\\nThe Data Request form can be accessed at the following URL: \\n\\nThe Request form consists of: [...] ### Request Details\\n\\nFollow instructions of the grey hint text in each box to provide information about the intended use of the requested data.\\n\\n### Request History\\n\\nThe request history section shows the status history include when a status was set, who set the status and a note relating to the status. Statuses are set using the Action buttons near the top of the form. For more information about Statuses and Actions see the Data Request Lifecycle section of this document. [...] 1. Project: Projects are detailed in another section of this page. This field shows any projects that the current user has been assigned to. There is also an option of \\\"Unspecified\\\" to allow any registered user to initiate a data request.\\n2. Requestor: Displays the Name and Organization of the data requestor.\\n3. Data Use Agreement: Describes the terms of use for the requested data.\",\"score\":0.47504577,\"raw_content\":null,\"id\":\"84a3ba-04\"},{\"url\":\"https://www.securends.com/blog/access-request-management\",\"title\":\"Access Request Management: What It Is and Why It Matters\",\"content\":\"## Introduction\\n\\nIn 2026, managing user access remains critical for safeguarding organizational assets and meeting increasingly strict regulatory requirements. Access Request Management (ARM) is a core component of Identity Governance and Administration (IGA) and Identity Access Management (IAM) frameworks. It governs how users request, approve, and receive access to applications, systems, and sensitive data across cloud, hybrid, and on-prem environments. [...] Improved User Experience: Automation enhances the user experience by providing a more straightforward and intuitive access request process, with clear visibility into the status of their requests. Automated workflows can also facilitate self-service options, enabling users to request access or reset passwords without the need for IT intervention. [...] Access requests are integral to the “Joiner” phase of the identity lifecycle, which includes:\\n\\n Provisioning: Granting initial access as users are onboarded into the organization.\\n Role-Based Access Control (RBAC): Assigning entitlements based on predefined roles to minimize risk and ensure consistency.\\n User Access Review: Periodically evaluating access rights to detect and remediate excessive or outdated privileges—critical for identity governance and administration solutions.\",\"score\":0.40063268,\"raw_content\":null,\"id\":\"446874-05\"},{\"url\":\"https://community.powerplatform.com/forums/thread/details?threadid=bad484cd-018a-42aa-affb-118e0fc329ce\",\"title\":\"Get User Details from a 'When a HTTP request is receive\",\"content\":\"Dec 9, 2022 — I'm trying to update a Sharepoint list when a user clicks on a link. I want to pass a couple of items of data, which I've managed to do by\",\"score\":0.37545508,\"raw_content\":null,\"id\":\"7cafc2-06\"},{\"url\":\"https://www.adaxes.com/questions/8947/new-user-request-work-flow\",\"title\":\"New User Request Work Flow\",\"content\":\"Nov 1, 2019 — Example: The Manager creates the request and adds the individual's name, birthday, employee ID and then sends forward for review. The Help Desk ...Read more\",\"score\":0.32714194,\"raw_content\":null,\"id\":\"3a071f-07\"},{\"url\":\"https://www.civicplus.help/nextrequest/docs/create-and-manage-users\",\"title\":\"Create and Manage Users\",\"content\":\"If you want to edit a Requester account, check the box next to Show requestersShow requestors toggle under search box.\\n4. Click the Edit icon (pencil) next to the user account Pencil icon next to user name.\\n5. Update the user's Account detailsAccount details fields. [...] Getting Started with NextRequest > User Management\\n Manage the Requester on a Request\\n\\n  Request Management\\n Assign Requests\\n\\n  Request Management [...] Prev  Next \\n\\nIn order for your staff members to use NextRequest, an Admin must first add them as a user to your account or send them an invitation using the Invite User feature. You can also create accounts for requesters who visit your portal.\",\"score\":0.30293778,\"raw_content\":null,\"id\":\"ba3d99-08\"},{\"url\":\"https://www.reginfo.gov/public/do/DownloadDocument?objectID=28572801\",\"title\":\"User Access Request Form\",\"content\":\"STATE/LOCALITY CODES - Enter the state/locality codes that are needed for system access. State/Locality codes are FNCS organization codes that specific systems ...Read more\",\"score\":0.19260046,\"raw_content\":null,\"id\":\"fd7690-09\"}],\"response_time\":1.17,\"request_id\":\"1258fc2c-1c16-4a0b-88b4-5f660ce106ff\",\"auth_mode\":\"keyed\"}"
+  }
+ ],
+ "recorded_with": "ollama:qwen2.5-coder:7b",
+ "recorded_at": "20261104-232645"
+}

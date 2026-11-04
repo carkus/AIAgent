@@ -25,6 +25,7 @@ import logging
 import os
 import requests
 from openai import OpenAI
+import run_trace
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,8 @@ _PROVIDERS = [
 ]
 
 
-def create_chat_completion(provider: str | None = None, model: str | None = None, _meta: dict | None = None, **kwargs):
+def create_chat_completion(provider: str | None = None, model: str | None = None, _meta: dict | None = None,
+                           _trace: str | tuple[str, str] | None = None, **kwargs):
     """
     Drop-in replacement for `client.chat.completions.create(...)`. Do not pass
     `model` as a plain kwarg — use the `model` parameter below instead.
@@ -109,8 +111,16 @@ def create_chat_completion(provider: str | None = None, model: str | None = None
                         provider that was tried and failed before either a
                         success or total failure
 
+    `_trace` labels this call in the run trace (run_trace.py): a label
+    string (kind "llm"), or a (kind, label) tuple, e.g. ("check", "Scope
+    guard"). Every attempt is recorded as a span, including failed cascade
+    attempts. Streamed calls aren't recorded here (only time-to-first-byte is
+    known at this point), so their callers time them themselves.
+
     Raises RuntimeError only if every eligible provider fails.
     """
+    trace_kind, trace_label = _trace if isinstance(_trace, tuple) else ("llm", _trace or "Model call")
+    streamed = bool(kwargs.get("stream"))
     forced = (provider or os.environ.get("LLM_PROVIDER", "")).strip().lower()
     providers = [p for p in _PROVIDERS if p[0] == forced] if forced else _PROVIDERS
     # A browser can keep "gemini" saved in Settings after the key is removed
@@ -134,10 +144,18 @@ def create_chat_completion(provider: str | None = None, model: str | None = None
             extra_body = {**kwargs.get("extra_body", {})}
             extra_body.setdefault("options", {}).setdefault("num_ctx", OLLAMA_NUM_CTX)
             call_kwargs = {**kwargs, "extra_body": extra_body}
+        started = run_trace.now_ms()
         try:
             response = client.chat.completions.create(
                 model=use_model, timeout=_TIMEOUTS[name], **call_kwargs
             )
+            if not streamed:
+                usage = getattr(response, "usage", None)
+                run_trace.record(
+                    trace_kind, trace_label, started, provider=name, model=use_model,
+                    input_tokens=getattr(usage, "prompt_tokens", None),
+                    output_tokens=getattr(usage, "completion_tokens", None),
+                )
             if last_error is not None:
                 logger.warning("LLM provider %s failed (%s); fell back to %s", last_error[0], last_error[1], name)
             if _meta is not None:
@@ -145,6 +163,10 @@ def create_chat_completion(provider: str | None = None, model: str | None = None
             return response
         except Exception as e:
             logger.warning("LLM provider %s (%s) failed: %s", name, use_model, e)
+            run_trace.record(
+                trace_kind, trace_label, started, status="error", provider=name,
+                model=use_model, detail=str(e)[:300],
+            )
             if _meta is not None:
                 _meta.setdefault("failed", []).append({"provider": name, "model": use_model})
             last_error = (name, e)
