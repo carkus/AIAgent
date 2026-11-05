@@ -21,8 +21,8 @@
 }
 
 .node {
-  width: 320px;
-  padding: 0.85rem 1rem;
+  width: 236px;
+  padding: 0.55rem 0.7rem;
   border-radius: 8px;
   background: #ffffff;
   border: 1px solid #ddd9cd;
@@ -43,13 +43,13 @@
 }
 
 .nodeIcon {
-  font-size: 1.25rem;
+  font-size: 0.95rem;
   line-height: 1;
 }
 
 .nodeTitle {
   font-weight: 600;
-  font-size: 1.05rem;
+  font-size: 0.85rem;
   color: #16324a;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -58,15 +58,15 @@
 }
 
 .nodeMeta {
-  margin: 0.35rem 0 0;
-  font-size: 0.8rem;
+  margin: 0.3rem 0 0;
+  font-size: 0.7rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: #6b7785;
 }
 
 .nodeSubtitle {
-  margin: 0.4rem 0 0;
-  font-size: 0.92rem;
+  margin: 0.3rem 0 0;
+  font-size: 0.75rem;
   color: #6b7785;
   line-height: 1.35;
   overflow: hidden;
@@ -76,11 +76,30 @@
 }
 
 .nodeEval {
-  margin: 0.45rem 0 0;
+  margin: 0.35rem 0 0;
   display: flex;
-  gap: 0.6rem;
-  font-size: 0.88rem;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.75rem;
   font-weight: 600;
+}
+
+.evalLabel {
+  color: #6b7785;
+  font-weight: 400;
+}
+
+/* Says the card opens; the whole card is the click target. */
+.nodeOpen {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #1f6f73;
+}
+
+.node:hover .nodeOpen {
+  text-decoration: underline;
 }
 
 .evalPass { color: #2f7a3d; }
@@ -205,6 +224,37 @@
   line-height: 1.5;
   color: #33475a;
   white-space: pre-wrap;
+}
+
+.modalMeta {
+  margin: -0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #6b7785;
+}
+
+.modalMarkdown {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #33475a;
+}
+
+.modalMarkdown :global(p) {
+  margin: 0 0 0.6rem;
+}
+
+.checkList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: #33475a;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.checkReason {
+  color: #6b7785;
 }
 
 .modalPre {

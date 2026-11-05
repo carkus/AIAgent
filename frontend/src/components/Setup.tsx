@@ -4,7 +4,7 @@ import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api
 import { getLastOpenedPointer, hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat, setLastOpenedPointer } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, Relic, RelicKind, RelicSuggestion, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
 import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, DEFAULT_AGENT_SPEC, MAX_FOCUS_CHARS, shortFocus, type BehaviorToggle } from '../agentTypes'
-import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
+import { storedOllamaModel, describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
 import { buildAgentBrief, joinNatural } from '../agentBrief'
 import { formatDate, getDateFormat, type DateFormatId } from '../dateFormat'
 import styles from '../styles/Setup.module.css'
@@ -301,6 +301,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [keywords, setKeywords] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [location, setLocation] = useState('Melbourne, Australia')
+  // Whether the location is passed on at all (brief, bootstrap purpose,
+  // agent config). Off by default except for Job search: "Augustus in
+  // Melbourne" is what you get when every topic is told where the user is.
+  const [factorLocation, setFactorLocation] = useState(
+    () => ((localStorage.getItem('aiagent_agent_type') as AgentTemplateId) || 'general') === 'job_search'
+  )
+  const usedLocation = factorLocation ? location.trim() : ''
   // Persisted across "New agent"/reset (which fully remounts Setup — see
   // App.tsx's phase-conditional render) and page reloads, same
   // localStorage idiom as chatStorage.ts/aiagent_saved_chats — otherwise the
@@ -314,7 +321,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     () => (localStorage.getItem('aiagent_provider') as LlmProvider) || 'ollama'
   )
   const [ollamaModel, setOllamaModel] = useState<string | null>(
-    () => localStorage.getItem('aiagent_ollama_model') || DEFAULT_OLLAMA_MODEL
+    () => storedOllamaModel()
   )
   function handleProviderChange(p: LlmProvider) {
     setProvider(p)
@@ -661,7 +668,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       .filter(t => selectedTraits.includes(t.id)).map(t => t.label)
     briefDebounceRef.current = window.setTimeout(() => {
       setBriefLoading(true)
-      fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel, undefined, undefined, maxDelegations, behaviorLabels, traitLabels)
+      fetchAgentBrief(agentType, [...keywords], usedLocation, agentName, provider, ollamaModel, undefined, undefined, maxDelegations, behaviorLabels, traitLabels)
         .then(result => {
           if (requestId !== briefRequestIdRef.current) return
           setAiBrief(result)
@@ -677,7 +684,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }, 700)
     return () => window.clearTimeout(briefDebounceRef.current)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentType, keywords, location, agentName, maxDelegations, activeToggles, selectedTraits])
+  }, [agentType, keywords, location, factorLocation, agentName, maxDelegations, activeToggles, selectedTraits])
 
   function handleBriefAnswerSubmit() {
     const answer = briefAnswer.trim()
@@ -687,7 +694,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     const behaviorLabels = BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.label)
     const traitLabels = (PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research)
       .filter(t => selectedTraits.includes(t.id)).map(t => t.label)
-    fetchAgentBrief(agentType, [...keywords], location.trim(), agentName, provider, ollamaModel, aiBrief.text, answer, maxDelegations, behaviorLabels, traitLabels)
+    fetchAgentBrief(agentType, [...keywords], usedLocation, agentName, provider, ollamaModel, aiBrief.text, answer, maxDelegations, behaviorLabels, traitLabels)
       .then(result => {
         if (requestId !== briefRequestIdRef.current) return
         setAiBrief(result)
@@ -968,7 +975,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       ...chat.agentConfig,
       template: agentType,
       keywords: [...keywords],
-      location: location.trim(),
+      location: usedLocation,
+      factor_location: factorLocation,
       active_toggles: [...activeToggles],
       active_traits: [...selectedTraits],
     }
@@ -984,6 +992,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setEditing({ kind: 'draft', id: d.id })
     const type = d.agentType ?? 'research'
     setAgentType(type)
+    setFactorLocation(type === 'job_search')
     setKeywords([...d.keywords])
     setDraft('')
     if (d.location) setLocation(d.location)
@@ -1038,6 +1047,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // not just name/keywords.
   function applyAgentConfigToForm(cfg: AgentConfig, name: string) {
     if (cfg.template) setAgentType(cfg.template)
+    // The job's own choice if it recorded one, else the type's default:
+    // older configs all carry a location, so "has a location" isn't a signal.
+    setFactorLocation(cfg.factor_location ?? (cfg.template ?? 'general') === 'job_search')
     setKeywords([...(cfg.keywords ?? [])])
     setDraft('')
     if (cfg.location) setLocation(cfg.location)
@@ -1123,6 +1135,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     // type just stays inert (not shown, not counted) until that type is
     // revisited, instead of being lost.
     setAgentType(type)
+    setFactorLocation(type === 'job_search')
   }
 
   function toggleSavedSection(section: SavedSectionId) {
@@ -1139,7 +1152,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       setCommissionHint('Add at least one focus area above — the brief needs it before this agent can be commissioned.')
       return
     }
-    const loc = location.trim()
+    const loc = usedLocation
     const activeInstructions = BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.instruction)
     const traitPool = PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research
     const traitInstructions = traitPool.filter(t => selectedTraits.includes(t.id)).map(t => t.instruction)
@@ -1189,6 +1202,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         ...config,
         keywords,
         location: loc,
+        factor_location: factorLocation,
         provider,
         ollama_model: provider === 'ollama' ? ollamaModel : null,
         template: agentType,
@@ -1234,7 +1248,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     ? null
     : aiBrief
       ? aiBrief.warning ?? null
-      : buildDeterministicWarning(keywords, agentType, location.trim(), maxDelegations)
+      : buildDeterministicWarning(keywords, agentType, usedLocation, maxDelegations)
 
   return (
     <div className={styles.container}>
@@ -1306,7 +1320,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           <div className={styles.agentCardMain}>
             <div className={styles.agentCardInfo}>
               <h1 className={styles.title}>Agent {agentName}</h1>
-              <p className={styles.locationLiner}>{location || 'No location set'}</p>
+              <p className={`${styles.locationLiner} ${!factorLocation ? styles.locationLinerOff : ''}`}>
+                {location ? (factorLocation ? location : `${location} · not used`) : 'No location set'}
+              </p>
               <button
                 type="button"
                 className={styles.modelLiner}
@@ -1318,6 +1334,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               </button>
             </div>
             <div className={styles.agentTypeSelector}>
+              <span className={styles.agentTypeCaption}>Case type</span>
               <div className={styles.agentTypePills} role="radiogroup" aria-label="Agent type">
                 {AGENT_TEMPLATES.map(t => (
                   <button
@@ -1338,6 +1355,20 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 ))}
               </div>
               <span className={styles.agentTypeLabel}>{getTemplate(agentType).label}</span>
+              <label
+                className={styles.locationToggle}
+                title={factorLocation
+                  ? 'The location is passed to the agent, which applies it only to location-dependent topics'
+                  : 'The location is not passed to the agent at all'}
+              >
+                <input
+                  type="checkbox"
+                  checked={factorLocation}
+                  onChange={ev => setFactorLocation(ev.target.checked)}
+                  disabled={bootstrapping}
+                />
+                <span>Factor in location</span>
+              </label>
             </div>
           </div>
 
@@ -1609,7 +1640,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     {aiBrief?.text ?? buildAgentBrief(
                       agentType,
                       keywords,
-                      location.trim(),
+                      usedLocation,
                       agentName,
                       BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.label),
                       (PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research).filter(t => selectedTraits.includes(t.id)).map(t => t.label),
@@ -2327,6 +2358,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         onEmploy={character => {
           onAgentNameChange(character.surname)
           setAgentType(character.agentType)
+          setFactorLocation(character.agentType === 'job_search')
           setSelectedTraits(character.traitIds)
           setActiveToggles(character.behaviorIds)
           setEditing(null)

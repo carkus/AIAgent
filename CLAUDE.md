@@ -100,13 +100,14 @@ expecting it to reach production.
 | `frontend/src/components/AdvancedSetup.tsx` | Advanced agent creation: define a structured spec (each field labelled with the layer that enforces it) → stream bootstrap → review/edit the generated config, re-checked via `POST /validate-config` before launch |
 | `frontend/src/components/ToolActivity.tsx` | Renders tool call log inline under each assistant message; top-level container and every nested keyword/worker section are independently collapsible |
 | `frontend/src/components/CaseFile.tsx` | The "Case file" toggle under each assistant turn: waterfall of that turn's `TraceSpan`s (model calls, self-checks, tools, workers with their own nested spans) with wall time, reasoning/check/tool totals, tokens and models; spans are saved with the chat (`SavedChatMessage.trace`) |
+| `frontend/src/components/AgentMakingReport.tsx` | "How this agent was made" above the chat, open by default: the brief, grounding (similar past agents with match %, MCP tools offered), the design call's model/persona/proposed tools, what the code checks caught and whether the retry fixed it or the tool was dropped, spec rules applied, the final persona/system prompt/tools with their code, self-checks and whether it was saved to memory; read from `AgentConfig.bootstrap_report` (written by `_generate_agent_config_stream`), with the `bootstrap_trace` timings (`CaseFile`) underneath |
 | `frontend/src/components/MermaidDiagram.tsx` | Renders one Mermaid chart string to SVG via the `mermaid` package, themed to match the app's dark-cyan palette; used by `Chat.tsx` for ` ```mermaid ` fences in assistant replies |
 
 ---
 
 ## Model and API Defaults
 
-- Provider cascade (`llm_client.py`): **Gemini** (`gemini-3.6-flash`) → **Ollama** (`qwen2.5` default, local-only). Production is Gemini-only for this chat/bootstrap cascade specifically — no Ollama on the droplet for this app (see Deployment). This does **not** apply to image generation, which has its own separate Gemini(optional)→Hugging Face cascade in `tools.py` — see that file and Deployment's `HF_API_TOKEN` note.
+- Provider cascade (`llm_client.py`): **Gemini** (`gemini-3.6-flash`) → **Ollama** (`qwen3:8b` default, thinking turned off in `llm_client.py`; local-only. Ollama ignores the API's `num_ctx`, so the server needs `OLLAMA_CONTEXT_LENGTH=16384` or prompts are cut to ~2k tokens). Production is Gemini-only for this chat/bootstrap cascade specifically — no Ollama on the droplet for this app (see Deployment). This does **not** apply to image generation, which has its own separate Gemini(optional)→Hugging Face cascade in `tools.py` — see that file and Deployment's `HF_API_TOKEN` note.
 - Per-agent `provider`/`ollama_model` choice made once on the Setup screen threads through both bootstrap and every agent-loop turn (`LlmProvider` in `types.ts`)
 - Bootstrap call uses a single user message; agent loop maintains full message history
 - Tool content blocks are passed back as `tool_result` in the next user turn
@@ -442,6 +443,42 @@ tool-usage basics:
   accurately. Still followed by a short line of prose per rule 5, but
   skipping the diagram itself is no longer acceptable once one was
   explicitly asked for, regardless of what the request was made of.
+- **Report back with options.** The main agent ends a reply with one line
+  asking which way to take the job, then a ` ```options ` fence of 2-4
+  next moves it devised (short instructions, grounded in its findings and
+  the focus topics). `_extract_next_options()` strips the fence into the
+  `done` event's `next_options`. `Chat.tsx` shows each as a button that
+  sends it as the user's next message, and saves them with the chat.
+  Unrelated questions are fine: they get answered, and the options may steer
+  back to the job.
+  Workers return their own `next_options` in the `delegate_to_worker`
+  result; the main agent builds its options from them (rule 9a), and if it
+  writes none, the workers' options are used. When the main agent asks for
+  context with zero tool calls and the job has focus topics,
+  `_starter_reply()` replaces the nudge loop: one no-tools call proposes
+  four real starting points drawn from the topics. If that call fails, it
+  falls back to "Give an overview of <topic>".
+  Status events carry `title`/`why` (`_status()`), so the graph shows
+  "Sent back for another try: it described a tool call without making it"
+  rather than a row of identical "Thinking" boxes.
+- **An agent with focus topics leads a team (rule 8, `_delegation_rule_body`).**
+  On a research turn the main agent plans a split of 2 to
+  `max_delegations` workers before writing anything:
+  - by angle when the topics are facets of one subject (augustus / roman
+    era expert / research history), each angle drawing on all topics;
+  - by topic when they are separate subjects.
+  Each worker's context says what the others cover, and summarising is
+  never delegated. The main agent then writes the report itself (rule 9):
+  themed headings, threads across workers, disagreements, gaps. The worker
+  cards are the evidence.
+  - A research turn is the first user message, or one `Chat.tsx` flags
+    `research: true` (an option or idea clicked).
+  - Code sends the reply back once if it used fewer than 2 workers
+    (`team_nudges`), and once if a team reported back but the reply has no
+    report (`report_nudges`, under 400 characters).
+  - Typed questions aren't forced into a team.
+  - Without focus topics the older one-worker-per-listed-keyword rule
+    below still applies.
 - **Delegation is mandatory for multi-keyword requests, not a default the
   model can talk itself out of.** A request naming several distinct
   keywords/topics/roles (e.g. a comma-separated list) MUST delegate one

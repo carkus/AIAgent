@@ -64,12 +64,39 @@ export interface AgentSpec {
   temperature?: number | null;
 }
 
+export interface BootstrapIssue { tool: string; message: string }
+
+export interface BootstrapReport {
+  agent_type?: string | null;
+  requested?: { provider?: string | null; model?: string | null };
+  has_image?: boolean;
+  grounding?: { purpose?: string; similarity?: number | null; persona?: string | null; tools?: string[] }[];
+  catalog?: string[];
+  design?: {
+    provider?: string | null;
+    model?: string | null;
+    persona?: string | null;
+    tools?: { name?: string; source?: string | null }[];
+  };
+  json_fix?: { error: string; fixed: boolean };
+  code_checks?: { issues: BootstrapIssue[]; retried: boolean; remaining?: BootstrapIssue[]; dropped?: string[] };
+  mcp_dropped?: string[];
+  spec_notes?: string[];
+  self_checks?: { check?: string; passed?: boolean; severity?: string; reason?: string }[];
+  memory?: 'recorded' | 'skipped_restricted';
+}
+
 export interface AgentConfig {
   purpose: string;
   // Timed spans of the bootstrap that generated this config (bootstrap.py's
   // generate_agent_config_stream) — shown as "How this agent was made" in
   // Chat.tsx. Absent on configs bootstrapped before tracing existed.
   bootstrap_trace?: TraceSpan[];
+  // Step-by-step account of the same bootstrap (bootstrap.py's
+  // bootstrap_report): what it was grounded on, what the model proposed,
+  // what the code checks found and fixed or dropped, and the self-checks.
+  // Absent on configs bootstrapped before this existed.
+  bootstrap_report?: BootstrapReport;
   system_prompt: string;
   tools: ToolDefinition[];
   // Stable identity assigned by bootstrap.py, independent of name/description —
@@ -85,6 +112,9 @@ export interface AgentConfig {
   intro?: string;
   keywords?: string[];
   location?: string;
+  // "Factor in location" on Setup. Absent = the type's default (on only for
+  // job_search); agent_stream.py drops the location when false.
+  factor_location?: boolean;
   provider?: LlmProvider;
   // Which locally-pulled Ollama model to use; ignored unless provider === 'ollama'.
   // undefined/null = the backend's OLLAMA_MODEL default.
@@ -136,6 +166,9 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   feedback?: ResultFeedback;
+  // A research turn on the job (the opening message, or a clicked option):
+  // agent_stream.py then requires a team of at least 2 workers.
+  research?: boolean;
   // Base64 data URL of a user-attached image, sent alongside content
   // for the backend to fold into a multimodal request (agent_stream.py).
   // Optional/undefined on every message that isn't an image upload.
@@ -220,7 +253,7 @@ export type StreamEvent =
   // (not synthetic) — how long this turn has run and the running token count
   // across every LLM call so far this turn — surfaced so the chat UI can show
   // more than the bare message string during a long gap between tool calls.
-  | { type: 'status'; message: string; elapsed_seconds?: number; tokens_so_far?: { input_tokens: number; output_tokens: number } }
+  | { type: 'status'; message: string; title?: string; why?: string; elapsed_seconds?: number; tokens_so_far?: { input_tokens: number; output_tokens: number } }
   // Which provider/model actually served the agent loop's LLM call this
   // iteration (and which were tried and failed first) — same shape and
   // purpose as bootstrap's pre-existing 'model' event below, just not
@@ -248,6 +281,9 @@ export type StreamEvent =
       // Output relics the agent offers for this answer (agent_stream.py's
       // rule 7b). Built only if the user clicks one (POST /relic).
       relic_suggestions?: RelicSuggestion[];
+      // The agent's proposed next moves for the job (agent_stream.py's
+      // REPORT BACK WITH OPTIONS); each is sent as the next message on click.
+      next_options?: string[];
     }
   | { type: 'error'; message: string }
 
@@ -309,6 +345,7 @@ export interface SavedChatMessage {
   relicSuggestions?: RelicSuggestion[];
   relics?: Relic[];
   trace?: TraceSpan[];
+  nextOptions?: string[];
 }
 
 // A whole saved conversation: everything needed to drop straight back into

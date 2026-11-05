@@ -28,6 +28,8 @@ interface Props {
   className?: string
   contentClassName?: string
   label?: string // accessible name for the frame
+  // External mode only: exact frame height in px (content-sized), replacing the CSS square.
+  height?: number
 }
 
 const MIN_SCALE = 0.1
@@ -37,7 +39,7 @@ const STEP = 1.25
 // grew into a wide empty margin on a full-width frame.
 const FIT_PAD = 12
 
-export default function GraphFrame({ children, zoom, onExpand, className, contentClassName, label = 'Graph' }: Props) {
+export default function GraphFrame({ children, zoom, onExpand, className, contentClassName, label = 'Graph', height: externalHeight }: Props) {
   const frameRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ scale: 1, x: 0, y: 0 })
@@ -132,7 +134,11 @@ export default function GraphFrame({ children, zoom, onExpand, className, conten
     <div
       ref={frameRef}
       className={`${styles.frame} ${external ? '' : styles.pannable} ${className ?? ''}`}
-      style={!external && height !== null ? { height } : undefined}
+      style={
+        !external && height !== null ? { height }
+          : external && externalHeight !== undefined ? { height: externalHeight, aspectRatio: 'auto' }
+            : undefined
+      }
       role="group"
       aria-label={label}
       onPointerDown={onPointerDown}

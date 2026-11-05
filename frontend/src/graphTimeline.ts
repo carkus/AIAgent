@@ -10,7 +10,8 @@ import type { ToolCall } from './types'
 
 export type TimelineNode =
   | { id: string; kind: 'plan'; seq: number; summary: string | null }
-  | { id: string; kind: 'status'; seq: number; message: string }
+  // title/why: what the step was and why it happened (agent_stream.py _status).
+  | { id: string; kind: 'status'; seq: number; message: string; title?: string; why?: string }
   | {
       id: string
       kind: 'tool'

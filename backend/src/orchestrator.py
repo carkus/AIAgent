@@ -134,6 +134,7 @@ def _run_worker(task: str, context: str, provider: str | None, model: str | None
     user_content = task if not context else f"{task}\n\nContext:\n{context}"
 
     final_response = ""
+    next_options: list[str] = []
     tool_calls: list[dict] = []
     loop_trace: list[dict] = []
     try:
@@ -145,6 +146,7 @@ def _run_worker(task: str, context: str, provider: str | None, model: str | None
             if event["type"] == "done":
                 final_response = event["response"]
                 tool_calls = event["tool_calls"]
+                next_options = event.get("next_options") or []
             elif event["type"] == "error":
                 final_response = f"Worker failed: {event['message']}"
             elif event["type"] == "trace":
@@ -172,6 +174,9 @@ def _run_worker(task: str, context: str, provider: str | None, model: str | None
         "worker_traits": persona.get("traits", []),
         "task": task,
         "response": final_response,
+        # The worker's own proposed next moves for its topic; the main agent
+        # builds the options it offers the user from these.
+        "next_options": next_options,
         "tools_used": [tc["tool"] for tc in tool_calls],
         "tool_sources": [tc.get("source", "generated") for tc in tool_calls],
         # Parallel to tools_used/tool_sources — the raw JSON result string of

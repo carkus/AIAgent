@@ -1548,3 +1548,66 @@
     margin: 0 0.15rem;
   }
 }
+
+/* The agent's proposed next moves under a reply (nextOptions). */
+.nextOptions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+
+.nextOptionBtn {
+  composes: btn-base from global;
+  background: #ffffff;
+  border: 1px solid #ddd9cd;
+  color: #1f6f73;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  padding: 0.35rem 0.7rem;
+  text-align: left;
+  max-width: 100%;
+}
+
+.nextOptionBtn:hover:not(:disabled) {
+  border-color: #1f6f73;
+}
+
+.nextOptionBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* "New content" badge: pinned to the bottom right of the transcript while
+   the reader is scrolled up. A zero-height sticky dock, so it takes no room
+   in the feed itself. */
+.newContentDock {
+  position: sticky;
+  bottom: 0;
+  align-self: flex-end;
+  height: 0;
+  z-index: 5;
+}
+
+.newContentBadge {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0.5rem;
+  white-space: nowrap;
+  padding: 0.3rem 0.7rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-accent, #1f6f73);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(22, 50, 74, 0.18);
+}
+
+.newContentBadge:hover {
+  opacity: 0.9;
+}

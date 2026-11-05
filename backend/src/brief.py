@@ -58,19 +58,16 @@ _BRIEF_PROMPT = """You are drafting the short "Brief" shown on an AI agent platf
 Agent type: {agent_type}
 Agent name: {agent_name}
 Specialties/keywords: {keywords}
-Location focus: {location}
-Active behaviors: {behaviors}
+{location_line}Active behaviors: {behaviors}
 Active personality traits: {traits}
 {prior_qa}
 Most of the time, just write the brief directly and confidently — you don't need the user's permission to interpret a reasonable set of specialties. Only when the specialties are genuinely ambiguous, sparse, or pulling in conflicting directions (e.g. a single very broad word with no other context, two contradictory domains, or a location need that isn't clear) should you ask the user ONE short, specific clarifying question instead of guessing — don't ask just because you *could* be more specific.
 
 If Agent type is not "job_search", the agent has no ability to search live job listings or job boards — even when a specialty sounds job-related (e.g. "jobs advertised", "job openings"), describe it as scouting for leads and pointing toward useful sources on that topic, never as finding, searching, or reporting back actual job postings/listings. That capability only exists for a "job_search" agent type.
 
-When writing the brief: third person, THREE short paragraphs separated by a blank line (a "
+When writing the brief: third person, THREE short paragraphs separated by a blank line (written as \n\n inside the JSON string, never a raw line break), roughly 8-11 sentences in all. It should read as a considered write-up of this particular agent, not a one-liner.
 
-" inside the JSON string), roughly 8-11 sentences in all. It should read as a considered write-up of this particular agent, not a one-liner.
-
-PARAGRAPH 1, the focuses: your analytical read of the combination, not the list. Open with what these specialties mean TOGETHER that none of them means alone: the intersection they define, the underlying goal they imply, or which one is load-bearing and which ones narrow or qualify it. Then analyse that combination: why it is more useful than covering each specialty separately, where they pull against each other or leave a gap, and one concrete, specific scenario where commissioning this agent would actually pay off (a real situation, not "this could be useful for various purposes"). Do NOT open by naming the keywords one after another, and never name more than two keywords in a single sentence; refer to them through what they combine into (e.g. "solar", "insurance", "farms" becomes "the risk side of putting solar on agricultural land", not "solar, insurance and farms"). If this paragraph would read the same with the keywords shuffled, or a reader could reconstruct it from the keyword list alone, it is a keyword walk: rewrite it. A location ({location}) only belongs where it genuinely shapes the work.
+PARAGRAPH 1, the focuses: your analytical read of the combination, not the list. Open with what these specialties mean TOGETHER that none of them means alone: the intersection they define, the underlying goal they imply, or which one is load-bearing and which ones narrow or qualify it. Then analyse that combination: why it is more useful than covering each specialty separately, where they pull against each other or leave a gap, and one concrete, specific scenario where commissioning this agent would actually pay off (a real situation, not "this could be useful for various purposes"). Do NOT open by naming the keywords one after another, and never name more than two keywords in a single sentence; refer to them through what they combine into (e.g. "solar", "insurance", "farms" becomes "the risk side of putting solar on agricultural land", not "solar, insurance and farms"). If this paragraph would read the same with the keywords shuffled, or a reader could reconstruct it from the keyword list alone, it is a keyword walk: rewrite it.{location_rule}
 
 PARAGRAPH 2, its character: how the selected personality traits and behaviors shape the way it will tackle THESE focuses. Name EVERY active trait and behavior listed above (none may be left out), each tied to a concrete effect on this case: what it will do differently with these specialties because of it (e.g. "Meticulous" means it will flag where the evidence on crop-insurance terms is thin rather than smoothing it over; "Max Delegation" means each focus goes to its own worker agent and the main agent only compares their findings). Where two selections interact or pull against each other (e.g. "Concise" with "Cite Sources"), say how that plays out. Never just list the labels. If both traits and behaviors are "(none)", keep this paragraph to one sentence on the plain, default way it will work.
 
@@ -123,11 +120,19 @@ def generate_brief(
         )
 
     location_clause = f" in {location}" if location else ""
+    # No location at all: say nothing about it, or the model spends a
+    # sentence on "with no location specified".
+    location_line = f"Location focus: {location}\n" if location else ""
+    location_rule = (
+        f" A location ({location}) only belongs where it genuinely shapes the work."
+        if location else " The agent is not location-bound: never mention location."
+    )
     prompt = _BRIEF_PROMPT.format(
         agent_type=agent_type or "general",
         agent_name=agent_name or "Agent",
         keywords=", ".join(keywords) if keywords else "(none yet)",
-        location=location or "(none specified)",
+        location_line=location_line,
+        location_rule=location_rule,
         behaviors=", ".join(behaviors) if behaviors else "(none)",
         traits=", ".join(traits) if traits else "(none)",
         location_clause=location_clause,
@@ -145,7 +150,10 @@ def generate_brief(
         )
         raw = (response.choices[0].message.content or "").strip()
         raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        data = json.loads(raw)
+        # strict=False: small models put real line breaks inside the text
+        # string; strict parsing rejected the whole brief, and Setup showed
+        # its two-line template fallback instead.
+        data = json.loads(raw, strict=False)
         text = (data.get("text") or "").strip()
         kind = data.get("type") if data.get("type") in ("brief", "question") else "brief"
         warning = (data.get("warning") or "").strip() or None

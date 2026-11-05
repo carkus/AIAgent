@@ -11,6 +11,7 @@ import CopyButton from './CopyButton'
 import ImageViewer from './ImageViewer'
 import JsonTree from './JsonTree'
 import MermaidDiagram from './MermaidDiagram'
+import { toolDisplayName } from '../toolLabels'
 
 // Lets an image result row deep inside RawResult/WorkerResultCard open the
 // shared full-screen viewer without threading a callback prop through every
@@ -719,7 +720,7 @@ function KeywordSection({
           {!hasStructured && toolCalls.map((tc, i) => (
             <div key={i} className={styles.rawEntry}>
               {toolCalls.length > 1 && (
-                <span className={styles.toolName}>{tc.tool}</span>
+                <span className={styles.toolName}>{toolDisplayName(tc.tool)}</span>
               )}
               {tc.source === 'mcp' && <span className={styles.mcpBadge}>🔌 MCP</span>}
               <RawResult result={tc.result} />
@@ -975,7 +976,7 @@ function LiveToolRow({ tc, location }: { tc: ToolCall; location?: string }) {
   return (
     <div className={styles.entry}>
       <div className={styles.entryHeader}>
-        <span className={styles.toolName}>{tc.tool}</span>
+        <span className={styles.toolName}>{toolDisplayName(tc.tool)}</span>
         {tc.source === 'mcp' && <span className={styles.mcpBadge}>🔌 MCP</span>}
         <InputSummary inputs={tc.inputs} />
       </div>

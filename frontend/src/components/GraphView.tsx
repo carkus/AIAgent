@@ -4,12 +4,17 @@
 // Reads the same TimelineNode[] Chat.tsx accumulates from the agent loop's
 // StreamEvents (status/tool_start/tool_result/plan/done/error) — no backend
 // changes needed, the event stream already has the right granularity.
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
   useViewport,
+  useNodesInitialized,
+  useStore,
   Background,
   BackgroundVariant,
   Handle,
@@ -23,6 +28,7 @@ import type { EvalResultItem, TraceSpan } from '../types'
 import JsonTree from './JsonTree'
 import GraphFrame from './GraphFrame'
 import styles from '../styles/GraphView.module.css'
+import { toolDisplayName } from '../toolLabels'
 
 interface Props {
   timeline: TimelineNode[]
@@ -38,8 +44,13 @@ function fmtDuration(ms: number): string {
   return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`
 }
 
-const COL_WIDTH = 360
-const ROW_HEIGHT = 150
+// Vertical layout: each step is a row, top to bottom. Parallel steps (a
+// wave of delegated workers) sit side by side, wrapping after
+// MAX_PER_ROW so a 6-worker wave doesn't zoom the whole graph out.
+const COL_WIDTH = 256 // node is 236px wide (GraphView.module.css .node)
+const ROW_GAP = 22
+const MAX_PER_ROW = 3
+const DEFAULT_NODE_HEIGHT = 72 // until React Flow has measured the real card
 
 function parseResultPreview(raw: string | undefined): string {
   if (!raw || raw === '…') return ''
@@ -50,6 +61,62 @@ function parseResultPreview(raw: string | undefined): string {
   } catch { /* use raw as-is */ }
   text = text.replace(/\s+/g, ' ').trim()
   return text.length > 150 ? text.slice(0, 150) + '…' : text
+}
+
+// Plain-text preview of a markdown reply: drops fenced blocks (diagrams,
+// options), link targets and markup characters.
+function replyPreview(md: string | undefined): string {
+  if (!md) return ''
+  const text = md
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[#>*_`|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return text.length > 160 ? text.slice(0, 160).replace(/\s+\S*$/, '') + '…' : text
+}
+
+// What the run as a whole took, for the "Reply ready" card and its detail.
+interface RunSummary {
+  tools: number
+  workers: number
+  modelCalls: number
+  tokens: number
+  wallMs: number
+  diagrams: number
+}
+
+function summarizeRun(timeline: TimelineNode[], trace: TraceSpan[], response: string): RunSummary {
+  const toolNodes = timeline.filter(n => n.kind === 'tool')
+  const workers = toolNodes.filter(n => n.kind === 'tool' && n.tool === 'delegate_to_worker').length
+  let tokens = 0
+  let first = Infinity
+  let last = 0
+  for (const s of trace) {
+    tokens += (s.input_tokens ?? 0) + (s.output_tokens ?? 0)
+    if (!s.parent) {
+      first = Math.min(first, s.start_ms)
+      last = Math.max(last, s.start_ms + s.duration_ms)
+    }
+  }
+  return {
+    tools: toolNodes.length - workers,
+    workers,
+    modelCalls: trace.filter(s => !s.parent && (s.kind === 'llm' || s.kind === 'check')).length,
+    tokens,
+    wallMs: first === Infinity ? 0 : last - first,
+    diagrams: (response.match(/```mermaid/g) ?? []).length,
+  }
+}
+
+function runSummaryLine(r: RunSummary): string {
+  return [
+    r.tools > 0 && `${r.tools} tool${r.tools === 1 ? '' : 's'}`,
+    r.workers > 0 && `${r.workers} worker${r.workers === 1 ? '' : 's'}`,
+    r.modelCalls > 0 && `${r.modelCalls} model call${r.modelCalls === 1 ? '' : 's'}`,
+    r.diagrams > 0 && `${r.diagrams} diagram${r.diagrams === 1 ? '' : 's'}`,
+    r.wallMs > 0 && fmtDuration(r.wallMs),
+  ].filter(Boolean).join(' · ')
 }
 
 function toolIcon(node: Extract<TimelineNode, { kind: 'tool' }>): string {
@@ -79,11 +146,11 @@ function nodeDisplay(node: TimelineNode, pending: boolean): { icon: string; titl
     case 'plan':
       return { icon: '🧭', title: 'Plan', subtitle: node.summary ?? '', variant: 'plan' }
     case 'status':
-      return { icon: '💭', title: 'Thinking', subtitle: node.message, variant: 'status' }
+      return { icon: '💭', title: node.title ?? 'Thinking', subtitle: node.why ?? node.message, variant: 'status' }
     case 'tool':
-      return { icon: toolIcon(node), title: node.tool, subtitle: pending ? 'running…' : parseResultPreview(node.result), variant: 'tool' }
+      return { icon: toolIcon(node), title: toolDisplayName(node.tool), subtitle: pending ? 'running…' : parseResultPreview(node.result), variant: 'tool' }
     case 'done':
-      return { icon: '✅', title: 'Reply ready', subtitle: parseResultPreview(node.response), variant: 'done' }
+      return { icon: '✅', title: 'Reply ready', subtitle: replyPreview(node.response), variant: 'done' }
     case 'error':
       return { icon: '⚠️', title: 'Error', subtitle: node.message, variant: 'error' }
   }
@@ -95,22 +162,22 @@ interface TraceNodeData {
   isLast: boolean
   evalSummary?: { passed: number; failed: number }
   span?: TraceSpan
+  run?: RunSummary
   onOpen: (node: TimelineNode) => void
 }
 
 function TraceNode({ data }: { data: TraceNodeData }) {
-  const { node, pending, evalSummary, span, onOpen } = data
+  const { node, pending, evalSummary, span, run, onOpen } = data
   const { icon, title, subtitle, variant } = nodeDisplay(node, pending)
 
   return (
     <div
       className={`${styles.node} ${styles[`node_${variant}`]} ${pending ? styles.nodePending : ''}`}
-      onClick={() => onOpen(node)}
       role="button"
       tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onOpen(node) }}
     >
-      <Handle type="target" position={Position.Left} className={styles.handle} />
+      <Handle type="target" position={Position.Top} className={styles.handle} />
       <div className={styles.nodeHeader}>
         <span className={styles.nodeIcon} aria-hidden="true">{icon}</span>
         <span className={styles.nodeTitle}>{title}</span>
@@ -128,9 +195,12 @@ function TraceNode({ data }: { data: TraceNodeData }) {
         <p className={styles.nodeEval}>
           {evalSummary.passed > 0 && <span className={styles.evalPass}>✓ {evalSummary.passed}</span>}
           {evalSummary.failed > 0 && <span className={styles.evalFail}>✕ {evalSummary.failed}</span>}
+          <span className={styles.evalLabel}>self-checks</span>
         </p>
       )}
-      <Handle type="source" position={Position.Right} className={styles.handle} />
+      {run && runSummaryLine(run) && <p className={styles.nodeMeta}>{runSummaryLine(run)}</p>}
+      {node.kind === 'done' && <span className={styles.nodeOpen}>Full reply and checks ›</span>}
+      <Handle type="source" position={Position.Bottom} className={styles.handle} />
     </div>
   )
 }
@@ -141,7 +211,7 @@ const nodeTypes = { trace: TraceNode }
 // pattern as ImageViewer.tsx, read-only/no zoom since this is text, not an
 // image. Shows the untruncated title/message/inputs/result the compact
 // 320px card can only ever preview.
-function NodeDetailModal({ node, onClose }: { node: TimelineNode; onClose: () => void }) {
+function NodeDetailModal({ node, onClose, evalResults, run }: { node: TimelineNode; onClose: () => void; evalResults: EvalResultItem[]; run?: RunSummary }) {
   const { icon, title } = nodeDisplay(node, node.kind === 'tool' && node.result === undefined)
   return (
     <div className={styles.modalOverlay} onClick={onClose}>
@@ -155,17 +225,42 @@ function NodeDetailModal({ node, onClose }: { node: TimelineNode; onClose: () =>
           <p className={styles.modalText}>{node.summary || '(no summary)'}</p>
         )}
         {node.kind === 'status' && (
-          <p className={styles.modalText}>{node.message}</p>
+          <>
+            {node.why && <p className={styles.modalText}>{node.why}</p>}
+            <p className={styles.modalText}>{node.message}</p>
+          </>
         )}
         {node.kind === 'error' && (
           <p className={styles.modalText}>{node.message}</p>
         )}
-        {node.kind === 'done' && (() => {
-          const parsed = tryParseJson(node.response)
-          return parsed !== undefined
-            ? <JsonTree data={parsed} />
-            : <p className={styles.modalText}>{node.response || '(empty)'}</p>
-        })()}
+        {node.kind === 'done' && (
+          <>
+            {run && runSummaryLine(run) && <p className={styles.modalMeta}>{runSummaryLine(run)}{run.tokens > 0 && ` · ${run.tokens.toLocaleString()} tokens`}</p>}
+            <p className={styles.modalLabel}>Reply</p>
+            {(() => {
+              const parsed = tryParseJson(node.response)
+              return parsed !== undefined
+                ? <JsonTree data={parsed} />
+                : node.response
+                  ? <div className={styles.modalMarkdown}><ReactMarkdown remarkPlugins={[remarkGfm]}>{node.response}</ReactMarkdown></div>
+                  : <p className={styles.modalText}>(empty)</p>
+            })()}
+            {evalResults.length > 0 && (
+              <>
+                <p className={styles.modalLabel}>Self-checks</p>
+                <ul className={styles.checkList}>
+                  {evalResults.map((e, i) => (
+                    <li key={`${e.check}-${i}`}>
+                      <span className={e.passed ? styles.evalPass : styles.evalFail}>{e.passed ? '✓' : '✕'}</span>{' '}
+                      <strong>{e.check.replace(/_/g, ' ')}</strong>
+                      {e.reason && <span className={styles.checkReason}> — {e.reason}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </>
+        )}
         {node.kind === 'tool' && (
           <>
             {node.inputs && Object.keys(node.inputs).length > 0 && (
@@ -190,7 +285,9 @@ function NodeDetailModal({ node, onClose }: { node: TimelineNode; onClose: () =>
   )
 }
 
-function buildGraph(timeline: TimelineNode[], live: boolean, evalResults: EvalResultItem[], trace: TraceSpan[], onOpen: (node: TimelineNode) => void): { nodes: Node[]; edges: Edge[] } {
+interface Size { width: number; height: number }
+
+function buildGraph(timeline: TimelineNode[], live: boolean, evalResults: EvalResultItem[], trace: TraceSpan[], onOpen: (node: TimelineNode) => void, sizes: Map<string, Size>): { nodes: Node[]; edges: Edge[] } {
   const spanByCall = new Map<number, TraceSpan>()
   for (const s of trace) {
     if (!s.parent && s.call_index != null && (s.kind === 'tool' || s.kind === 'worker')) spanByCall.set(s.call_index, s)
@@ -232,19 +329,32 @@ function buildGraph(timeline: TimelineNode[], live: boolean, evalResults: EvalRe
     ? { passed: evalResults.filter(e => e.passed).length, failed: evalResults.filter(e => !e.passed).length }
     : undefined
 
-  const nodes: Node[] = timeline.map(node => {
-    const r = rankOf.get(node.id)!
+  // Top edge of every node: ranks stack downward, a wrapped wave takes
+  // several sub-rows, and each sub-row is as tall as its tallest card.
+  const pos = new Map<string, { x: number; y: number }>()
+  let y = 0
+  for (const r of [...byRank.keys()].sort((a, b) => a - b)) {
     const group = byRank.get(r)!
-    const idx = group.indexOf(node)
-    const y = idx * ROW_HEIGHT - ((group.length - 1) * ROW_HEIGHT) / 2
+    for (let start = 0; start < group.length; start += MAX_PER_ROW) {
+      const row = group.slice(start, start + MAX_PER_ROW)
+      row.forEach((n, i) => pos.set(n.id, { x: (i - (row.length - 1) / 2) * COL_WIDTH, y }))
+      y += Math.max(...row.map(n => sizes.get(n.id)?.height ?? DEFAULT_NODE_HEIGHT)) + ROW_GAP
+    }
+  }
+
+  const nodes: Node[] = timeline.map(node => {
     const pending = node.kind === 'tool'
       ? node.result === undefined
       : live && !hasTerminal && node === lastNode
     return {
       id: node.id,
       type: 'trace',
-      position: { x: r * COL_WIDTH, y },
-      data: { node, pending, isLast: node === lastNode, evalSummary: node.kind === 'done' ? evalSummary : undefined, span: node.kind === 'tool' ? spanByCall.get(node.callIndex) : undefined, onOpen },
+      position: pos.get(node.id)!,
+      // React Flow drops its measurement whenever it is handed a new node
+      // object; passing the last known size back keeps the layout stable
+      // (its ResizeObserver still reports any real change in size).
+      ...(sizes.has(node.id) ? { measured: sizes.get(node.id) } : {}),
+      data: { node, pending, isLast: node === lastNode, evalSummary: node.kind === 'done' ? evalSummary : undefined, span: node.kind === 'tool' ? spanByCall.get(node.callIndex) : undefined, run: node.kind === 'done' ? summarizeRun(timeline, trace, node.response) : undefined, onOpen },
       draggable: false,
       connectable: false,
     }
@@ -284,22 +394,95 @@ export default function GraphView(props: Props) {
   )
 }
 
-const FIT_OPTIONS = { padding: 0.25, maxZoom: 1 }
+// Inset (px) around the graph, and the tallest the frame may grow (as a
+// share of the window) before the graph is zoomed out to fit instead.
+const FIT_PAD = 16
+const MAX_FRAME_VH = 0.85
+const MIN_FRAME_PX = 140
 
 function GraphViewInner({ timeline, live = false, evalResults = [], trace = [] }: Props) {
   const [openNode, setOpenNode] = useState<TimelineNode | null>(null)
-  const { nodes, edges } = useMemo(() => buildGraph(timeline, live, evalResults, trace, setOpenNode), [timeline, live, evalResults, trace])
+  // Measured card heights feed back into the layout so rows sit tight.
+  const [sizes, setSizes] = useState<Map<string, Size>>(() => new Map())
+  const { nodes, edges } = useMemo(() => buildGraph(timeline, live, evalResults, trace, setOpenNode, sizes), [timeline, live, evalResults, trace, sizes])
   const flow = useReactFlow()
   const { zoom } = useViewport()
+  const initialized = useNodesInitialized()
+  // Changes whenever any card's measured size changes, so a card that grows
+  // in place (no node added) still triggers a re-layout and refit.
+  const sizeKey = useStore(st => {
+    let k = ''
+    for (const n of st.nodeLookup.values()) k += `${n.id}:${Math.round(n.measured?.width ?? 0)}x${Math.round(n.measured?.height ?? 0)};`
+    return k
+  })
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(0)
+  const [height, setHeight] = useState<number | undefined>(undefined)
+
+  useLayoutEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth))
+    ro.observe(el)
+    setWidth(el.clientWidth)
+    return () => ro.disconnect()
+  }, [])
+
+  // The frame is sized to the graph: fit the measured node bounds to the
+  // width (never past 100%), make the frame exactly that tall (capped), and
+  // place the viewport ourselves so nothing needs scrolling inside it.
+  const fitToContent = useCallback(() => {
+    if (!width) return
+    // By id, so React Flow uses its internal measured sizes; the user
+    // nodes' own `measured` can lag a card that just grew.
+    const b = flow.getNodesBounds(flow.getNodes().map(n => n.id))
+    if (!b.width || !b.height) return
+    const maxH = window.innerHeight * MAX_FRAME_VH
+    const z = Math.min(1, (width - 2 * FIT_PAD) / b.width, (maxH - 2 * FIT_PAD) / b.height)
+    const h = Math.max(MIN_FRAME_PX, b.height * z + 2 * FIT_PAD)
+    setHeight(h)
+    void flow.setViewport({
+      x: (width - b.width * z) / 2 - b.x * z,
+      y: (h - b.height * z) / 2 - b.y * z,
+      zoom: z,
+    })
+  }, [flow, width])
+
+  // Fit-to-frame is the default view, and it is re-applied whenever the
+  // graph changes (a step or worker added, a card resized) or the frame
+  // width changes, even if the user had zoomed or panned in the meantime.
+  // Runs a frame late so React Flow's store already holds the new
+  // positions and measured sizes when the bounds are read.
+  useEffect(() => {
+    // Merge every real (non-zero) measurement into the layout sizes; a card
+    // that grew moves everything below it down on the next render.
+    let changed = false
+    const next = new Map(sizes)
+    for (const { id } of flow.getNodes()) {
+      // The internal node holds the ResizeObserver's latest size.
+      const m = flow.getInternalNode(id)?.measured
+      const w = Math.round(m?.width ?? 0)
+      const h = Math.round(m?.height ?? 0)
+      if (!w || !h) continue
+      const prev = next.get(id)
+      if (!prev || prev.width !== w || prev.height !== h) { next.set(id, { width: w, height: h }); changed = true }
+    }
+    if (changed) { setSizes(next); return } // re-layout; this effect runs again and then fits
+    if (!initialized) return
+    const raf = requestAnimationFrame(fitToContent)
+    return () => cancelAnimationFrame(raf)
+  }, [initialized, nodes, sizeKey, fitToContent, flow, sizes])
 
   return (
+    <div ref={wrapRef}>
     <GraphFrame
       className={styles.container}
       label="Reasoning trace graph"
+      height={height}
       zoom={{
         zoomIn: () => { void flow.zoomIn({ duration: 150 }) },
         zoomOut: () => { void flow.zoomOut({ duration: 150 }) },
-        fit: () => { void flow.fitView({ ...FIT_OPTIONS, duration: 150 }) },
+        fit: fitToContent,
         level: zoom,
       }}
     >
@@ -307,22 +490,33 @@ function GraphViewInner({ timeline, live = false, evalResults = [], trace = [] }
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={FIT_OPTIONS}
         minZoom={0.1}
         maxZoom={4}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
+        onNodeClick={(_, n) => setOpenNode((n.data as unknown as TraceNodeData).node)}
         panOnDrag
-        panOnScroll
+        panOnScroll={false}
         zoomOnScroll={false}
+        preventScrolling={false}
         zoomOnPinch
       >
         <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#e2dfd5" />
       </ReactFlow>
-      {openNode && <NodeDetailModal node={openNode} onClose={() => setOpenNode(null)} />}
+      {/* Portalled: inside the frame, a transformed ancestor turned the
+          fixed overlay into one clipped to the graph box. */}
+      {openNode && createPortal(
+        <NodeDetailModal
+          node={openNode}
+          onClose={() => setOpenNode(null)}
+          evalResults={evalResults}
+          run={openNode.kind === 'done' ? summarizeRun(timeline, trace, openNode.response) : undefined}
+        />,
+        document.body,
+      )}
     </GraphFrame>
+    </div>
   )
 }

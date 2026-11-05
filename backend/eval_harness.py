@@ -341,6 +341,7 @@ def _bootstrap_fixture_config(case: dict, arm: tuple[str, str | None]) -> dict |
     if config is None:
         return None
     config.pop("bootstrap_trace", None)
+    config.pop("bootstrap_report", None)
     config["spec"] = spec
     if case.get("keywords"):
         config["keywords"] = case["keywords"]

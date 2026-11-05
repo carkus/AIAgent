@@ -33,8 +33,9 @@ export const DEFAULT_AGENT_SPEC: AgentSpec = {
 // `fetch_page` (general web fetch) are the two built-in primitives every
 // agent gets — see backend/src/agent_stream.py — so "Job search" leans on
 // the former, "Research" the latter, and "General" is explicitly a scout/
-// pointer role (leads to better sources, not a deep dive) that's told never
-// to touch job search even via fetch_page.
+// pointer role (leads to better sources, not a deep dive). It isn't told
+// "don't job-search": naming jobs primed small models to answer as a job
+// search; search_jobs is simply absent from its tool list.
 export interface AgentTemplate {
   id: AgentTemplateId
   label: string
@@ -51,9 +52,8 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
       `General-purpose assistant covering the following topics: ${keywords.join(', ')}. ` +
       `Scout around each topic and surface leads to better information — ` +
       `what it is, why it matters, and where to look next for the real depth — ` +
-      `rather than a deep or narrowly-angled investigation itself. This agent is not a ` +
-      `job search tool: never search for job listings, salaries, or job boards, even if a ` +
-      `topic sounds job-related — just point toward better sources on it.` +
+      `rather than a deep or narrowly-angled investigation itself. Take each topic in ` +
+      `its plain subject-matter sense (a person, period, field or idea to learn about).` +
       `${loc ? ` The user's location is ${loc}. Only bring location into a topic when that ` +
         `topic is actually location-dependent (e.g. local news, nearby events, regional ` +
         `context) — do not mention or work the location into a topic that has no natural ` +

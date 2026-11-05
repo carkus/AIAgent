@@ -8,6 +8,7 @@ import { BEHAVIOR_TOGGLES, PERSONALITY_TRAITS } from '../agentTypes'
 import ToolActivity from './ToolActivity'
 import GraphView from './GraphView'
 import CaseFile from './CaseFile'
+import AgentMakingReport from './AgentMakingReport'
 import { appendTimelineNode, nextSeq, type TimelineNode } from '../graphTimeline'
 import MermaidDiagram from './MermaidDiagram'
 import JsonTree from './JsonTree'
@@ -233,6 +234,8 @@ interface ChatMessage {
   content: string
   // The user's optional 👍/👎 (+ note) on this result; see ResultRating.
   feedback?: ResultFeedback
+  // A research turn on the job (opening message or a clicked option); see Message.research.
+  research?: boolean
   // What the user bubble actually shows, when it needs to differ from the
   // literal text sent to the backend as this turn's user message — e.g. the
   // auto-fired initial search still sends a standardized instruction (the
@@ -269,6 +272,9 @@ interface ChatMessage {
   // Output relics the agent offered for this answer (done event's
   // relic_suggestions); each renders as a chip that builds the file on click.
   relicSuggestions?: RelicSuggestion[]
+  // Next moves the agent devised for the job (done event's next_options);
+  // each is a button that sends it as the user's next message.
+  nextOptions?: string[]
   // Relics the user has built from this answer (one per kind), kept so they
   // can be previewed and downloaded again without another model call.
   relics?: Relic[]
@@ -308,6 +314,9 @@ interface Props {
 
 export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, initialMessages, chatId }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages ?? [])
+  // Same rule as agent_stream.py: location only counts for Job search unless
+  // the job ticked "Factor in location".
+  const usedLocation = (agentConfig.factor_location ?? agentConfig.template === 'job_search') ? agentConfig.location : undefined
   const [input, setInput] = useState('')
   // Fresh agent: mission briefing. Resumed chat (initialMessages): an
   // in-character "Previously…" recap of the story so far.
@@ -361,6 +370,14 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // tool_start/tool_result, finished reply) so the transcript follows along
   // live instead of leaving a fast-moving run sitting below the fold.
   const bottomRef = useRef<HTMLDivElement>(null)
+  // Follow the feed only while the reader is at the bottom. Scrolled up to
+  // read, it stays put and a "New content" badge appears instead of the view
+  // being dragged down on every streamed event.
+  const listRef = useRef<HTMLDivElement>(null)
+  const stickRef = useRef(true)
+  // Index of the last reply already scrolled to its start, so it happens once.
+  const landedRef = useRef(-1)
+  const [newBelow, setNewBelow] = useState(false)
   // Stable identity for this conversation so re-saving it (after more
   // messages) updates the same localStorage entry instead of duplicating it.
   const chatIdRef = useRef(chatId ?? crypto.randomUUID())
@@ -391,8 +408,9 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // Per-message "Graph view" toggle (default off — the existing ToolActivity
   // log stays the default view per the confirmed scope). Keyed by message
   // index, which is stable for the lifetime of one chat session's array.
-  const [graphViewMessages, setGraphViewMessages] = useState<Set<number>>(new Set())
-  const [showBootstrapTrace, setShowBootstrapTrace] = useState(false)
+  // Graph view is the default for every reply; this holds the ones switched to the log.
+  const [logViewMessages, setLogViewMessages] = useState<Set<number>>(new Set())
+  const [showBootstrapTrace, setShowBootstrapTrace] = useState(true)
   const [caseFileMessages, setCaseFileMessages] = useState<Set<number>>(new Set())
   function toggleCaseFile(i: number) {
     setCaseFileMessages(prev => {
@@ -403,7 +421,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     })
   }
   function toggleGraphView(i: number) {
-    setGraphViewMessages(prev => {
+    setLogViewMessages(prev => {
       const next = new Set(prev)
       if (next.has(i)) next.delete(i)
       else next.add(i)
@@ -442,8 +460,10 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     // a delegated worker's own bootstrap nothing concrete to latch onto
     // except the location text, so it searched the location itself instead
     // of doing anything related to the actual specialty.
-    const text = 'Produce your standard output across your full focus pool.'
-    sendMessage(text, messages, undefined, text)
+    // Names the topics verbatim: a generic "your focus pool" message got
+    // "please give more context" replies instead of work on them.
+    const text = `Starting commission: research each of these focus topics and report what you find: ${kws.map(k => `"${k}"`).join(', ')}.`
+    sendMessage(text, messages, undefined, text, true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -452,8 +472,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       id: chatIdRef.current,
       agentName,
       agentConfig: { ...agentConfig, keywords: focusPool },
-      messages: messages.map(({ role, content, feedback, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics, trace }) => ({
-        role, content, feedback, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics, trace,
+      messages: messages.map(({ role, content, feedback, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics, trace, nextOptions }) => ({
+        role, content, feedback, displayContent, image, toolCalls, planDiagram, planSummary, durationSeconds, usage, rateLimits, relicSuggestions, relics, trace, nextOptions,
       })),
       savedAt: Date.now(),
     }
@@ -518,7 +538,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // "Export as…" sits inside the Tool activity box, after the worker
   // reports, whenever that box is showing; otherwise in the relic row.
   function exportInToolActivity(msg: ChatMessage, i: number) {
-    return offersRelics(msg) && !!msg.toolCalls?.length && !graphViewMessages.has(i)
+    return offersRelics(msg) && !!msg.toolCalls?.length && !!logViewMessages.has(i)
   }
 
   function exportControls(msg: ChatMessage, i: number) {
@@ -572,7 +592,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
       const context: PdfAgentContext = {
         purpose: agentConfig.purpose,
         keywords: focusPool,
-        location: agentConfig.location,
+        location: usedLocation,
         model: describeModel(agentConfig.provider, agentConfig.ollama_model),
         persona: agentConfig.persona,
         behaviorToggles: (agentConfig.active_toggles ?? [])
@@ -744,8 +764,43 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   }, [])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const list = listRef.current
+    if (!list) return
+    // A reply that just finished: show its first line, not its last.
+    // Following the bottom left a long report's opening off-screen.
+    const last = messages.length - 1
+    const lastMsg = messages[last]
+    if (stickRef.current && lastMsg?.role === 'assistant' && lastMsg.durationSeconds !== undefined && landedRef.current !== last) {
+      landedRef.current = last
+      const reply = markdownRefs.current.get(last)
+      if (reply) {
+        const top = reply.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop - 16
+        if (top < list.scrollHeight - list.clientHeight) {
+          stickRef.current = false
+          list.scrollTo({ top, behavior: 'smooth' })
+          return
+        }
+      }
+    }
+    if (stickRef.current) list.scrollTop = list.scrollHeight
+    else setNewBelow(true)
   }, [messages, thinking])
+
+  function handleListScroll() {
+    const list = listRef.current
+    if (!list) return
+    const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60
+    stickRef.current = atBottom
+    if (atBottom) setNewBelow(false)
+  }
+
+  function jumpToLatest() {
+    const list = listRef.current
+    if (!list) return
+    stickRef.current = true
+    setNewBelow(false)
+    list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' })
+  }
 
   function updateLastMessage(updater: (prev: ChatMessage) => ChatMessage) {
     setMessages(msgs => {
@@ -803,14 +858,17 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     setAttachedImage(null)
   }
 
-  async function sendMessage(text: string, currentMessages: ChatMessage[] = messages, image?: string, displayText?: string) {
+  async function sendMessage(text: string, currentMessages: ChatMessage[] = messages, image?: string, displayText?: string, research?: boolean) {
     if ((!text.trim() && !image) || thinking) return
     setError(null)
+    // Sending is a request to follow the reply: back to the bottom.
+    stickRef.current = true
+    setNewBelow(false)
 
     const controller = new AbortController()
     abortRef.current = controller
 
-    const userMsg: ChatMessage = { role: 'user', content: text, displayContent: displayText, image }
+    const userMsg: ChatMessage = { role: 'user', content: text, displayContent: displayText, image, ...(research ? { research: true } : {}) }
     const withUser = [...currentMessages, userMsg]
     setMessages([...withUser, { role: 'assistant', content: '', liveToolCalls: [] }])
     setThinking(true)
@@ -818,7 +876,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     setStatusTokens(null)
     setModelInfo(null)
 
-    const apiMessages = withUser.map(m => ({ role: m.role, content: m.content, image: m.image, feedback: m.feedback }))
+    const apiMessages = withUser.map(m => ({ role: m.role, content: m.content, image: m.image, feedback: m.feedback, research: m.research }))
     // Send the live, possibly-edited focus pool rather than the static
     // bootstrap-time prop — agent_stream.py rebuilds its delegation
     // instruction from this field fresh on every request.
@@ -843,7 +901,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
               const seq = nextSeq()
               return {
                 ...msg,
-                timeline: appendTimelineNode(msg.timeline ?? [], { id: `status-${seq}`, kind: 'status', seq, message: event.message }),
+                timeline: appendTimelineNode(msg.timeline ?? [], { id: `status-${seq}`, kind: 'status', seq, message: event.message, title: event.title, why: event.why }),
               }
             })
             break
@@ -897,6 +955,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
               usage: event.usage,
               rateLimits: event.rate_limits,
               relicSuggestions: event.relic_suggestions?.length ? event.relic_suggestions : undefined,
+              nextOptions: event.next_options?.length ? event.next_options : undefined,
               timeline: appendTimelineNode(msg.timeline ?? [], { id: 'done', kind: 'done', seq: nextSeq(), response: event.response }),
             }))
             setThinking(false)
@@ -1029,9 +1088,9 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                 {activePersonalityLabels.join(' · ')}
               </span>
             )}
-            {agentConfig.location && (
+            {usedLocation && (
               <span className={styles.locationBadge}>
-                <ToolbarIcon name="location" /> {agentConfig.location}
+                <ToolbarIcon name="location" /> {usedLocation}
               </span>
             )}
             <span className={styles.dateTimeBadge}>
@@ -1157,8 +1216,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         ))}
       </div>
 
-      <div className={styles.messageList}>
-        {agentConfig.bootstrap_trace && agentConfig.bootstrap_trace.length > 0 && (
+      <div className={styles.messageList} ref={listRef} onScroll={handleListScroll}>
+        {(agentConfig.bootstrap_report || (agentConfig.bootstrap_trace && agentConfig.bootstrap_trace.length > 0)) && (
           <div>
             <button
               type="button"
@@ -1167,7 +1226,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
             >
               {showBootstrapTrace ? '🗂️ Hide how this agent was made' : '🗂️ How this agent was made'}
             </button>
-            {showBootstrapTrace && <CaseFile spans={agentConfig.bootstrap_trace} />}
+            {showBootstrapTrace && <AgentMakingReport config={agentConfig} />}
           </div>
         )}
         {messages.length === 0 && !thinking && (
@@ -1195,9 +1254,9 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                   className={styles.viewToggleBtn}
                   onClick={() => toggleGraphView(i)}
                 >
-                  {graphViewMessages.has(i) ? '📋 Log view' : '🕸️ Graph view'}
+                  {!logViewMessages.has(i) ? '📋 Log view' : '🕸️ Graph view'}
                 </button>
-                {graphViewMessages.has(i) ? (
+                {!logViewMessages.has(i) ? (
                   <GraphView timeline={msg.timeline ?? []} live evalResults={evalResults} trace={msg.trace} />
                 ) : (
                   <ToolActivity
@@ -1208,7 +1267,34 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                       source: tc.source,
                     }))}
                     live
-                    location={agentConfig.location}
+                    location={usedLocation}
+                  />
+                )}
+              </>
+            )}
+            {/* Same place as the live graph above, so the reply lands
+                under the graph the reader was watching, not above it. */}
+            {msg.toolCalls && (
+              <>
+                <button
+                  type="button"
+                  className={styles.viewToggleBtn}
+                  onClick={() => toggleGraphView(i)}
+                >
+                  {!logViewMessages.has(i) ? '📋 Log view' : '🕸️ Graph view'}
+                </button>
+                {!logViewMessages.has(i) ? (
+                  <GraphView
+                    timeline={msg.timeline ?? []}
+                    evalResults={i === messages.length - 1 ? evalResults : []}
+                    trace={msg.trace}
+                  />
+                ) : (
+                  <ToolActivity
+                    toolCalls={msg.toolCalls}
+                    live={false}
+                    location={usedLocation}
+                    afterWorkers={exportInToolActivity(msg, i) ? exportControls(msg, i) : null}
                   />
                 )}
               </>
@@ -1289,7 +1375,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                                         className={styles.extendIdeaButton}
                                         title="Ask the agent to extend upon this idea"
                                         disabled={thinking}
-                                        onClick={() => sendMessage(`Extend upon this idea: ${idea}`)}
+                                        onClick={() => sendMessage(`Extend upon this idea: ${idea}`, messages, undefined, undefined, true)}
                                       >
                                         Extend ↗
                                       </button>
@@ -1307,30 +1393,20 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                   })()
                 : <p className={styles.bubbleText}>{msg.displayContent ?? msg.content}</p>
             )}
-            {msg.toolCalls && (
-              <>
-                <button
-                  type="button"
-                  className={styles.viewToggleBtn}
-                  onClick={() => toggleGraphView(i)}
-                >
-                  {graphViewMessages.has(i) ? '📋 Log view' : '🕸️ Graph view'}
-                </button>
-                {graphViewMessages.has(i) ? (
-                  <GraphView
-                    timeline={msg.timeline ?? []}
-                    evalResults={i === messages.length - 1 ? evalResults : []}
-                    trace={msg.trace}
-                  />
-                ) : (
-                  <ToolActivity
-                    toolCalls={msg.toolCalls}
-                    live={false}
-                    location={agentConfig.location}
-                    afterWorkers={exportInToolActivity(msg, i) ? exportControls(msg, i) : null}
-                  />
-                )}
-              </>
+            {msg.role === 'assistant' && msg.durationSeconds !== undefined && msg.nextOptions && msg.nextOptions.length > 0 && (
+              <div className={styles.nextOptions} role="group" aria-label="Options to continue">
+                {msg.nextOptions.map(option => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={styles.nextOptionBtn}
+                    disabled={thinking}
+                    onClick={() => sendMessage(option, messages, undefined, undefined, true)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
             )}
             {msg.role === 'assistant' && msg.trace && msg.trace.length > 0 && (
               <>
@@ -1429,6 +1505,13 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         ))}
         {error && <p className={styles.error}>{error}</p>}
         <div ref={bottomRef} />
+        {newBelow && (
+          <div className={styles.newContentDock}>
+            <button type="button" className={styles.newContentBadge} onClick={jumpToLatest}>
+              New content ↓
+            </button>
+          </div>
+        )}
       </div>
 
       {(attachedImage || attachingImage) && (

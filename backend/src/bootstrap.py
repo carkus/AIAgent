@@ -216,6 +216,16 @@ def _tool_syntax_errors(config: dict) -> list[tuple[str, SyntaxError]]:
     return errors
 
 
+def _issue_list(errors: list) -> list[dict]:
+    """tool_errors as plain dicts for bootstrap_report."""
+    out = []
+    for name, e in errors:
+        line = getattr(e, "lineno", None)
+        where = f" (line {line})" if line not in (None, "?") else ""
+        out.append({"tool": name, "message": f"{getattr(e, 'msg', e)}{where}"})
+    return out
+
+
 def _describe_tool_errors(errors: list[tuple[str, SyntaxError]]) -> str:
     return "; ".join(f"tool '{name}': {e.msg} at line {e.lineno}" for name, e in errors)
 
@@ -457,7 +467,7 @@ def _format_mcp_catalog(catalog: list[dict]) -> str:
     )
 
 
-def _resolve_mcp_tools(config: dict) -> None:
+def _resolve_mcp_tools(config: dict) -> list[str]:
     """For every tool the model tagged "source": "mcp", replace whatever it
     wrote for name/description/input_schema with the REAL schema from the
     vetted server (same "trust the live schema, not the model's guess"
@@ -468,6 +478,7 @@ def _resolve_mcp_tools(config: dict) -> None:
     broken generated Python, just for a hallucinated MCP reference instead."""
     catalog = {(c["server_id"], c["tool_name"]): c for c in mcp_client.catalog_summary()}
     resolved = []
+    dropped: list[str] = []
     for tool in config.get("tools", []):
         if not isinstance(tool, dict):
             continue
@@ -478,6 +489,7 @@ def _resolve_mcp_tools(config: dict) -> None:
                     "Dropping hallucinated MCP tool reference: server=%s tool=%s",
                     tool.get("mcp_server"), tool.get("mcp_tool"),
                 )
+                dropped.append(f'{tool.get("mcp_server")}/{tool.get("mcp_tool")}')
                 continue
             tool["name"] = tool.get("name") or real["tool_name"]
             tool["description"] = real["description"]
@@ -485,6 +497,7 @@ def _resolve_mcp_tools(config: dict) -> None:
             tool.pop("implementation", None)
         resolved.append(tool)
     config["tools"] = resolved
+    return dropped
 
 
 def _format_fewshot(entries: list[dict]) -> str:
@@ -555,7 +568,7 @@ def _normalize_intro(config: dict) -> None:
 
 def _build_prompt(
     purpose: str, provider: str | None, is_worker: bool, agent_type: str | None = None,
-    has_image: bool = False, spec: dict | None = None,
+    has_image: bool = False, spec: dict | None = None, report: dict | None = None,
 ) -> tuple[str, int]:
     """Grounds the bootstrap prompt in real data (CLAUDE.md RAG priority 5 +
     MCP priority 6): past similar bootstraps as few-shot examples, and the
@@ -568,6 +581,17 @@ def _build_prompt(
     persona/system_prompt/tools, not merely acknowledge."""
     fewshot_entries = bootstrap_memory.retrieve_similar(purpose, provider, is_worker, agent_type=agent_type)
     mcp_catalog = agent_spec.filter_mcp_catalog(mcp_client.catalog_summary(), spec)
+    if report is not None:  # what the model was given to work from (bootstrap_report)
+        report["grounding"] = [
+            {
+                "purpose": e.get("purpose"),
+                "similarity": e.get("similarity"),
+                "persona": (e.get("persona") or {}).get("name"),
+                "tools": [t.get("name") for t in e.get("tool_descriptions", []) if t.get("name")],
+            }
+            for e in fewshot_entries
+        ]
+        report["catalog"] = [f'{c["server_id"]}/{c["tool_name"]}' for c in mcp_catalog]
     _has_web_search_mcp = any(c["server_id"] == "search" for c in mcp_catalog)
     # search_jobs is only ever wired up at runtime for a job_search agent
     # (agent_stream.run_agent_stream gates it by AgentConfig.template) — an
@@ -635,12 +659,12 @@ def _build_prompt(
             "- `fetch_page` — takes a `url` (string), returns "
             "{status_code, url, content, char_count, truncated, listing_count} where "
             "`content` is clean text with all HTML, scripts, and SVG stripped. Use for "
-            "company pages, news, or any general URL.\n"
+            "news, reference pages, or any general URL.\n"
             f"{_image_primitive}"
             f"{_image_gen_primitive}\n"
-            "Instruct the agent to call these directly rather than reinventing them. This "
-            "agent has no job-search tool — do not instruct it to search job listings or "
-            "salary data; that capability is reserved for job-search agents only."
+            "Instruct the agent to call these directly rather than reinventing them. "
+            "Write the system_prompt about the purpose's own subject matter only; do not "
+            "frame it as job, career or hiring research unless the purpose says so."
         )
         jobsearch_rule = ""
         jobsearch_pronoun_suffix = ""
@@ -894,7 +918,16 @@ def _generate_agent_config_stream(
     """
     yield {"type": "status", "message": "Thinking about your purpose…"}
 
-    prompt, fewshot_count = _build_prompt(purpose, provider, is_worker, agent_type, has_image=bool(image), spec=spec)
+    # Step-by-step account of this bootstrap, shown as "How this agent was
+    # made" (AgentMakingReport.tsx) alongside the timed bootstrap_trace.
+    report: dict = {
+        "agent_type": agent_type,
+        "requested": {"provider": provider, "model": model},
+        "has_image": bool(image),
+    }
+    prompt, fewshot_count = _build_prompt(
+        purpose, provider, is_worker, agent_type, has_image=bool(image), spec=spec, report=report,
+    )
     user_content = _build_user_content(prompt, image, provider)
     if fewshot_count:
         yield {"type": "status", "message": f"Found {fewshot_count} similar past agent(s) — reusing what worked…"}
@@ -991,6 +1024,7 @@ def _generate_agent_config_stream(
         # See the assert in generate_agent_config for why this is safe:
         # _try_parse never returns a None config alongside a None error.
         assert error is not None
+        report["json_fix"] = {"error": f"{error.msg} at char {error.pos}", "fixed": False}
         yield {"type": "status", "message": "Fixing malformed response…"}
         correction_meta: dict = {}
         try:
@@ -1009,6 +1043,7 @@ def _generate_agent_config_stream(
             yield _model_event(correction_meta)
             text = _extract_text(correction_response)
             config, error = _try_parse(text)
+            report["json_fix"]["fixed"] = config is not None
         except Exception as e:
             yield _model_event(correction_meta)
             yield {"type": "error", "message": f"Correction retry failed: {e}"}
@@ -1038,6 +1073,17 @@ def _generate_agent_config_stream(
     forbidden_names = {"search_jobs", "fetch_page", "search_image", "generate_image"} | {
         c["tool_name"] for c in mcp_client.catalog_summary()
     }
+    used = meta.get("used") or {}
+    proposed_persona = config.get("persona") if isinstance(config.get("persona"), dict) else {}
+    report["design"] = {
+        "provider": used.get("provider"),
+        "model": used.get("model"),
+        "persona": proposed_persona.get("name"),
+        "tools": [
+            {"name": t.get("name"), "source": t.get("source") or ("generated" if t.get("implementation") else None)}
+            for t in config.get("tools", []) if isinstance(t, dict)
+        ],
+    }
     tool_errors = (
         _tool_syntax_errors(config)
         + _forbidden_call_errors(config, forbidden_names)
@@ -1045,6 +1091,7 @@ def _generate_agent_config_stream(
         + _local_endpoint_errors(config)
         + _fake_save_output_errors(config)
     )
+    report["code_checks"] = {"issues": _issue_list(tool_errors), "retried": bool(tool_errors)}
     if tool_errors:
         yield {"type": "status", "message": "Fixing broken tool code…"}
         tool_fix_meta: dict = {}
@@ -1091,8 +1138,10 @@ def _generate_agent_config_stream(
             t for t in config.get("tools", [])
             if not isinstance(t, dict) or t.get("name") not in broken
         ]
+    report["code_checks"]["remaining"] = _issue_list(tool_errors)
+    report["code_checks"]["dropped"] = dropped_tool_names
 
-    _resolve_mcp_tools(config)
+    report["mcp_dropped"] = _resolve_mcp_tools(config)
     _normalize_persona(config)
     _normalize_intro(config)
     config["purpose"] = purpose
@@ -1101,14 +1150,20 @@ def _generate_agent_config_stream(
     # See generate_agent_config's identical assignment above for why this
     # exists — a stable id agent_registry.publish() can key off of.
     config["agent_config_id"] = uuid.uuid4().hex
+    report["spec_notes"] = []
     for note in agent_spec.enforce_on_config(config, spec):
+        report["spec_notes"].append(note)
         yield {"type": "status", "message": note}
 
+    report["self_checks"] = []
     try:
         for eval_result in eval_checks.check_bootstrap(
             config, purpose, provider, model, dropped_tool_names=dropped_tool_names,
         ):
             eval_log.record(eval_result)
+            report["self_checks"].append({
+                k: eval_result.get(k) for k in ("check", "passed", "severity", "reason")
+            })
             yield {"type": "eval_result", **eval_result}
     except Exception as e:
         logger.info("bootstrap eval checks skipped: %s", e)
@@ -1118,6 +1173,10 @@ def _generate_agent_config_stream(
     # tools"), so it's kept out of retrieval memory.
     if not agent_spec.restricts_tools(spec):
         bootstrap_memory.record(purpose, config, provider, is_worker, agent_type=agent_type)
+        report["memory"] = "recorded"
+    else:
+        report["memory"] = "skipped_restricted"
+    config["bootstrap_report"] = report
     yield {"type": "done", "config": config}
 
 

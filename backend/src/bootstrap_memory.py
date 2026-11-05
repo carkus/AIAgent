@@ -185,7 +185,9 @@ def retrieve_similar(
 
         scored = _apply_success_boost(scored)
         scored.sort(key=lambda pair: pair[0], reverse=True)
-        return [entry for _, entry in scored[:k]]
+        # Score travels with the entry so bootstrap's report can show how close
+        # each example was; _format_fewshot ignores the extra key.
+        return [{**entry, "similarity": round(score, 3)} for score, entry in scored[:k]]
     except Exception as e:
         logger.info("bootstrap_memory.retrieve_similar skipped: %s", e)
         return []

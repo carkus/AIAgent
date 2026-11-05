@@ -3,7 +3,7 @@ import { bootstrap, listMcpTools, validateConfig } from '../api'
 import type { ConfigValidationIssue, McpServerInfo } from '../api'
 import type { AgentConfig, AgentSpec, AgentTemplateId, LlmProvider, ToolDefinition } from '../types'
 import { BEHAVIOR_TOGGLES, MAX_FOCUS_CHARS, PERSONALITY_TRAITS, getTemplate, shortFocus } from '../agentTypes'
-import { DEFAULT_OLLAMA_MODEL, describeModel, describeModelFallback } from '../modelLabel'
+import { storedOllamaModel, describeModel, describeModelFallback } from '../modelLabel'
 import styles from '../styles/AdvancedSetup.module.css'
 // Basic Setup's pill/chip classes, so Focus, Personality and Behavior look
 // the same on both screens.
@@ -65,7 +65,7 @@ function optionalInt(value: string): number | null {
 
 export default function AdvancedSetup({ onCancel, onDone }: Props) {
   const provider = (localStorage.getItem('aiagent_provider') as LlmProvider) || 'ollama'
-  const ollamaModel = localStorage.getItem('aiagent_ollama_model') || DEFAULT_OLLAMA_MODEL
+  const ollamaModel = storedOllamaModel()
 
   const [step, setStep] = useState<Step>('define')
 

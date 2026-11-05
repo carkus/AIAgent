@@ -15,9 +15,9 @@ developer's localhost).
 Env vars:
   GEMINI_API_KEY   - required to use Gemini at all; if unset, Gemini is skipped
   OLLAMA_BASE_URL  - default http://localhost:11434/v1
-  OLLAMA_MODEL     - default qwen2.5-coder:7b (per CLAUDE.md, the only locally-pulled
-                     model that reliably returns valid JSON for this app's bootstrap
-                     tool-schema output; plain qwen2.5 was not reliable enough)
+  OLLAMA_MODEL     - default qwen3:8b (thinking turned off below). On the
+                     Augustus team test it planned and ran a 3-worker team and
+                     wrote the report; qwen2.5-coder:7b never delegated.
   LLM_PROVIDER     - "gemini" or "ollama" to force a single provider instead of
                      cascading (e.g. LLM_PROVIDER=ollama for offline/no-cost dev)
 """
@@ -42,7 +42,7 @@ GEMINI_EMBED_MODEL = "gemini-embedding-2-preview"
 # configured or fails.
 GEMINI_IMAGE_MODEL = "gemini-3.6-flash-image"
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:7b")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:8b")
 # Ollama's own runtime default (4096, confirmed live via /api/ps) is easily
 # blown by this app's own prompt overhead alone — bootstrap system prompt +
 # MCP catalog + tool schemas + few-shot grounding examples — before a single
@@ -144,6 +144,11 @@ def create_chat_completion(provider: str | None = None, model: str | None = None
             extra_body = {**kwargs.get("extra_body", {})}
             extra_body.setdefault("options", {}).setdefault("num_ctx", OLLAMA_NUM_CTX)
             call_kwargs = {**kwargs, "extra_body": extra_body}
+            # qwen3 thinks by default: over the OpenAI-compat API the answer
+            # lands in `reasoning`, `content` comes back empty, and each call
+            # takes ~8x longer. Turn thinking off unless the caller asked.
+            if use_model and use_model.startswith("qwen3"):
+                call_kwargs.setdefault("reasoning_effort", "none")
         started = run_trace.now_ms()
         try:
             response = client.chat.completions.create(

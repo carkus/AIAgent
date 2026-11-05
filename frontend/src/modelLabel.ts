@@ -7,7 +7,25 @@ import type { LlmProvider, ModelAttempt } from './types'
 // and Chat.tsx (while running it), so the two screens never describe the
 // same choice differently.
 export const GEMINI_MODEL_NAME = 'gemini-3.6-flash'
-export const DEFAULT_OLLAMA_MODEL = 'qwen2.5-coder:7b'
+export const DEFAULT_OLLAMA_MODEL = 'qwen3:8b'
+
+// The saved local model, with a one-time move off the old default
+// (qwen2.5-coder:7b): browsers that never picked a model kept it in
+// localStorage, so changing DEFAULT_OLLAMA_MODEL alone did nothing for them.
+// Runs once per browser; a model picked in Settings afterwards is kept.
+export function storedOllamaModel(): string {
+  try {
+    if (!localStorage.getItem('aiagent_model_default_v2')) {
+      localStorage.setItem('aiagent_model_default_v2', '1')
+      if (localStorage.getItem('aiagent_ollama_model') === 'qwen2.5-coder:7b') {
+        localStorage.setItem('aiagent_ollama_model', DEFAULT_OLLAMA_MODEL)
+      }
+    }
+    return localStorage.getItem('aiagent_ollama_model') || DEFAULT_OLLAMA_MODEL
+  } catch {
+    return DEFAULT_OLLAMA_MODEL
+  }
+}
 
 export function describeModel(provider: LlmProvider | undefined, ollamaModel?: string | null): string {
   if (provider === 'ollama') return `Ollama: ${ollamaModel ?? DEFAULT_OLLAMA_MODEL}`

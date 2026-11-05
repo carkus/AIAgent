@@ -112,6 +112,99 @@ def _extract_relic_suggestions(content: str) -> tuple[str, list[dict]]:
             suggestions.append({"kind": kind, "reason": reason})
     return _RELIC_FENCE_RE.sub("", content).strip(), suggestions[:2]
 
+# Rule "REPORT BACK WITH OPTIONS": the main agent closes a reply with a
+# ```options fence listing the next moves it has devised for this job.
+# Stripped from the text and sent as `next_options`; Chat.tsx shows each as a
+# button that sends it as the user's next message.
+_OPTIONS_FENCE_RE = re.compile(r"```options\s*(.*?)\s*```|<options>\s*(.*?)\s*</options>", re.DOTALL)
+
+
+_JOB_HINT_RE = re.compile(r"\s*For job listings/salary data, use search_jobs instead[^.]*\.(?:[^.]*IP\.)?")
+
+
+def _strip_job_hint(tool: dict) -> dict:
+    fn = tool.get("function", {})
+    desc = fn.get("description") or ""
+    cleaned = _JOB_HINT_RE.sub("", desc).replace("company pages, news, or any general URL", "news, reference pages, or any general URL")
+    if cleaned == desc:
+        return tool
+    return {**tool, "function": {**fn, "description": cleaned.strip()}}
+
+
+def _clip_option(text: str, limit: int = 110) -> str:
+    """One line, cut at a word boundary: models ignore the length rule."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(",.;:") + "…"
+
+
+def _extract_next_options(content: str) -> tuple[str, list[str]]:
+    """Strips every ```options fence and returns (content, options): short,
+    distinct strings, at most four. A malformed fence is still stripped."""
+    options: list[str] = []
+    for match in _OPTIONS_FENCE_RE.finditer(content):
+        try:
+            parsed = json.loads(match.group(1) or match.group(2) or "")
+        except (ValueError, TypeError):
+            continue
+        for item in parsed if isinstance(parsed, list) else [parsed]:
+            text = item.get("option") or item.get("text") if isinstance(item, dict) else item
+            if not isinstance(text, str):
+                continue
+            text = _clip_option(text)
+            if text and text.lower() not in (o.lower() for o in options):
+                options.append(text)
+    return _OPTIONS_FENCE_RE.sub("", content).strip(), options[:4]
+
+
+def _starter_reply(focus_pool: list[str], provider, model) -> tuple[str, list[str]]:
+    """Used instead of a clarifying question when the job has focus topics:
+    the topics ARE the context, so propose concrete places to start on them
+    rather than asking the user for some. One small no-tools call; falls back
+    to options built from the topics themselves if it fails."""
+    topics = ", ".join(f'"{k}"' for k in focus_pool)
+    options: list[str] = []
+    intro = ""
+    try:
+        response = create_chat_completion(
+            provider=provider,
+            model=model,
+            max_tokens=600,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"A research job has these focus topics: {topics}.\n"
+                    "Propose 4 specific, interesting starting points to explore "
+                    "that combine or draw on these topics. Name well-known, real "
+                    "people, events, works or questions, never invented ones. Each "
+                    "must be something an AI agent can do with web search and "
+                    "writing: research, summarise, compare, build a timeline or "
+                    "diagram. No interviews, visits or contacting anyone. "
+                    "Reply with JSON only, no fence: "
+                    '{"intro": "<one sentence offering these as places to start; '
+                    'do not claim to have found or read anything yet>", '
+                    '"options": ["<short instruction under 12 words, starting with a verb>", ...]}'
+                ),
+            }],
+            _trace="Starting points from the focus topics",
+        )
+        text = (response.choices[0].message.content or "").strip()
+        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text)
+        parsed = json.loads(text[text.find("{"): text.rfind("}") + 1])
+        intro = str(parsed.get("intro") or "").strip()
+        for o in parsed.get("options") or []:
+            if isinstance(o, str) and o.strip() and len(options) < 4:
+                options.append(_clip_option(o))
+    except Exception as e:
+        logger.info("starter options call failed: %s", e)
+    if not options:
+        options = [f"Give an overview of {k}" for k in focus_pool[:4]]
+    if not intro:
+        intro = f"Here are some places to start on {topics}."
+    return intro + "\n\nWhich would you like me to take first?", options
+
+
 # Confirmed against qwen2.5-coder:7b via Ollama: after a long tool-schema-
 # heavy conversation, the model occasionally answers a plain question (no
 # tool calls at all) with a single bare word echoed from a JSON-schema key
@@ -799,6 +892,24 @@ MAX_DELEGATIONS_PER_REQUEST = 6
 MAX_TOOL_CALLS_PER_TURN = 20
 
 
+def _worker_context(context: str, focus_pool: list[str]) -> str:
+    """A worker never sees the job's focus topics unless they are passed on;
+    without them a task like "<topic>: produce your standard output" left it
+    asking for more context. Append them so its search terms come from the
+    user's own keywords."""
+    if not focus_pool:
+        return context
+    note = (
+        "You are one worker in a team; the lead agent combines your findings "
+        "with the others' into one report, so cover only your own angle or "
+        "topic, in depth, and say clearly which sources you used.\n"
+        "Focus topics of the overall job (the user's own keywords and phrases; "
+        "use the one(s) your task names as your exact search terms, and do not "
+        "ask for more context): " + "; ".join(f'"{k.strip()}"' for k in focus_pool)
+    )
+    return f"{context}\n\n{note}" if context else note
+
+
 def _delegation_rule_body(keywords: list[str], max_delegations: int) -> str:
     """
     Rule 6's body, in the system prompt built by run_agent_stream.
@@ -812,34 +923,34 @@ def _delegation_rule_body(keywords: list[str], max_delegations: int) -> str:
     from the request text itself.
     """
     if keywords:
-        pool = ", ".join(keywords)
+        pool = ", ".join(f'"{k}"' for k in keywords)
         return f"""
-   This agent's configured specialty pool is: {pool}. Whatever task the
-   user just gave you, run it across EVERY specialty in that pool, not
-   only ones the message happens to name — the pool itself is the set of
-   specialties to work on, regardless of how the request is worded. A
-   specialty is not necessarily something to research/search — it may be a
-   creative or generative task (e.g. "clown images" means USE
-   `generate_image`/`search_image`, not a web search for the phrase
-   itself); read each specialty for what it actually asks for, don't
-   default to searching it. Delegate ONE worker per specialty, and fold
-   BOTH pieces into that worker's `task`: the specialty itself AND
-   whatever the user actually asked for (e.g. task = "<specialty>: <the
-   user's request>") — never delegate on the bare specialty name alone,
-   and never drop what the user said in favor of just the keyword.
-   Exception: if the user's message clearly narrows things to only one or
-   a few specialties from the pool, delegate for just those; if the
-   request has nothing to do with the pool at all, handle it yourself
-   instead. Call every delegate_to_worker you need before writing your
-   own findings. Limit: {max_delegations} per turn — if the pool has more
-   entries than that, delegate as many as the limit allows and handle the
-   rest yourself with your own tools."""
+   YOU LEAD A TEAM. This job's focus topics are: {pool}. For any research
+   turn on the job (starting it, or following one of your options), plan
+   how to split the work across AT LEAST 2 and at most {max_delegations}
+   workers, then call delegate_to_worker once per worker before writing
+   anything yourself. Read the topics together first and pick the split:
+   - BY ANGLE when the topics are facets of one subject (e.g. a person, a
+     role and a discipline about the same thing): give each worker a
+     distinct angle that draws on ALL the topics, such as the core story,
+     the sources and expert views, and where to go deeper.
+   - BY TOPIC when the topics are genuinely separate subjects: one worker
+     per topic.
+   Every worker's `task` names its own angle or topic and what the user
+   asked for (e.g. "<angle>: <the user's request>"); its `context` starts
+   with "Split: by angle" or "Split: by topic" and says what the OTHER
+   workers are covering, so no two workers do the same search. Workers research; never
+   delegate summarising, compiling or writing the report, which is your
+   job once they report back. A topic may
+   be a creative task rather than research (e.g. "clown images" means
+   generate_image/search_image, not a web search); give it that kind of
+   task. A quick question unrelated to the job (a fact, a definition, a
+   greeting) is not a research turn: answer it yourself without a team."""
     return f"""
    First, identify the distinct tasks the request actually requires. When
    it names multiple distinct keywords, topics, roles, or subjects to
    search/research (e.g. a request listing several comma-separated items —
-   "python developer, react developer", "renewable energy, EV batteries,
-   grid storage"), you MUST delegate ONE worker per keyword/topic, each
+   "renewable energy, EV batteries, grid storage"), you MUST delegate ONE worker per keyword/topic, each
    with a `task` scoped to that single item — never research more than one
    keyword/topic yourself with your own tools when the request names
    several. Call every `delegate_to_worker` you need before writing your
@@ -1014,15 +1125,24 @@ def _run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool
     # Re-stating it explicitly, every turn, from agent_config itself (not the
     # generated prose) means it's never lost regardless of how bootstrap worded
     # the original purpose, and it's the same one field for live chat and MCP.
-    _location = (agent_config.get("location") or "").strip()
+    # Location is a Job search thing. General and Research agents ignore it
+    # unless the user ticked "Factor in location" (factor_location: true);
+    # older configs without the flag follow the type's default.
+    _factor = agent_config.get("factor_location")
+    if _factor is None:
+        _factor = agent_config.get("template") == "job_search"
+    _location = (agent_config.get("location") or "").strip() if _factor else ""
     _location_note = (
         f"\n\nUser location: {_location}. Assume this location for anything "
         "genuinely location-dependent (local context, \"near me\"/\"nearby\" "
         "phrasing, search_jobs' `where`, weather or time-of-day framing) "
-        "without asking the user to repeat it. Job, salary and job-market "
-        "research is location-dependent: unless the user names another place, "
-        "it is about this location, so put it in the search query rather than "
-        "searching (or reporting) for some other city or country. Do NOT work this location into "
+        "without asking the user to repeat it. "
+        + ("Job, salary and job-market "
+           "research is location-dependent: unless the user names another place, "
+           "it is about this location, so put it in the search query rather than "
+           "searching (or reporting) for some other city or country. "
+           if agent_config.get("template") == "job_search" else "")
+        + "Do NOT work this location into "
         "a `generate_image`/`search_image` prompt or any other creative, "
         "generative, or general-knowledge request unless the user explicitly "
         f"asked for that location in it — e.g. a request for \"clown images\" "
@@ -1059,13 +1179,13 @@ clarifying question only belongs AFTER you've already produced real findings
    Do NOT use `fetch_page` against SEEK/Indeed/LinkedIn or similar job boards — they block this
    server's IP with a 403 regardless of headers, so it will not work.
 """ if is_job_search_agent else "") + f"""
-3. USE `fetch_page` for everything else — company pages, news, general URLs. It returns
+3. USE `fetch_page` for everything else — news, reference pages, general URLs. It returns
    text ONLY (HTML and scripts stripped) — it cannot fetch or embed an image itself.
    NEVER invent a URL from memory or a guess at what one "would probably be"
-   (e.g. guessing a company's careers page follows some common URL pattern).
+   (e.g. guessing a site's page follows some common URL pattern).
    Only write a `[text](url)` link whose url is one a tool actually returned
-   to you this turn (fetch_page's resolved page URL, search_jobs' listing
-   URLs, or a URL already present in the conversation) — if you don't have
+   to you this turn (fetch_page's resolved page URL, a search result's
+   URL, or a URL already present in the conversation) — if you don't have
    a real URL for something, name it in plain text with no link at all
    rather than fabricate one. A markdown link whose URL wasn't backed by an
    actual tool result is removed from your reply before the user sees it,
@@ -1227,12 +1347,17 @@ clarifying question only belongs AFTER you've already produced real findings
    last message is feedback or instructions rather than a question.
 """ + (f"""
 8. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [], max_delegations)}
-9. Once your workers report back, do NOT restate or re-summarize each one's
-   full findings in your own reply — the user already sees each worker's
-   complete response individually, attributed to that worker, in the UI.
-   Your own reply should be short: at most a few sentences comparing or
-   synthesizing across workers (or noting anything none of them covered),
-   never a repeat of content they already reported.
+9a. Each worker's result has `next_options`: the next moves it devised for
+   its own topic. Build YOUR ```options block from those (pick the most
+   interesting, merge near-duplicates, at most 4), so the user can choose
+   which worker's thread to pull next.
+9. Once your workers report back, YOU WRITE THE REPORT. It is one
+   joined-up piece on the job as a whole, not a worker-by-worker summary
+   (the user can open each worker's own findings separately): the overall
+   picture, the threads that run across what the workers found, where they
+   disagree or a source is weak, and what nobody covered yet. Use headings
+   by theme, never by worker. Interpret, don't paste: no sentence copied
+   from a worker's response.
 10. DRIVE THE CONVERSATION FORWARD.""" if allow_delegation else """
 8. DRIVE THE CONVERSATION FORWARD.""") + """ This is a discussion with the
    user, not a one-shot report — treat it that way. After you've laid out
@@ -1247,6 +1372,25 @@ clarifying question only belongs AFTER you've already produced real findings
    never a generic prompt disconnected from what you just found. Skip this
    only for a trivial exchange: a greeting or a case where there is
    genuinely nowhere further to take it.
+   REPORT BACK WITH OPTIONS. You are an agent reporting back to the person
+   running this job. End your reply with one short line asking which way
+   to take it, then a ```options fenced block (after any ```relic block)
+   holding a JSON list of 2-4 options YOU have devised for continuing the
+   job, each grounded in what you just found and in the job's focus
+   topics:
+   ```options
+   ["…", "…", "…"]
+   ```
+   Each option is a short instruction the user could send you as-is
+   (under 12 words, starting with a verb). Every option must be about the
+   job's actual subject matter. Never turn a topic into a job, career,
+   salary or hiring question unless the topics themselves are about jobs
+   (e.g. "historian" in a history job means the discipline, not a
+   vacancy). Do not repeat the options in
+   your prose: the user sees them as buttons. If the user asked something
+   unrelated to the job, answer it, and the options may steer back to the
+   job. Skip the block only for a greeting or an exchange with genuinely
+   nowhere further to go.
 ---"""
 
     # Filtered again at runtime, not just at bootstrap: the config came back
@@ -1257,6 +1401,10 @@ clarifying question only belongs AFTER you've already produced real findings
     primitive_tools = [
         t for t in _PRIMITIVE_TOOLS if t["function"]["name"] in _allowed_primitive_names
     ]
+    if not is_job_search_agent:
+        # The shared tool descriptions mention job boards; for any other
+        # agent that steered research towards jobs it was never about.
+        primitive_tools = [_strip_job_hint(t) for t in primitive_tools]
     tools = primitive_tools + ([_DELEGATE_TOOL] if allow_delegation else []) + [
         {
             "type": "function",
@@ -1339,12 +1487,34 @@ clarifying question only belongs AFTER you've already produced real findings
             ],
         })
 
+    # The job's focus topics (Setup's keywords/phrases) restated on the latest
+    # user message, model-side only. Rule 8 already names them in the system
+    # prompt, but models kept replying "please give more context for the
+    # search" to short messages — the topics ARE the context, so they go right
+    # next to the request where they can't be overlooked.
+    _focus_pool = [k for k in (agent_config.get("keywords") or []) if isinstance(k, str) and k.strip()]
+    if _focus_pool:
+        _focus_line = (
+            "\n\n[Focus topics for this job, set when the agent was created: "
+            + "; ".join(f'"{k.strip()}"' for k in _focus_pool)
+            + ". Use these exact keywords and phrases as the subject and search "
+            "terms. They are the context; do not ask the user for more.]"
+        )
+        for m in reversed(current_messages):
+            if m["role"] != "user":
+                continue
+            if isinstance(m["content"], str):
+                m["content"] = (m["content"] or "") + _focus_line
+            elif isinstance(m["content"], list) and m["content"] and m["content"][0].get("type") == "text":
+                m["content"][0]["text"] += _focus_line
+            break
+
     tool_calls_log = []
     started_at = time.time()
     total_input_tokens = 0
     total_output_tokens = 0
 
-    def _status(message: str) -> dict:
+    def _status(message: str, title: str | None = None, why: str | None = None) -> dict:
         # Real, already-computed values (not synthetic) attached to every
         # status line: how long this turn has run, and the running token
         # count across every LLM call so far — closes the "just a static
@@ -1354,6 +1524,10 @@ clarifying question only belongs AFTER you've already produced real findings
         return {
             "type": "status",
             "message": message,
+            # What this step is and why it happened, for the graph view
+            # (GraphView.tsx) so it isn't a row of identical "Thinking" boxes.
+            **({"title": title} if title else {}),
+            **({"why": why} if why else {}),
             "elapsed_seconds": round(time.time() - started_at, 1),
             "tokens_so_far": {"input_tokens": total_input_tokens, "output_tokens": total_output_tokens},
         }
@@ -1427,6 +1601,14 @@ clarifying question only belongs AFTER you've already produced real findings
             provider=provider, model=model, agent_id=agent_id,
         )}
     delegation_count = 0
+    team_nudges = 0
+    report_nudges = 0
+    # A research turn on the job (the opening message, or an option/idea the
+    # user clicked, flagged `research` by Chat.tsx) must go to a team of at
+    # least 2 workers. A typed question is left to the model's judgement.
+    _user_turns = [m for m in messages if m.get("role") == "user"]
+    research_turn = bool(_user_turns) and (len(_user_turns) == 1 or bool(_user_turns[-1].get("research")))
+    worker_options: list[str] = []  # workers' next_options, fallback for the main agent's
     # Hard ceiling on LLM calls per request — without this, a model stuck in a
     # tool-calling loop (or a buggy tool) burns unlimited API quota on one request.
     max_iterations = (spec and spec["max_tool_rounds"]) or 25
@@ -1449,7 +1631,10 @@ clarifying question only belongs AFTER you've already produced real findings
                 "Thinking through your request…"
             )
         else:
-            yield _status("Thinking through your request…")
+            yield _status(
+                "Thinking through your request…", "Reading the request",
+                "Model call: decides whether to answer, use tools, or hand topics to workers.",
+            )
         # call_index is unique across the whole turn, not per round: the UI
         # (Chat.tsx liveToolCalls, graphTimeline.ts) and the run trace match
         # results and spans to calls by it, and a per-round index made round
@@ -1548,6 +1733,11 @@ clarifying question only belongs AFTER you've already produced real findings
             # No tool calls → final response
             if not effective_tool_calls:
                 final_text, relic_suggestions = _extract_relic_suggestions(raw_content or "")
+                final_text, next_options = _extract_next_options(final_text)
+                # Small models sometimes wrap the whole reply in <response> tags.
+                final_text = re.sub(r"^\s*<response>\s*|\s*</response>\s*$", "", final_text)
+                if not next_options and worker_options:
+                    next_options = list(dict.fromkeys(worker_options))[:4]
                 described_not_called = (
                     not tool_calls_log
                     and not delegation_count
@@ -1583,13 +1773,64 @@ clarifying question only belongs AFTER you've already produced real findings
                 # more before recovering), so this allows up to two retries
                 # before giving up, rather than the one-shot ceiling used for
                 # the costlier/more ambiguous cases below.
+                # Team rule (rule 8): a research turn on a job with focus
+                # topics goes to at least 2 workers. One send-back if the
+                # model answered alone or with a single worker.
+                if (
+                    allow_delegation
+                    and _focus_pool
+                    and research_turn
+                    and delegation_count < 2
+                    and team_nudges < 1
+                    and finish_reason == "stop"
+                ):
+                    team_nudges += 1
+                    yield _status(
+                        "Building the team…", "Sent back for another try",
+                        f"A research turn needs at least 2 workers; it used {delegation_count}.",
+                    )
+                    current_messages.append({
+                        "role": "user",
+                        "content": (
+                            f"You used {delegation_count} worker(s). This is a research turn on the job, "
+                            "so plan a team of at least 2 workers (split by angle or by topic, rule 8) "
+                            "and call delegate_to_worker for each one now, all in this reply. "
+                            "Do not write the report until they have reported back."
+                        ),
+                    })
+                    continue
+
+                # Rule 9: after a team reports back the lead writes the
+                # report. One send-back if it only listed options or a line.
+                if (
+                    delegation_count >= 2
+                    and report_nudges < 1
+                    and finish_reason == "stop"
+                    and len(final_text.strip()) < 400
+                ):
+                    report_nudges += 1
+                    yield _status(
+                        "Writing the report…", "Sent back for another try",
+                        "The workers reported back but the reply had no report.",
+                    )
+                    current_messages.append({
+                        "role": "user",
+                        "content": (
+                            "Your workers have reported back. Now write the report yourself (rule 9): "
+                            "one joined-up piece with headings by theme, the overall picture, the threads "
+                            "across the workers' findings, disagreements or weak sources, and gaps. Then "
+                            "one line asking which way to go next, and the ```options block."
+                        ),
+                    })
+                    continue
+
                 if (
                     finish_reason == "stop"
                     and degenerate_retries < 2
                     and _is_degenerate_reply(final_text)
                 ):
                     degenerate_retries += 1
-                    yield _status("Cleaning up an incomplete reply…")
+                    yield _status("Cleaning up an incomplete reply…", "Fixing a broken reply", "The reply came back empty or cut off, so it was asked again.")
                     current_messages.append({
                         "role": "user",
                         "content": (
@@ -1604,7 +1845,7 @@ clarifying question only belongs AFTER you've already produced real findings
                 # the same answer in the user's language.
                 if language_retries < 1 and _is_wrong_language(final_text, last_user_message):
                     language_retries += 1
-                    yield _status("Rewriting the reply in your language…")
+                    yield _status("Rewriting the reply in your language…", "Fixing the language", "The reply wasn't in your language.")
                     current_messages.append({
                         "role": "user",
                         "content": (
@@ -1625,7 +1866,7 @@ clarifying question only belongs AFTER you've already produced real findings
                     and not any(c.get("tool") in _IMAGE_TOOL_NAMES for c in tool_calls_log)
                 ):
                     image_nudges += 1
-                    yield _status("Making the image you asked for…")
+                    yield _status("Making the image you asked for…", "Making the image", "You asked for an image and none had been made yet.")
                     current_messages.append({
                         "role": "user",
                         "content": (
@@ -1640,7 +1881,18 @@ clarifying question only belongs AFTER you've already produced real findings
 
                 raw_json_dump = bool(tool_calls_log) and _is_raw_json_dump(final_text)
 
-                if (
+                # The job's focus topics are the context: instead of
+                # nudging a model that keeps asking for some, propose
+                # starting points drawn from the topics themselves.
+                if asks_for_clarification and _focus_pool:
+                    yield _status(
+                        "Finding places to start…", "Proposing starting points",
+                        "The model asked for more context, but the focus topics are the context, "
+                        "so starting points were drawn from them instead.",
+                    )
+                    final_text, next_options = _starter_reply(_focus_pool, provider, model)
+                    asks_for_clarification = False
+                elif (
                     nudge_retries < 2
                     and finish_reason == "stop"
                     and (
@@ -1658,7 +1910,14 @@ clarifying question only belongs AFTER you've already produced real findings
                     )
                 ):
                     nudge_retries += 1
-                    yield _status("Refining the answer before replying…")
+                    yield _status(
+                        "Refining the answer before replying…", "Sent back for another try",
+                        "It declined without trying." if outright_decline
+                        else "It asked for context instead of working." if asks_for_clarification
+                        else "It described a tool call without making it." if described_not_called
+                        else "It pasted raw tool output instead of an answer." if raw_json_dump
+                        else "The reply was too thin for the tool results it had.",
+                    )
                     current_messages.append({
                         "role": "user",
                         "content": (
@@ -1669,9 +1928,15 @@ clarifying question only belongs AFTER you've already produced real findings
                             "after actually attempting it, you truly have no way to make progress."
                         ) if outright_decline else (
                             "Asking the user what to do is not a completed answer — the user's "
-                            "message IS the task. If this agent has a configured specialty/keyword "
-                            "pool, that pool is what to run the task across even when the message "
-                            "is short. Make a real attempt with your real tools now and present "
+                            "message IS the task. "
+                            + (
+                                "This job's focus topics are "
+                                + "; ".join(f'"{k}"' for k in _focus_pool)
+                                + " — use those exact keywords and phrases as your search "
+                                "terms and subject. "
+                                if _focus_pool else ""
+                            )
+                            + "Make a real attempt with your real tools now and present "
                             "actual findings instead of asking for clarification."
                         ) if asks_for_clarification else (
                             "You described taking an action (e.g. calling a tool) but did not "
@@ -1698,7 +1963,23 @@ clarifying question only belongs AFTER you've already produced real findings
                 # it" symptom reported live against qwen2.5-coder:7b), say so
                 # plainly so the user isn't misled into thinking real research
                 # happened.
-                if (described_not_called or outright_decline or asks_for_clarification) and nudge_retries >= 2:
+                if (
+                    (described_not_called or outright_decline)
+                    and nudge_retries >= 2
+                    and _focus_pool
+                    and not tool_calls_log
+                ):
+                    # Nothing real came back after both retries, but the job
+                    # has focus topics: offer starting points on them rather
+                    # than a "this reply may not reflect real results" note.
+                    yield _status(
+                        "Finding places to start…", "Proposing starting points",
+                        "The model kept describing tool calls without making them, "
+                        "so starting points were drawn from the focus topics instead.",
+                    )
+                    final_text, next_options = _starter_reply(_focus_pool, provider, model)
+                    described_not_called = outright_decline = False
+                elif (described_not_called or outright_decline or asks_for_clarification) and nudge_retries >= 2:
                     final_text = (
                         "_(Note: the model asked for clarification instead "
                         "of attempting the task, even after being asked "
@@ -1730,7 +2011,7 @@ clarifying question only belongs AFTER you've already produced real findings
                 # regenerate on a violation, then a code-authored decline —
                 # the reply that reaches the user is never the flagged one.
                 if scope_guard.active(spec):
-                    yield _status("Checking the reply against your scope rules…")
+                    yield _status("Checking the reply against your scope rules…", "Scope check", "A separate judge checks the reply against the out-of-scope rules.")
                     guard = scope_guard.screen(final_text, last_user_message, spec, provider, model)
                     if guard:
                         if guard["verdict"] == "violation" and scope_retries < 1:
@@ -1744,9 +2025,10 @@ clarifying question only belongs AFTER you've already produced real findings
                         if guard["verdict"] == "violation":
                             final_text = scope_guard.blocked_reply(spec)
                             relic_suggestions = []
+                            next_options = []
                         yield _scope_eval("chat_response", None, guard)
 
-                yield _status("Double-checking the reply…")
+                yield _status("Double-checking the reply…", "Self-check", "The finished reply is checked for relevance, links and tool use.")
                 try:
                     for eval_result in eval_checks.check_chat_response(
                         last_user_message, final_text, tool_calls_log, stripped_link_count, provider, model,
@@ -1764,6 +2046,9 @@ clarifying question only belongs AFTER you've already produced real findings
                     # Advisory: Chat.tsx shows these as chips, and only a
                     # click spends anything (POST /relic, relic.py).
                     "relic_suggestions": relic_suggestions,
+                    # The agent's own proposed next moves (REPORT BACK WITH
+                    # OPTIONS); Chat.tsx sends one as the next message on click.
+                    "next_options": next_options,
                     "duration_seconds": round(time.time() - started_at, 1),
                     "usage": {
                         "input_tokens": total_input_tokens,
@@ -1900,12 +2185,12 @@ clarifying question only belongs AFTER you've already produced real findings
                         future = executor.submit(
                             run_worker,
                             task=tool_inputs.get("task", ""),
-                            context=tool_inputs.get("context", ""),
+                            context=_worker_context(tool_inputs.get("context", ""), _focus_pool),
                             provider=provider,
                             model=model,
                             search_defaults=search_defaults,
                             agent_type=agent_config.get("template"),
-                            location=agent_config.get("location"),
+                            location=_location or None,
                         )
                         pending_workers[idx] = (future, tc, tool_name, tool_inputs, source)
                         worker_span_ids[idx] = run_trace.new_id()
@@ -1934,8 +2219,9 @@ clarifying question only belongs AFTER you've already produced real findings
                     result = {
                         "error": (
                             "No generic search engine is connected. Do NOT call this tool again. "
-                            "For job listings/salary data, call search_jobs instead. "
-                            "For any other URL, use fetch_page."
+                            + ("For job listings/salary data, call search_jobs instead. "
+                               if is_job_search_agent else "")
+                            + "For any other URL, use fetch_page."
                         )
                     }
                 elif source == "mcp":
@@ -2002,6 +2288,8 @@ clarifying question only belongs AFTER you've already produced real findings
                     # own inner run_agent_stream loop — see orchestrator.py's
                     # run_worker) were already recorded inside run_worker
                     # itself; relay them here without recording again.
+                    if isinstance(result, dict):
+                        worker_options.extend(o for o in (result.get("next_options") or []) if isinstance(o, str))
                     if isinstance(result, dict) and result.get("eval_results"):
                         for eval_result in result["eval_results"]:
                             yield {"type": "eval_result", **eval_result}
@@ -2009,7 +2297,16 @@ clarifying question only belongs AFTER you've already produced real findings
 
             call_base += len(effective_tool_calls)
             current_messages.extend(tool_result_messages)
-            yield _status("Reviewing tool results…")
+            _round_tools = [
+                "worker" if c.get("tool") == "delegate_to_worker" else str(c.get("tool"))
+                for c in tool_calls_log[-len(effective_tool_calls):]
+            ] if effective_tool_calls else []
+            yield _status(
+                "Reviewing tool results…", "Reading the results",
+                f"Model call with {len(effective_tool_calls)} result(s) added"
+                + (f" ({', '.join(dict.fromkeys(_round_tools))})" if _round_tools else "")
+                + ": decides the next step or writes the reply.",
+            )
 
         yield {"type": "error", "message": f"Stopped after {max_iterations} tool-call rounds without a final answer."}
 
