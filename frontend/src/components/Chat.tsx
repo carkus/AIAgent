@@ -19,7 +19,7 @@ import { downloadRelic, RELIC_KINDS, RELIC_LABELS, relicFilename } from '../reli
 import ImageViewer from './ImageViewer'
 import FeedbackStatusBar from './FeedbackStatusBar'
 import type { AgentConfig, EvalResultItem, Relic, RelicKind, RelicSuggestion, ResultFeedback, SavedChat, SavedChatMessage, StreamEvent, ToolCall, TraceSpan } from '../types'
-import { describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
+import { describeModel, describeModelFallback, describeServedModel, formatModelInfo, lastServedModel, type ModelInfo } from '../modelLabel'
 import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate, getDateFormat } from '../dateFormat'
 import { extractMermaidDiagrams } from '../mermaidExtract'
@@ -314,6 +314,19 @@ interface Props {
 
 export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, initialMessages, chatId }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages ?? [])
+  // Toolbar model: the one that last actually answered (newest turn's trace,
+  // then bootstrap's), not just the one the agent was configured with.
+  const configuredModel = describeModel(agentConfig.provider, agentConfig.ollama_model)
+  const servedModel = useMemo(
+    () => lastServedModel([...messages.map(m => m.trace).reverse(), agentConfig.bootstrap_trace]),
+    [messages, agentConfig.bootstrap_trace],
+  )
+  const shownModel = servedModel ? describeServedModel(servedModel) : configuredModel
+  const shownModelTitle = !servedModel
+    ? describeModelFallback(agentConfig.provider)
+    : shownModel === configuredModel
+      ? `Last answered by ${shownModel}`
+      : `Set to ${configuredModel}, but the server answered with ${shownModel}`
   // Same rule as agent_stream.py: location only counts for Job search unless
   // the job ticked "Factor in location".
   const usedLocation = (agentConfig.factor_location ?? agentConfig.template === 'job_search') ? agentConfig.location : undefined
@@ -593,7 +606,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
         purpose: agentConfig.purpose,
         keywords: focusPool,
         location: usedLocation,
-        model: describeModel(agentConfig.provider, agentConfig.ollama_model),
+        model: shownModel,
         persona: agentConfig.persona,
         behaviorToggles: (agentConfig.active_toggles ?? [])
           .map(id => BEHAVIOR_TOGGLES.find(t => t.id === id)?.label ?? id),
@@ -1099,8 +1112,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           </div>
         </div>
         <div className={styles.headerActions}>
-          <span className={styles.modelBadge} title={describeModelFallback(agentConfig.provider)}>
-            {describeModel(agentConfig.provider, agentConfig.ollama_model)}
+          <span className={styles.modelBadge} title={shownModelTitle}>
+            {shownModel}
           </span>
           <div className={styles.headerActionButtons}>
             <button

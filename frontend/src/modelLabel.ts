@@ -1,4 +1,4 @@
-import type { LlmProvider, ModelAttempt } from './types'
+import type { LlmProvider, ModelAttempt, TraceSpan } from './types'
 
 // Mirrors backend/src/llm_client.py's cascade: Gemini first (cloud, cheap),
 // falling back to local Ollama on any provider error — unless the agent's
@@ -57,6 +57,30 @@ export function isReasoningOllamaModel(model: string | null | undefined): boolea
   if (!model) return false
   const lower = model.toLowerCase()
   return REASONING_MODEL_PATTERNS.some(p => p.test(lower))
+}
+
+// The model that actually answered, from the run-trace spans (newest list
+// first). The agent's provider/ollama_model is only what it asked for: a
+// server without a Gemini key quietly serves "Gemini" agents from Ollama,
+// and an agent with no saved model gets whatever the server's OLLAMA_MODEL
+// is, so the toolbar can't trust the config alone.
+export function lastServedModel(spanLists: (TraceSpan[] | undefined)[]): ModelAttempt | null {
+  for (const spans of spanLists) {
+    if (!spans) continue
+    for (let i = spans.length - 1; i >= 0; i--) {
+      const s = spans[i]
+      if (s.kind === 'llm' && s.status === 'ok' && s.provider && s.model) {
+        return { provider: s.provider, model: s.model }
+      }
+    }
+  }
+  return null
+}
+
+export function describeServedModel({ provider, model }: ModelAttempt): string {
+  if (provider === 'ollama') return `Ollama: ${model}`
+  if (provider === 'gemini') return `Gemini (${model})`
+  return `${provider}: ${model}`
 }
 
 export function describeModelFallback(provider: LlmProvider | undefined): string {
