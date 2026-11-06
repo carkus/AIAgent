@@ -63,7 +63,10 @@ if os.path.exists(_ENV_JSON):
     with open(_ENV_JSON) as f:
         for _section in json.load(f).values():
             for k, v in _section.items():
-                os.environ.setdefault(k, v)
+                # Skip blanks: env.json has the same key in several sections, and an
+                # empty one listed first used to win (GEMINI_API_KEY "" -> Ollama fallback).
+                if v and not os.environ.get(k):
+                    os.environ[k] = v
 os.environ.setdefault("DATA_DIR", os.path.join(_ROOT, "data"))
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))

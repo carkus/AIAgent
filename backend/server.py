@@ -22,7 +22,10 @@ if os.path.exists(_ENV_JSON):
         _sections = json.load(f)
     for _section in _sections.values():
         for k, v in _section.items():
-            os.environ.setdefault(k, v)
+            # Skip blanks: env.json has the same key in several sections, and an
+            # empty one listed first used to win (GEMINI_API_KEY "" -> Ollama fallback).
+            if v and not os.environ.get(k):
+                os.environ[k] = v
 
 # Saved-search storage lives outside backend/ deliberately — deploy/redeploy.sh's
 # deploy_backend() tars and overwrites the entire backend/ directory on every
