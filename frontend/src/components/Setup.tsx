@@ -1532,7 +1532,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 <p className={styles.specialtiesHint}>
                   {keywords.length >= MAX_SPECIALTIES
                     ? `Limit of ${MAX_SPECIALTIES} reached — remove one to add another.`
-                    : 'Type a keyword and press Enter, or select a Saved Focus item from the Agent Dossier below'}
+                    : 'Focus keywords define the Agent job - they act like a search.\nType a keyword and press Enter, or select a Saved Focus item from the Agent Dossier below'}
                 </p>
               )}
               {specialtiesOpen && (
