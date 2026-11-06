@@ -993,7 +993,7 @@
   font-size: var(--font-size-base);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.3rem 0.8rem 0.45rem;
+  padding: 0.6rem 0.8rem 0.45rem;
 }
 
 .setupPanelTab:hover {
@@ -1004,6 +1004,8 @@
    panel's top border runs under it. */
 .setupPanelTabInactive {
   z-index: 0;
+  /* Shorter than the selected tab, so the selected one stands taller. */
+  padding-top: 0.3rem;
   border-bottom: 1px solid #cfe3ea;
   background: transparent;
 }
@@ -1027,6 +1029,25 @@
 /* The first section in a panel sits right under the tab, so it drops the
    dashed divider the sections use between each other. */
 .setupPanel > .agentCardScroll > :first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+/* Personality + Behavior grouped in their own inner panel: Focus's border
+   and shape, but no background. Its first row drops the divider; the
+   panel itself keeps its full border even as the first section. */
+.traitsPanel,
+.setupPanel > .agentCardScroll > .traitsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.7rem 0.65rem;
+  background: transparent;
+  border: 1px solid rgba(191, 204, 216, 0.7);
+  border-radius: 8px;
+}
+
+.traitsPanel > :first-child {
   border-top: none;
   padding-top: 0;
 }
@@ -2358,7 +2379,7 @@
   margin: 0;
   overflow-y: auto;
   min-height: 0;
-  transition: flex-basis 0.35s ease, opacity 0.35s ease, margin 0.35s ease;
+  transition: flex-basis 0.35s ease, opacity 0.35s ease, transform 0.35s ease;
 }
 
 /* The setup card itself never scrolls — .agentCardBody (the middle section
@@ -2434,9 +2455,7 @@
 .panelCollapsed {
   flex: 0 0 auto;
   opacity: 0.55;
-  /* Width cue: the unselected panel is inset 8px each side, so the selected
-     one reads as wider. Symmetric margins shrink it in place, unlike the old
-     wider-than-container and scale() versions, which shifted it off-centre. */
+  /* Width cue: scaled down, see the end of this file. */
   cursor: pointer;
   overflow: hidden;
 }
@@ -2488,6 +2507,7 @@
    back to active; hidden outright here rather than left to whatever the
    30% peek height happens to crop, so the contract holds at any viewport. */
 .panelCollapsed .briefSection,
+.panelCollapsed .traitsPanel,
 .panelCollapsed .personalityRow,
 .panelCollapsed .specialInstructionsRow,
 .panelCollapsed .specialtiesActionsRow,
@@ -2732,8 +2752,11 @@
   }
 }
 
-/* Beats .focusStack .agentCard/.form's margin: 0 (see .panelCollapsed). */
+/* Width cue: the unselected panel is scaled down slightly, so the selected
+   one reads as larger. Scaled about its top centre, so it stays centred
+   and keeps its top edge in place. */
 .focusStack .agentCard.panelCollapsed,
 .focusStack .form.panelCollapsed {
-  margin-inline: 8px;
+  transform: scale(0.96);
+  transform-origin: center top;
 }

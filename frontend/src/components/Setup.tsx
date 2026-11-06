@@ -1489,6 +1489,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           {setupTab === 'builder' && (
           <div className={styles.setupPanel} role="tabpanel" id="setup-panel-builder" aria-labelledby="setup-tab-builder">
           <div className={styles.agentCardScroll}>
+            <div className={styles.traitsPanel}>
             <div className={styles.personalityRow}>
               {(() => {
                 // selectedTraits can carry ids from a previously-selected
@@ -1583,6 +1584,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   ))}
                 </ul>
               )}
+            </div>
             </div>
 
             <div className={styles.specialtiesRow}>
