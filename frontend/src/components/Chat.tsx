@@ -1387,11 +1387,11 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                                       <button
                                         type="button"
                                         className={styles.extendIdeaButton}
-                                        title="Ask the agent to extend upon this idea"
+                                        title="Ask the agent to expand on this idea"
                                         disabled={thinking}
                                         onClick={() => sendMessage(`Extend upon this idea: ${idea}`, messages, undefined, undefined, true)}
                                       >
-                                        Extend ↗
+                                        Expand ↗
                                       </button>
                                     )}
                                   </li>
