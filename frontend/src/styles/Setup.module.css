@@ -957,14 +957,26 @@
    shaped like the Agent Dossier's (.dossierTab) but very light blue; the
    tab collapses it. The
    sections inside keep their own collapsible headers. */
-.setupPanelWrap {
+/* Tab strip + scrolling body as one unit, with no gap between them, so
+   the selected tab joins its panel. */
+.setupTabsWrap {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.setupTabRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.3rem;
   flex-shrink: 0;
 }
 
 .setupPanelTab {
-  align-self: flex-start;
+  /* Bottom-aligned in the row, so the selected tab's -1px margin overlaps
+     the panel's top border and hides it under the tab. */
+  align-self: flex-end;
   position: relative;
   z-index: 1;
   display: inline-flex;
@@ -988,11 +1000,18 @@
   color: var(--color-text);
 }
 
-/* Collapsed: the tab is all that's left, so it closes its own bottom edge. */
-.setupPanelTabClosed {
-  margin-bottom: 0;
+/* Not selected: sits behind the panel, closing its own bottom edge so the
+   panel's top border runs under it. */
+.setupPanelTabInactive {
+  z-index: 0;
   border-bottom: 1px solid #cfe3ea;
-  border-radius: 7px;
+  background: transparent;
+}
+
+/* The Brief tab isn't at the left edge, so its panel keeps a full top-left
+   corner. */
+.setupPanelSecond {
+  border-radius: 10px;
 }
 
 .setupPanel {

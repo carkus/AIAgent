@@ -187,32 +187,45 @@ function SectionHeader({ label, count, expanded, onToggle, help, right }: {
   )
 }
 
-// A folder-tab header for the setup card's two panels (Agent builder,
-// Brief), drawn like the Agent Dossier's tab but clickable: it collapses
-// the whole panel. Sections inside keep their own SectionHeader.
-function SetupPanel({ label, expanded, onToggle, help, className, children }: {
-  label: string
-  expanded: boolean
-  onToggle: () => void
-  help: string
-  className?: string
-  children: React.ReactNode
-}) {
+type SetupTabId = 'builder' | 'brief'
+
+const SETUP_TABS: { id: SetupTabId; label: string; help: string }[] = [
+  { id: 'builder', label: 'Agent builder', help: 'Everything that makes up the agent: its personality, behavior and the Focus topics it works on. The Brief is drawn from these.' },
+  { id: 'brief', label: 'Brief', help: "The Brief is a live preview of what this agent has agreed to do, generated from its type, focus, behavior and personality. It's read-only: edit the Agent builder fields to change it." },
+]
+
+// Folder tabs for the setup card's two views (Agent builder, Brief), drawn
+// like the Agent Dossier's tab. One view shows at a time; sections inside
+// keep their own SectionHeader.
+function SetupTabs({ active, onSelect }: { active: SetupTabId; onSelect: (id: SetupTabId) => void }) {
+  const onKeyDown = (e: React.KeyboardEvent, id: SetupTabId) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(id); return }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault()
+      const i = SETUP_TABS.findIndex(t => t.id === id)
+      const next = SETUP_TABS[(i + (e.key === 'ArrowRight' ? 1 : SETUP_TABS.length - 1)) % SETUP_TABS.length]
+      onSelect(next.id)
+      document.getElementById(`setup-tab-${next.id}`)?.focus()
+    }
+  }
   return (
-    <div className={`${styles.setupPanelWrap} ${className ?? ''}`}>
-      <div
-        className={`${styles.setupPanelTab} ${expanded ? '' : styles.setupPanelTabClosed}`}
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-        onClick={onToggle}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
-      >
-        <span>{label}</span>
-        <HelpTip text={help} label={`${label} help`} />
-        <span className={styles.fieldLabelCaret} aria-hidden="true">{expanded ? '▾' : '▸'}</span>
-      </div>
-      {expanded && <div className={styles.setupPanel}>{children}</div>}
+    <div className={styles.setupTabRow} role="tablist" aria-label="Agent setup views">
+      {SETUP_TABS.map(t => (
+        <div
+          key={t.id}
+          id={`setup-tab-${t.id}`}
+          className={`${styles.setupPanelTab} ${t.id === active ? '' : styles.setupPanelTabInactive}`}
+          role="tab"
+          aria-selected={t.id === active}
+          aria-controls={`setup-panel-${t.id}`}
+          tabIndex={t.id === active ? 0 : -1}
+          onClick={() => onSelect(t.id)}
+          onKeyDown={e => onKeyDown(e, t.id)}
+        >
+          <span>{t.label}</span>
+          <HelpTip text={t.help} label={`${t.label} help`} />
+        </div>
+      ))}
     </div>
   )
 }
@@ -549,10 +562,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setFocusPanel(target)
   }
   const [specialtiesOpen, setSpecialtiesOpen] = useState(true)
-  const [briefOpen, setBriefOpen] = useState(true)
+  const [setupTab, setSetupTab] = useState<SetupTabId>('builder')
   // The prose brief under the brief graph; the graph is the at-a-glance view.
   const [writtenBriefOpen, setWrittenBriefOpen] = useState(false)
-  const [builderOpen, setBuilderOpen] = useState(true)
   const [briefGraphOpen, setBriefGraphOpen] = useState(true)
   const [specialInstructionsOpen, setSpecialInstructionsOpen] = useState(false)
   const [activeToggles, setActiveToggles] = useState<string[]>([])
@@ -1469,13 +1481,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
           </div>
 
+          {/* Tabs sit outside the scrolling body so they stay put while
+              the selected view scrolls. */}
+          <div className={styles.setupTabsWrap}>
+          <SetupTabs active={setupTab} onSelect={setSetupTab} />
           <div className={styles.agentCardBody}>
-          <SetupPanel
-            label="Agent builder"
-            expanded={builderOpen}
-            onToggle={() => setBuilderOpen(o => !o)}
-            help="Everything that makes up the agent: its personality, behavior and the Focus topics it works on. The Brief below is drawn from these."
-          >
+          {setupTab === 'builder' && (
+          <div className={styles.setupPanel} role="tabpanel" id="setup-panel-builder" aria-labelledby="setup-tab-builder">
           <div className={styles.agentCardScroll}>
             <div className={styles.personalityRow}>
               {(() => {
@@ -1690,19 +1702,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
 
           </div>
-          </SetupPanel>
+          </div>
+          )}
 
-          {/* Brief lives in its own subsection, outside the editable-fields
-              scroll list above — it's generated from Focus/Behavior,
-              never typed into directly, so it reads as assembled output
-              rather than another field to fill in. */}
-          <SetupPanel
-            className={styles.briefSection}
-            label="Brief"
-            expanded={briefOpen}
-            onToggle={() => setBriefOpen(o => !o)}
-            help="The Brief is a live preview of what this agent has agreed to do, generated from its type, focus, behavior and personality. It's read-only — edit the fields above to change it."
-          >
+          {/* Brief: generated from the builder fields, never typed into
+              directly, so it reads as assembled output rather than another
+              field to fill in. It keeps drafting while the builder tab is
+              showing. */}
+          {setupTab === 'brief' && (
+          <div className={`${styles.setupPanel} ${styles.setupPanelSecond} ${styles.briefSection}`} role="tabpanel" id="setup-panel-brief" aria-labelledby="setup-tab-brief">
             {keywords.length === 0 ? (
                 <p className={styles.briefPlaceholderText}>
                   <span className={styles.briefPlaceholderIcon} aria-hidden="true">✎</span>
@@ -1788,7 +1796,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   )}
                 </>
               )}
-          </SetupPanel>
+          </div>
+          )}
+          </div>
           </div>
           </div>
 
