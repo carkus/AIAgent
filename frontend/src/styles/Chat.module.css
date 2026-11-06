@@ -1611,3 +1611,17 @@
 .newContentBadge:hover {
   opacity: 0.9;
 }
+
+/* "How this agent was made": a plain disclosure above the messages. */
+.makingDetails > summary {
+  cursor: pointer;
+  color: var(--color-muted);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--chat-footer-size);
+  letter-spacing: 0.02em;
+  padding: 0.2rem 0;
+}
+
+.makingDetails > summary:hover {
+  color: var(--color-text);
+}

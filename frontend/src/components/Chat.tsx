@@ -424,7 +424,6 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // index, which is stable for the lifetime of one chat session's array.
   // Graph view is the default for every reply; this holds the ones switched to the log.
   const [logViewMessages, setLogViewMessages] = useState<Set<number>>(new Set())
-  const [showBootstrapTrace, setShowBootstrapTrace] = useState(true)
   const [caseFileMessages, setCaseFileMessages] = useState<Set<number>>(new Set())
   function toggleCaseFile(i: number) {
     setCaseFileMessages(prev => {
@@ -456,9 +455,9 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // pool. The pool itself (focusPool) is now the keyword source the
   // backend's delegation rule iterates over (see agent_stream.py's
   // _delegation_rule_body) — this message no longer needs to spell out
+  // each keyword itself, just hand over a generic task.
   // Held until the briefing is dismissed: the user reads what the agent is
   // about to do and can still go back to Setup before any work starts.
-  // each keyword itself, just hand over a generic task.
   useEffect(() => {
     if (autoSentRef.current || showBriefing) return
     const kws = focusPool
@@ -1083,8 +1082,8 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           agentName={agentName}
           resumedMessages={initialMessages}
           onDirection={direction => sendMessage(direction, messages, undefined, undefined, true)}
-          onBackToSetup={onBackToSetup}
           onClose={() => setShowBriefing(false)}
+          onBackToSetup={onBackToSetup}
         />
       )}
       <header className={styles.header}>
@@ -1236,16 +1235,10 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
 
       <div className={styles.messageList} ref={listRef} onScroll={handleListScroll}>
         {(agentConfig.bootstrap_report || (agentConfig.bootstrap_trace && agentConfig.bootstrap_trace.length > 0)) && (
-          <div>
-            <button
-              type="button"
-              className={styles.viewToggleBtn}
-              onClick={() => setShowBootstrapTrace(v => !v)}
-            >
-              {showBootstrapTrace ? '🗂️ Hide how this agent was made' : '🗂️ How this agent was made'}
-            </button>
-            {showBootstrapTrace && <AgentMakingReport config={agentConfig} />}
-          </div>
+          <details className={styles.makingDetails} open>
+            <summary>How this agent was made</summary>
+            <AgentMakingReport config={agentConfig} />
+          </details>
         )}
         {messages.length === 0 && !thinking && (
           <p className={styles.emptyHint}>Send a message to start.</p>
@@ -1507,7 +1500,10 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                 onChange={feedback => setMessages(prev => prev.map((m, mi) => (mi === i ? { ...m, feedback } : m)))}
               />
             )}
-            {thinking && i === messages.length - 1 && msg.role === 'assistant' && !msg.content && (
+            {/* Only until the live graph appears: once it's up it already shows
+                each step, and this line just repeated it underneath. */}
+            {thinking && i === messages.length - 1 && msg.role === 'assistant' && !msg.content
+              && !(msg.liveToolCalls && msg.liveToolCalls.length > 0 && !logViewMessages.has(i)) && (
               <>
                 <p className={styles.workingText}>
                   {statusMessage ?? 'Working'}{elapsed > 0 ? ` · ${elapsed}s` : ''}
