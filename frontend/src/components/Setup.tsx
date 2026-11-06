@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { bootstrap, buildBriefRelic, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, fetchBriefMap, fetchModelInfo, listAgentDrafts, listPublishedAgents, listSavedSearches, unpublishAgent, updateAgentDraft } from '../api'
 import type { AgentBrief, AgentDraft, BriefMap, PublishedAgent, SavedSearch } from '../api'
 import { getLastOpenedPointer, hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat, setLastOpenedPointer } from '../chatStorage'
-import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, Relic, RelicKind, RelicSuggestion, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
+import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, LlmProvider, Relic, RelicKind, RelicSuggestion, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
 import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, DEFAULT_AGENT_SPEC, MAX_FOCUS_CHARS, shortFocus, type BehaviorToggle } from '../agentTypes'
 import { storedOllamaModel, describeModel, describeModelFallback, formatModelInfo, type ModelInfo } from '../modelLabel'
 import { buildAgentBrief, joinNatural } from '../agentBrief'
@@ -17,7 +17,6 @@ import ScoreboardModal from './ScoreboardModal'
 import CharacterGenerator from './CharacterGenerator'
 import HelpTip from './HelpTip'
 import BehaviorIcon from './BehaviorIcon'
-import FeedbackStatusBar from './FeedbackStatusBar'
 import RelicPreviewModal from './RelicPreviewModal'
 import { useToolbarDrag, useToolbarLayout, type ToolbarItem } from '../toolbarLayout'
 import { downloadRelic, RELIC_LABELS, relicFilename } from '../relicFiles'
@@ -523,11 +522,6 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // reset-on-stop/interval-while-active shape as Chat.tsx's own `elapsed`
   // (its `thinking` there is `bootstrapping` here).
   const [bootstrapElapsed, setBootstrapElapsed] = useState(0)
-  // Self-evaluation status bar (root CLAUDE.md eval-framework task) — same
-  // component/shape as Chat.tsx's, scoped to just this bootstrap attempt
-  // (reset alongside progress/toolsSoFar in runBootstrap below).
-  const [evalResults, setEvalResults] = useState<EvalResultItem[]>([])
-  const [evalBarCollapsed, setEvalBarCollapsed] = useState(true)
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([])
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
   const [locationDetecting, setLocationDetecting] = useState(false)
@@ -1256,27 +1250,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     setProgress(null)
     setToolsSoFar([])
     setModelInfo(null)
-    setEvalResults([])
-    setEvalBarCollapsed(true)
     function handleProgress(event: BootstrapStreamEvent) {
       if (event.type === 'status') setProgress(event.message)
       else if (event.type === 'tool') setToolsSoFar(prev => [...prev, event.name])
       else if (event.type === 'model') setModelInfo({ used: event.used, failed: event.failed })
-      else if (event.type === 'eval_result') {
-        setEvalResults(prev => [
-          ...prev,
-          {
-            check: event.check,
-            target: event.target,
-            target_id: event.target_id,
-            passed: event.passed,
-            reason: event.reason,
-            method: event.method,
-            severity: event.severity,
-          },
-        ])
-        if (!event.passed) setEvalBarCollapsed(false)
-      }
     }
     const controller = new AbortController()
     bootstrapAbortRef.current = controller
@@ -2348,49 +2325,21 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         </form>
         </div>
 
-        {(bootstrapping || modelInfo || error) && (
-          <div className={styles.loadingHint}>
-            {modelInfo && (
-              <p className={styles.modelInfoLine}>{formatModelInfo(modelInfo)}</p>
-            )}
-            {bootstrapping ? (
-              <>
-                {(() => {
-                  const groundingMatch = progress?.match(/^Found (\d+) similar past agent/i)
-                  if (groundingMatch) {
-                    return <p><span className={styles.groundingBadge}>🧠 grounded ×{groundingMatch[1]}</span></p>
-                  }
-                  return (
-                    <p>
-                      {progress ??
-                        (provider === 'ollama'
-                          ? `${ollamaModel ?? 'Your local model'} is designing your agent's tools and behaviour. This may take longer than the cloud default.`
-                          : 'Designing your agent\'s tools and behaviour…')}
-                    </p>
-                  )
-                })()}
-                <FeedbackStatusBar
-                  results={evalResults}
-                  collapsed={evalBarCollapsed}
-                  onToggleCollapse={() => setEvalBarCollapsed(c => !c)}
-                  onClear={() => setEvalResults([])}
-                  onRemoveItem={(item) => setEvalResults(prev => prev.filter(r => r !== item))}
-                />
-              </>
-            ) : error ? (
-              <div className={styles.errorPanel}>
-                <span className={styles.errorIcon} aria-hidden="true">⚠</span>
-                <div className={styles.errorMessageRow}>
-                  <div className={styles.errorBody}>
-                    <p className={styles.errorHeadline}>Couldn't design this agent</p>
-                    <p className={styles.errorDetail}>{error}</p>
-                  </div>
-                  <button type="button" className={styles.errorRetry} onClick={runBootstrap}>
-                    ↻ Retry
-                  </button>
-                </div>
+        {/* Bootstrap progress lives on the shield; only a failure is shown here. */}
+        {!bootstrapping && error && (
+          <div className={styles.setupError}>
+          <div className={styles.errorPanel}>
+            <span className={styles.errorIcon} aria-hidden="true">⚠</span>
+            <div className={styles.errorMessageRow}>
+              <div className={styles.errorBody}>
+                <p className={styles.errorHeadline}>Couldn't design this agent</p>
+                <p className={styles.errorDetail}>{error}</p>
               </div>
-            ) : null}
+              <button type="button" className={styles.errorRetry} onClick={runBootstrap}>
+                ↻ Retry
+              </button>
+            </div>
+          </div>
           </div>
         )}
       </div>

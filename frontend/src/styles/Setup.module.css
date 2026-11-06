@@ -2299,24 +2299,9 @@
   color: #fff;
 }
 
-/* The bootstrapping "thinking" panel — styled as the same white card
-   (border/radius/shadow) as .agentCard rather than bare centered text, so it
-   reads as part of the app's UI instead of a plain loading message. */
-.loadingHint {
-  background: #ffffff;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(28, 40, 51, 0.06);
-  color: var(--color-muted);
-  font-family: 'Share Tech Mono', monospace;
-  font-size: var(--font-size-sm);
+/* A bootstrap failure, shown below the card. */
+.setupError {
   margin-top: 1rem;
-  padding: 0.85rem 1rem;
-  text-align: center;
-}
-
-.loadingHint p {
-  margin: 0;
 }
 
 .modelInfoLine {
