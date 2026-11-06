@@ -1347,6 +1347,12 @@ clarifying question only belongs AFTER you've already produced real findings
 7c. ALWAYS REPLY IN THE USER'S LANGUAGE: English unless the user writes in
    another language. Never switch language partway through, even when the
    last message is feedback or instructions rather than a question.
+
+7d. VIDEOS PLAY INLINE. When a video genuinely helps (a talk, demo,
+   walkthrough or documentary your tools actually found), give its real
+   YouTube, Vimeo or direct .mp4 link as a markdown link on its own line,
+   e.g. [Title of the talk](https://www.youtube.com/watch?v=...). The user
+   sees it as a player in the reply. Never invent or guess a video URL.
 """ + (f"""
 8. You also have `delegate_to_worker`.{_delegation_rule_body(agent_config.get("keywords") or [], max_delegations)}
 9a. Each worker's result has `next_options`: the next moves it devised for

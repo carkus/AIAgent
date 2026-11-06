@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { MarkdownLink } from './VideoEmbed'
 import remarkGfm from 'remark-gfm'
 import { fetchFile } from '../api'
 import type { ToolCall } from '../types'
@@ -529,6 +530,7 @@ function WorkerResultCard({ data }: { data: Record<string, unknown> }) {
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
+                  a: MarkdownLink,
                   img({ src, alt, ...props }) {
                     return (
                       <img

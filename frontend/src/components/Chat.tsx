@@ -1,5 +1,6 @@
 import { isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { MarkdownLink } from './VideoEmbed'
 import remarkGfm from 'remark-gfm'
 import { buildRelic, publishAgent, runAgent } from '../api'
 import { saveChat, setLastOpenedPointer } from '../chatStorage'
@@ -1360,6 +1361,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
                                   </div>
                                 )
                               },
+                              a: MarkdownLink,
                               img({ src, alt, ...props }) {
                                 return (
                                   <button
