@@ -999,6 +999,16 @@
   .briefUpdatingSpinner { animation-duration: 2.4s; }
 }
 
+/* Shown above the brief text while the graph's own call is still drawing. */
+.briefMapDrawing {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.35rem;
+  color: #6b7785;
+  font-size: 0.85rem;
+}
+
 /* "Written brief for Agent": the prose brief, folded under the brief graph. */
 .writtenBrief {
   display: flex;

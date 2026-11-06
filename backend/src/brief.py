@@ -35,7 +35,10 @@ user clicks one in Setup, and then relic.py builds it from the case and the
 agent on board, not by restating this paragraph.
 """
 import json
+import logging
 from llm_client import create_chat_completion
+
+logger = logging.getLogger(__name__)
 
 # Brief-sourced relics: nothing has been researched yet, so a chart (which
 # needs real numbers) isn't offered.
@@ -110,14 +113,8 @@ This is independent of the question/brief choice above — a warning can accompa
 
 When you write a brief (not a question), also offer up to two pieces of media the user could take away from this commission before it runs, picked for what would genuinely help THIS case: "slides" (to pitch or present the commission), "pdf" (a polished case file to share), "docx" (an editable case file), "diagram" (how the work splits across the focus topics and any workers), "markdown" (a working brief to keep editing), "json" (one entry per line of inquiry, for tracking). Each reason is one short line naming what it would contain for this case specifically. Offer none ([]) when nothing would really add to the brief.
 
-With a brief (not a question), also return "map": the same brief drawn as a flow chart the user sees beside it. Short plain phrases (under ~14 words each), synthesised from your own brief, never a copy of the keyword list:
-- "ask": what the user is commissioning, in one line.
-- "understood": 2-4 instructions the agent takes from it and holds itself to (its angle, its scope, what the traits and behaviors make it do).
-- "work": 2-5 lines of work it will actually split the job into (an angle or a worker each, the same split paragraph 3 describes), each {{"label": "2-5 word title", "detail": "one line on what that branch digs into"}}.
-- "result": the finished thing it hands back, in one line.
-
 Respond with ONLY raw JSON, no markdown code fences, no other text, exactly one of:
-{{"type": "brief", "text": "...", "warning": "..." or null, "relics": [{{"kind": "...", "reason": "..."}}], "map": {{"ask": "...", "understood": ["..."], "work": [{{"label": "...", "detail": "..."}}], "result": "..."}}}}
+{{"type": "brief", "text": "...", "warning": "..." or null, "relics": [{{"kind": "...", "reason": "..."}}]}}
 {{"type": "question", "text": "...", "warning": "..." or null}}
 """
 
@@ -137,8 +134,7 @@ def generate_brief(
 ) -> dict | None:
     """
     Returns {"type": "brief" | "question", "text": "...", "warning": "..." | None,
-    "relics": [{"kind", "reason"}, ...], "map": {...} | None} (relics empty
-    and map None for a question)
+    "relics": [{"kind", "reason"}, ...]} (relics empty for a question)
     or None if the call/parse failed — callers should fall back to the
     deterministic template brief on None rather than surfacing an error,
     since this is a nice-to-have polish step, not a required one.
@@ -170,18 +166,25 @@ def generate_brief(
         traits=", ".join(traits) if traits else "(none)",
         location_clause=location_clause,
         prior_qa=prior_qa,
-        max_delegations=max_delegations or 6,
+        max_delegations=max_delegations or 3,
     )
 
     try:
         response = create_chat_completion(
             provider=provider,
             model=model,
-            max_tokens=2200,
+            # Gemini 3.x thinks by default and counts that against max_tokens
+            # (OpenAI-compat API), so a tight cap cut the JSON off mid-brief
+            # and Setup fell back to its two-line template with no graph.
+            # Ollama/qwen3 has thinking off and stops well under this.
+            max_tokens=8000,
             temperature=0.6,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = (response.choices[0].message.content or "").strip()
+        choice = response.choices[0]
+        raw = (choice.message.content or "").strip()
+        if choice.finish_reason == "length":
+            logger.warning("brief: reply hit max_tokens (%d chars), JSON likely cut off", len(raw))
         raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         # strict=False: small models put real line breaks inside the text
         # string; strict parsing rejected the whole brief, and Setup showed
@@ -193,7 +196,69 @@ def generate_brief(
         if not text:
             return None
         relics = _relic_suggestions(data.get("relics")) if kind == "brief" else []
-        brief_map = _brief_map(data.get("map")) if kind == "brief" else None
-        return {"type": kind, "text": text, "warning": warning, "relics": relics, "map": brief_map}
-    except Exception:
+        return {"type": kind, "text": text, "warning": warning, "relics": relics}
+    except Exception as e:
+        # Logged so a silent template fallback in production can be traced.
+        logger.warning("brief: generation failed (%s): %s", provider or "default", e)
+        return None
+
+
+_MAP_PROMPT = """Below is the brief an AI agent wrote about a commission it is about to take on. Draw that same brief as a flow chart the user sees beside it. Short plain phrases (under ~14 words each), synthesised from the brief, never a copy of the keyword list.
+
+Agent type: {agent_type}
+Specialties/keywords: {keywords}
+
+<brief>
+{brief}
+</brief>
+
+Return:
+- "ask": what the user is commissioning, in one line.
+- "understood": 2-4 instructions the agent takes from it and holds itself to (its angle, its scope, what its traits and behaviors make it do).
+- "work": 2-5 lines of work it will actually split the job into (an angle or a worker each, the split the brief's last paragraph describes), each {{"label": "2-5 word title", "detail": "one line on what that branch digs into"}}.
+- "result": the finished thing it hands back, in one line.
+
+Respond with ONLY raw JSON, no markdown code fences, no other text:
+{{"ask": "...", "understood": ["..."], "work": [{{"label": "...", "detail": "..."}}], "result": "..."}}
+"""
+
+
+def generate_brief_map(
+    brief_text: str,
+    keywords: list[str],
+    agent_type: str | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+) -> dict | None:
+    """Second, separate call after the brief text: turns the finished brief
+    into BriefGraph's flow. Split from generate_brief so the text never waits
+    on (or dies with) the graph. Returns None on any failure, meaning just
+    no graph."""
+    brief_text = (brief_text or "").strip()
+    if not brief_text:
+        return None
+    prompt = _MAP_PROMPT.format(
+        agent_type=agent_type or "general",
+        keywords=", ".join(keywords) if keywords else "(none)",
+        brief=brief_text[:4000],
+    )
+    try:
+        response = create_chat_completion(
+            provider=provider,
+            model=model,
+            max_tokens=4000,  # headroom for Gemini thinking, as above
+            temperature=0.4,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        choice = response.choices[0]
+        raw = (choice.message.content or "").strip()
+        if choice.finish_reason == "length":
+            logger.warning("brief map: reply hit max_tokens (%d chars)", len(raw))
+        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        brief_map = _brief_map(json.loads(raw, strict=False))
+        if brief_map is None:
+            logger.warning("brief map: reply had no usable ask/work/result")
+        return brief_map
+    except Exception as e:
+        logger.warning("brief map: generation failed (%s): %s", provider or "default", e)
         return None

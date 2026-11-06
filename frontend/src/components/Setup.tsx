@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { bootstrap, buildBriefRelic, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, fetchModelInfo, listAgentDrafts, listPublishedAgents, listSavedSearches, unpublishAgent, updateAgentDraft } from '../api'
-import type { AgentBrief, AgentDraft, PublishedAgent, SavedSearch } from '../api'
+import { bootstrap, buildBriefRelic, createAgentDraft, createSavedSearch, deleteAgentDraft, deleteSavedSearch, fetchAgentBrief, fetchBriefMap, fetchModelInfo, listAgentDrafts, listPublishedAgents, listSavedSearches, unpublishAgent, updateAgentDraft } from '../api'
+import type { AgentBrief, AgentDraft, BriefMap, PublishedAgent, SavedSearch } from '../api'
 import { getLastOpenedPointer, hideSavedChat, loadHiddenChatIds, loadSavedChats, saveChat, setLastOpenedPointer } from '../chatStorage'
 import type { AgentConfig, AgentTemplateId, ArmStat, BootstrapStreamEvent, EvalResultItem, LlmProvider, Relic, RelicKind, RelicSuggestion, SavedChat, SavedChatMessage, SearchDefaults } from '../types'
 import { AGENT_TEMPLATES, getTemplate, PERSONALITY_TRAITS, describeTraitEffect, BEHAVIOR_TOGGLES, DEFAULT_AGENT_SPEC, MAX_FOCUS_CHARS, shortFocus, type BehaviorToggle } from '../agentTypes'
@@ -534,6 +534,13 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   }
   const [aiBrief, setAiBrief] = useState<AgentBrief | null>(null)
   const [briefLoading, setBriefLoading] = useState(false)
+  // The brief's graph, drawn by a second call once the text is in (so the
+  // text never waits on it). Null while drawing or when drawing failed.
+  const [briefMap, setBriefMap] = useState<BriefMap | null>(null)
+  const [briefMapLoading, setBriefMapLoading] = useState(false)
+  // Why the AI brief failed (e.g. a 429), shown under the template fallback
+  // so a quiet downgrade to the two-line brief is visible.
+  const [briefError, setBriefError] = useState<string | null>(null)
   const [briefAnswer, setBriefAnswer] = useState('')
   // Media the Brief offered (aiBrief.relics) that the user has built. Tied
   // to the brief they came from, so a redrafted brief starts empty.
@@ -658,9 +665,28 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   // buildAgentBrief() template (aiBrief stays null) on any failure, so a
   // network hiccup never leaves the Brief section blank. A stale response
   // from a superseded request is dropped via briefRequestIdRef.
+  // Second stage: draw the graph from the brief text that just arrived.
+  // Shares briefRequestIdRef, so a newer brief request drops a stale map.
+  function drawBriefMap(brief: AgentBrief, requestId: number) {
+    setBriefMap(null)
+    if (brief.type !== 'brief') {
+      setBriefMapLoading(false)
+      return
+    }
+    setBriefMapLoading(true)
+    fetchBriefMap(brief.text, [...keywords], agentType, provider, ollamaModel)
+      .then(map => {
+        if (requestId !== briefRequestIdRef.current) return
+        setBriefMap(map)
+        setBriefMapLoading(false)
+      })
+  }
+
   useEffect(() => {
     if (keywords.length === 0) {
       setAiBrief(null)
+      setBriefMap(null)
+      setBriefMapLoading(false)
       setBriefLoading(false)
       return
     }
@@ -675,10 +701,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         .then(result => {
           if (requestId !== briefRequestIdRef.current) return
           setAiBrief(result)
+          setBriefError(null)
+          drawBriefMap(result, requestId)
         })
-        .catch(() => {
+        .catch(err => {
           if (requestId !== briefRequestIdRef.current) return
           setAiBrief(null)
+          setBriefMap(null)
+          setBriefMapLoading(false)
+          setBriefError(err instanceof Error ? err.message : 'Could not draft the brief')
         })
         .finally(() => {
           if (requestId !== briefRequestIdRef.current) return
@@ -702,6 +733,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
         if (requestId !== briefRequestIdRef.current) return
         setAiBrief(result)
         setBriefAnswer('')
+        drawBriefMap(result, requestId)
       })
       .catch(() => {
         // Leave the question showing — the user can retry the answer.
@@ -1655,8 +1687,14 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
               ) : (
                 <>
                   <div className={styles.briefBody} aria-busy={briefLoading}>
-                  {aiBrief?.map && <BriefGraph map={aiBrief.map} />}
-                  {aiBrief?.map ? (
+                  {briefMap && <BriefGraph map={briefMap} />}
+                  {!briefMap && briefMapLoading && !briefLoading && (
+                    <p className={styles.briefMapDrawing} role="status">
+                      <span className={styles.briefUpdatingSpinner} aria-hidden="true" />
+                      <span>Drawing the brief graph…</span>
+                    </p>
+                  )}
+                  {briefMap ? (
                     <div className={styles.writtenBrief}>
                       <SectionHeader
                         label="Written brief for Agent"
@@ -1667,6 +1705,9 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                       {writtenBriefOpen && briefTextEl}
                     </div>
                   ) : briefTextEl}
+                  {!aiBrief && briefError && !briefLoading && (
+                    <p className={styles.briefLoadingHint}>Showing the basic brief: the AI brief couldn't be drafted ({briefError}).</p>
+                  )}
                   {briefLoading && (
                     <div className={styles.briefUpdating} role="status">
                       <span className={styles.briefUpdatingSpinner} aria-hidden="true" />

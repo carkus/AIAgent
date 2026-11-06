@@ -82,9 +82,6 @@ export interface AgentBrief {
   warning?: string | null;
   // Media the model offers for this commission (brief.py); built only on click.
   relics?: RelicSuggestion[];
-  // The brief drawn as a flow (brief.py's _brief_map), shown as BriefGraph.
-  // Absent for a question, or when the model's map didn't parse.
-  map?: BriefMap | null;
 }
 
 export interface BriefMap {
@@ -186,6 +183,39 @@ export async function fetchAgentBrief(
     throw new Error(err.error ?? 'Failed to generate brief');
   }
   return res.json();
+}
+
+/**
+ * The brief drawn as a flow (POST /brief-map, brief.py's generate_brief_map),
+ * shown as BriefGraph. A second call made after the brief text arrives, so
+ * the text never waits on the graph. Resolves to null on any failure: no
+ * graph, the text stays.
+ */
+export async function fetchBriefMap(
+  text: string,
+  keywords: string[],
+  agentType: AgentTemplateId | undefined,
+  provider?: LlmProvider,
+  ollamaModel?: string | null,
+): Promise<BriefMap | null> {
+  try {
+    const res = await fetch(`${API_URL}/brief-map`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        keywords,
+        agentType,
+        provider: provider ?? undefined,
+        ollama_model: ollamaModel ?? undefined,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.map ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**

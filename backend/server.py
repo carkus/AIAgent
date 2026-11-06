@@ -38,7 +38,7 @@ import tempfile
 from flask import Flask, Response, jsonify, request, stream_with_context
 from bootstrap import generate_agent_config_stream, validate_config
 from agent_stream import run_agent_stream
-from brief import generate_brief
+from brief import generate_brief, generate_brief_map
 from recap import generate_recap
 from relic import KINDS, generate_relic
 from llm_client import list_ollama_models, GEMINI_MODEL
@@ -163,6 +163,35 @@ def brief():
     if result is None:
         return jsonify({"error": "Could not generate a brief"}), 502
     return jsonify(result)
+
+
+@app.route("/brief-map", methods=["POST", "OPTIONS"])
+def brief_map():
+    """The brief's graph, drawn from the finished brief text in its own call
+    so the text shows first and a slow or failed graph never costs it."""
+    if request.method == "OPTIONS":
+        return "", 204
+    body = request.get_json() or {}
+    text = (body.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "text is required"}), 400
+    provider = ((body.get("provider") or "").strip() or None)
+    model = ((body.get("ollama_model") or "").strip() or None)
+    if provider != "ollama":
+        rate_limit_error = rate_limit.check(rate_limit.client_ip(request), bucket="brief")
+        if rate_limit_error:
+            return jsonify({"error": rate_limit_error}), 429
+    keywords = body.get("keywords") if isinstance(body.get("keywords"), list) else []
+    result = generate_brief_map(
+        brief_text=text,
+        keywords=keywords,
+        agent_type=body.get("agentType"),
+        provider=provider,
+        model=model,
+    )
+    if result is None:
+        return jsonify({"error": "Could not draw the brief graph"}), 502
+    return jsonify({"map": result})
 
 
 @app.route("/recap", methods=["POST", "OPTIONS"])
