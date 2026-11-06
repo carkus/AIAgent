@@ -9,6 +9,7 @@ import { buildAgentBrief, joinNatural } from '../agentBrief'
 import { formatDate, getDateFormat, type DateFormatId } from '../dateFormat'
 import styles from '../styles/Setup.module.css'
 import splashLogo from '../assets/favicon.png'
+import BriefGraph from './BriefGraph'
 import SettingsModal from './SettingsModal'
 import ThemePicker from './ThemePicker'
 import AgentStableModal from './AgentStableModal'
@@ -519,6 +520,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   }
   const [specialtiesOpen, setSpecialtiesOpen] = useState(true)
   const [briefOpen, setBriefOpen] = useState(true)
+  // The prose brief under the brief graph; the graph is the at-a-glance view.
+  const [writtenBriefOpen, setWrittenBriefOpen] = useState(false)
   const [specialInstructionsOpen, setSpecialInstructionsOpen] = useState(false)
   const [activeToggles, setActiveToggles] = useState<string[]>([])
   function toggleBehavior(id: string) {
@@ -1250,6 +1253,21 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       ? aiBrief.warning ?? null
       : buildDeterministicWarning(keywords, agentType, usedLocation, maxDelegations)
 
+  // The brief in prose. Under the brief graph it sits in its own collapsible
+  // "Written brief for Agent" section; without a graph it shows as before.
+  const briefTextEl = (
+    <p className={styles.agentSummaryText}>
+      {aiBrief?.text ?? buildAgentBrief(
+        agentType,
+        keywords,
+        usedLocation,
+        agentName,
+        BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.label),
+        (PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research).filter(t => selectedTraits.includes(t.id)).map(t => t.label),
+      )}
+    </p>
+  )
+
   return (
     <div className={styles.container}>
       <div className={styles.card}>
@@ -1636,17 +1654,26 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                 </>
               ) : (
                 <>
-                  <p className={styles.agentSummaryText}>
-                    {aiBrief?.text ?? buildAgentBrief(
-                      agentType,
-                      keywords,
-                      usedLocation,
-                      agentName,
-                      BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.label),
-                      (PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research).filter(t => selectedTraits.includes(t.id)).map(t => t.label),
-                    )}
-                    {briefLoading && <span className={styles.briefLoadingHint}> · redrafting…</span>}
-                  </p>
+                  <div className={styles.briefBody} aria-busy={briefLoading}>
+                  {aiBrief?.map && <BriefGraph map={aiBrief.map} />}
+                  {aiBrief?.map ? (
+                    <div className={styles.writtenBrief}>
+                      <SectionHeader
+                        label="Written brief for Agent"
+                        expanded={writtenBriefOpen}
+                        onToggle={() => setWrittenBriefOpen(o => !o)}
+                        help="The full brief in prose: what the graph above summarises, as the agent will receive it."
+                      />
+                      {writtenBriefOpen && briefTextEl}
+                    </div>
+                  ) : briefTextEl}
+                  {briefLoading && (
+                    <div className={styles.briefUpdating} role="status">
+                      <span className={styles.briefUpdatingSpinner} aria-hidden="true" />
+                      <span>Updating brief…</span>
+                    </div>
+                  )}
+                  </div>
                   {briefWarning && (
                     <div className={styles.briefWarningBox}>
                       <p className={styles.briefWarningText}><span aria-hidden="true">⚠</span> {briefWarning}</p>

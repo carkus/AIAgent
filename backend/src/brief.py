@@ -42,6 +42,32 @@ from llm_client import create_chat_completion
 BRIEF_RELIC_KINDS = ("slides", "pdf", "docx", "diagram", "markdown", "json")
 
 
+def _clip(value, limit: int) -> str:
+    return str(value or "").strip()[:limit]
+
+
+def _brief_map(raw) -> dict | None:
+    """The brief drawn as a flow for Setup's brief graph (BriefGraph.tsx):
+    the commission, how the agent understood it, the lines of work it will
+    split into, and the result it hands back. Optional: a missing or
+    malformed map just means no graph, never a failed brief."""
+    if not isinstance(raw, dict):
+        return None
+    ask = _clip(raw.get("ask"), 200)
+    result = _clip(raw.get("result"), 200)
+    understood = [_clip(u, 160) for u in raw.get("understood") or [] if isinstance(u, str) and u.strip()][:4]
+    work = []
+    for item in raw.get("work") or []:
+        if isinstance(item, dict) and _clip(item.get("label"), 60):
+            work.append({"label": _clip(item.get("label"), 60), "detail": _clip(item.get("detail"), 180)})
+        elif isinstance(item, str) and item.strip():
+            work.append({"label": _clip(item, 60), "detail": ""})
+    work = work[:6]
+    if not ask or not result or not work:
+        return None
+    return {"ask": ask, "understood": understood, "work": work, "result": result}
+
+
 def _relic_suggestions(raw) -> list[dict]:
     suggestions = []
     for item in raw if isinstance(raw, list) else []:
@@ -84,8 +110,14 @@ This is independent of the question/brief choice above — a warning can accompa
 
 When you write a brief (not a question), also offer up to two pieces of media the user could take away from this commission before it runs, picked for what would genuinely help THIS case: "slides" (to pitch or present the commission), "pdf" (a polished case file to share), "docx" (an editable case file), "diagram" (how the work splits across the focus topics and any workers), "markdown" (a working brief to keep editing), "json" (one entry per line of inquiry, for tracking). Each reason is one short line naming what it would contain for this case specifically. Offer none ([]) when nothing would really add to the brief.
 
+With a brief (not a question), also return "map": the same brief drawn as a flow chart the user sees beside it. Short plain phrases (under ~14 words each), synthesised from your own brief, never a copy of the keyword list:
+- "ask": what the user is commissioning, in one line.
+- "understood": 2-4 instructions the agent takes from it and holds itself to (its angle, its scope, what the traits and behaviors make it do).
+- "work": 2-5 lines of work it will actually split the job into (an angle or a worker each, the same split paragraph 3 describes), each {{"label": "2-5 word title", "detail": "one line on what that branch digs into"}}.
+- "result": the finished thing it hands back, in one line.
+
 Respond with ONLY raw JSON, no markdown code fences, no other text, exactly one of:
-{{"type": "brief", "text": "...", "warning": "..." or null, "relics": [{{"kind": "...", "reason": "..."}}]}}
+{{"type": "brief", "text": "...", "warning": "..." or null, "relics": [{{"kind": "...", "reason": "..."}}], "map": {{"ask": "...", "understood": ["..."], "work": [{{"label": "...", "detail": "..."}}], "result": "..."}}}}
 {{"type": "question", "text": "...", "warning": "..." or null}}
 """
 
@@ -105,7 +137,8 @@ def generate_brief(
 ) -> dict | None:
     """
     Returns {"type": "brief" | "question", "text": "...", "warning": "..." | None,
-    "relics": [{"kind", "reason"}, ...]} (relics empty for a question)
+    "relics": [{"kind", "reason"}, ...], "map": {...} | None} (relics empty
+    and map None for a question)
     or None if the call/parse failed — callers should fall back to the
     deterministic template brief on None rather than surfacing an error,
     since this is a nice-to-have polish step, not a required one.
@@ -144,7 +177,7 @@ def generate_brief(
         response = create_chat_completion(
             provider=provider,
             model=model,
-            max_tokens=1400,
+            max_tokens=2200,
             temperature=0.6,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -160,6 +193,7 @@ def generate_brief(
         if not text:
             return None
         relics = _relic_suggestions(data.get("relics")) if kind == "brief" else []
-        return {"type": kind, "text": text, "warning": warning, "relics": relics}
+        brief_map = _brief_map(data.get("map")) if kind == "brief" else None
+        return {"type": kind, "text": text, "warning": warning, "relics": relics, "map": brief_map}
     except Exception:
         return None

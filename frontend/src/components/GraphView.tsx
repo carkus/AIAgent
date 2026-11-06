@@ -12,7 +12,6 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
-  useViewport,
   useNodesInitialized,
   useStore,
   Background,
@@ -27,6 +26,7 @@ import type { TimelineNode } from '../graphTimeline'
 import type { EvalResultItem, TraceSpan } from '../types'
 import JsonTree from './JsonTree'
 import GraphFrame from './GraphFrame'
+import { useDragScroll } from '../useDragScroll'
 import styles from '../styles/GraphView.module.css'
 import { toolDisplayName } from '../toolLabels'
 
@@ -44,12 +44,13 @@ function fmtDuration(ms: number): string {
   return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`
 }
 
-// Vertical layout: each step is a row, top to bottom. Parallel steps (a
-// wave of delegated workers) sit side by side, wrapping after
-// MAX_PER_ROW so a 6-worker wave doesn't zoom the whole graph out.
-const COL_WIDTH = 256 // node is 236px wide (GraphView.module.css .node)
-const ROW_GAP = 22
-const MAX_PER_ROW = 3
+// Horizontal layout: each step is a column, left to right, and the frame
+// scrolls sideways rather than shrinking the graph to the chat width.
+// Parallel steps (a wave of delegated workers) stack top to bottom in their
+// column, so the frame's height is set by the widest branch.
+const NODE_WIDTH = 236 // GraphView.module.css .node
+const COL_GAP = 56 // room for the edges between columns
+const ROW_GAP = 18
 const DEFAULT_NODE_HEIGHT = 72 // until React Flow has measured the real card
 
 function parseResultPreview(raw: string | undefined): string {
@@ -177,7 +178,7 @@ function TraceNode({ data }: { data: TraceNodeData }) {
       tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onOpen(node) }}
     >
-      <Handle type="target" position={Position.Top} className={styles.handle} />
+      <Handle type="target" position={Position.Left} className={styles.handle} />
       <div className={styles.nodeHeader}>
         <span className={styles.nodeIcon} aria-hidden="true">{icon}</span>
         <span className={styles.nodeTitle}>{title}</span>
@@ -200,7 +201,7 @@ function TraceNode({ data }: { data: TraceNodeData }) {
       )}
       {run && runSummaryLine(run) && <p className={styles.nodeMeta}>{runSummaryLine(run)}</p>}
       {node.kind === 'done' && <span className={styles.nodeOpen}>Full reply and checks ›</span>}
-      <Handle type="source" position={Position.Bottom} className={styles.handle} />
+      <Handle type="source" position={Position.Right} className={styles.handle} />
     </div>
   )
 }
@@ -329,18 +330,20 @@ function buildGraph(timeline: TimelineNode[], live: boolean, evalResults: EvalRe
     ? { passed: evalResults.filter(e => e.passed).length, failed: evalResults.filter(e => !e.passed).length }
     : undefined
 
-  // Top edge of every node: ranks stack downward, a wrapped wave takes
-  // several sub-rows, and each sub-row is as tall as its tallest card.
+  // One column per rank, left to right. A column's cards stack downward,
+  // centred on the same midline, so a single step lines up with the middle
+  // of the branch before or after it.
   const pos = new Map<string, { x: number; y: number }>()
-  let y = 0
-  for (const r of [...byRank.keys()].sort((a, b) => a - b)) {
+  ;[...byRank.keys()].sort((a, b) => a - b).forEach((r, col) => {
     const group = byRank.get(r)!
-    for (let start = 0; start < group.length; start += MAX_PER_ROW) {
-      const row = group.slice(start, start + MAX_PER_ROW)
-      row.forEach((n, i) => pos.set(n.id, { x: (i - (row.length - 1) / 2) * COL_WIDTH, y }))
-      y += Math.max(...row.map(n => sizes.get(n.id)?.height ?? DEFAULT_NODE_HEIGHT)) + ROW_GAP
-    }
-  }
+    const heights = group.map(n => sizes.get(n.id)?.height ?? DEFAULT_NODE_HEIGHT)
+    const total = heights.reduce((a, b) => a + b, 0) + ROW_GAP * (group.length - 1)
+    let y = -total / 2
+    group.forEach((n, i) => {
+      pos.set(n.id, { x: col * (NODE_WIDTH + COL_GAP), y })
+      y += heights[i] + ROW_GAP
+    })
+  })
 
   const nodes: Node[] = timeline.map(node => {
     const pending = node.kind === 'tool'
@@ -399,6 +402,9 @@ export default function GraphView(props: Props) {
 const FIT_PAD = 16
 const MAX_FRAME_VH = 0.85
 const MIN_FRAME_PX = 140
+const MIN_ZOOM = 0.2
+const MAX_ZOOM = 2
+const ZOOM_STEP = 1.25
 
 function GraphViewInner({ timeline, live = false, evalResults = [], trace = [] }: Props) {
   const [openNode, setOpenNode] = useState<TimelineNode | null>(null)
@@ -406,7 +412,6 @@ function GraphViewInner({ timeline, live = false, evalResults = [], trace = [] }
   const [sizes, setSizes] = useState<Map<string, Size>>(() => new Map())
   const { nodes, edges } = useMemo(() => buildGraph(timeline, live, evalResults, trace, setOpenNode, sizes), [timeline, live, evalResults, trace, sizes])
   const flow = useReactFlow()
-  const { zoom } = useViewport()
   const initialized = useNodesInitialized()
   // Changes whenever any card's measured size changes, so a card that grows
   // in place (no node added) still triggers a re-layout and refit.
@@ -416,8 +421,16 @@ function GraphViewInner({ timeline, live = false, evalResults = [], trace = [] }
     return k
   })
   const wrapRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
   const [height, setHeight] = useState<number | undefined>(undefined)
+  const [contentWidth, setContentWidth] = useState<number | undefined>(undefined)
+  // null = automatic: 100%, or smaller only if the tallest branch would
+  // push the frame past MAX_FRAME_VH. The +/- buttons set it explicitly.
+  const [userZoom, setUserZoom] = useState<number | null>(null)
+  const [zoomLevel, setZoomLevel] = useState(1)
+  // While live, keep the newest step in view unless the reader scrolled back.
+  const followRef = useRef(true)
 
   useLayoutEffect(() => {
     const el = wrapRef.current
@@ -428,9 +441,10 @@ function GraphViewInner({ timeline, live = false, evalResults = [], trace = [] }
     return () => ro.disconnect()
   }, [])
 
-  // The frame is sized to the graph: fit the measured node bounds to the
-  // width (never past 100%), make the frame exactly that tall (capped), and
-  // place the viewport ourselves so nothing needs scrolling inside it.
+  // The frame is sized to the graph: exactly as tall as its tallest
+  // branch, and as wide as the whole run, which the frame scrolls through
+  // sideways. React Flow's own viewport is the full drawn width, so it never
+  // pans; the browser's scrollbar does the moving.
   const fitToContent = useCallback(() => {
     if (!width) return
     // By id, so React Flow uses its internal measured sizes; the user
@@ -438,15 +452,37 @@ function GraphViewInner({ timeline, live = false, evalResults = [], trace = [] }
     const b = flow.getNodesBounds(flow.getNodes().map(n => n.id))
     if (!b.width || !b.height) return
     const maxH = window.innerHeight * MAX_FRAME_VH
-    const z = Math.min(1, (width - 2 * FIT_PAD) / b.width, (maxH - 2 * FIT_PAD) / b.height)
+    const z = userZoom ?? Math.min(1, (maxH - 2 * FIT_PAD) / b.height)
     const h = Math.max(MIN_FRAME_PX, b.height * z + 2 * FIT_PAD)
+    const w = Math.max(width, b.width * z + 2 * FIT_PAD)
     setHeight(h)
+    setContentWidth(w)
+    setZoomLevel(z)
     void flow.setViewport({
-      x: (width - b.width * z) / 2 - b.x * z,
+      x: FIT_PAD - b.x * z,
       y: (h - b.height * z) / 2 - b.y * z,
       zoom: z,
     })
-  }, [flow, width])
+    const scroller = scrollRef.current
+    if (live && followRef.current && scroller) {
+      requestAnimationFrame(() => { scroller.scrollLeft = scroller.scrollWidth })
+    }
+  }, [flow, width, userZoom, live])
+
+  useEffect(() => {
+    const scroller = scrollRef.current
+    if (!scroller) return
+    const onScroll = () => {
+      followRef.current = scroller.scrollWidth - scroller.scrollLeft - scroller.clientWidth < 40
+    }
+    scroller.addEventListener('scroll', onScroll, { passive: true })
+
+    return () => scroller.removeEventListener('scroll', onScroll)
+  }, [])
+  useDragScroll(scrollRef)
+
+  const zoomBy = (factor: number) =>
+    setUserZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomLevel * factor)))
 
   // Fit-to-frame is the default view, and it is re-applied whenever the
   // graph changes (a step or worker added, a card resized) or the frame
@@ -479,11 +515,14 @@ function GraphViewInner({ timeline, live = false, evalResults = [], trace = [] }
       className={styles.container}
       label="Reasoning trace graph"
       height={height}
+      scrollX
+      contentWidth={contentWidth}
+      scrollRef={scrollRef}
       zoom={{
-        zoomIn: () => { void flow.zoomIn({ duration: 150 }) },
-        zoomOut: () => { void flow.zoomOut({ duration: 150 }) },
-        fit: fitToContent,
-        level: zoom,
+        zoomIn: () => zoomBy(ZOOM_STEP),
+        zoomOut: () => zoomBy(1 / ZOOM_STEP),
+        fit: () => setUserZoom(null),
+        level: zoomLevel,
       }}
     >
       <ReactFlow
@@ -497,11 +536,12 @@ function GraphViewInner({ timeline, live = false, evalResults = [], trace = [] }
         nodesConnectable={false}
         elementsSelectable={false}
         onNodeClick={(_, n) => setOpenNode((n.data as unknown as TraceNodeData).node)}
-        panOnDrag
+        panOnDrag={false}
         panOnScroll={false}
         zoomOnScroll={false}
+        zoomOnPinch={false}
+        zoomOnDoubleClick={false}
         preventScrolling={false}
-        zoomOnPinch
       >
         <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#e2dfd5" />
       </ReactFlow>

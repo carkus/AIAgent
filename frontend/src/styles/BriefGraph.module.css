@@ -1,0 +1,43 @@
+/* Setup's brief graph (BriefGraph.tsx). Cards match the run trace
+   (GraphView.module.css) but show their full text: they're read, not
+   clicked through to a detail view. */
+.node {
+  width: 220px;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #ddd9cd;
+  box-shadow: 0 1px 3px rgba(22, 50, 74, 0.08);
+  font-family: 'Inter', sans-serif;
+}
+
+.node_ask { border-color: #3f7ea0; }
+.node_understood { border-color: #cfe3ea; }
+.node_work { border-color: #1f6f73; }
+.node_result { border-color: #2f7a3d; background: #f3faf4; }
+
+.nodeTitle {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: #16324a;
+}
+
+.nodeText {
+  margin: 0.3rem 0 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: #33475a;
+}
+
+.nodeList {
+  margin: 0.3rem 0 0;
+  padding-left: 1rem;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: #33475a;
+}
+
+.nodeList li + li {
+  margin-top: 0.2rem;
+}

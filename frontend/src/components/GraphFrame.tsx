@@ -11,7 +11,7 @@
 // - External zoom (`zoom` prop): for content that already owns a viewport
 //   (React Flow). The frame only draws the square and the controls, and the
 //   buttons call the given handlers.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import styles from '../styles/GraphFrame.module.css'
 
 export interface ExternalZoom {
@@ -30,6 +30,11 @@ interface Props {
   label?: string // accessible name for the frame
   // External mode only: exact frame height in px (content-sized), replacing the CSS square.
   height?: number
+  // External mode only: content scrolls sideways under fixed zoom controls,
+  // drawn at contentWidth (the full frame width until measured).
+  scrollX?: boolean
+  contentWidth?: number
+  scrollRef?: Ref<HTMLDivElement>
 }
 
 const MIN_SCALE = 0.1
@@ -39,7 +44,11 @@ const STEP = 1.25
 // grew into a wide empty margin on a full-width frame.
 const FIT_PAD = 12
 
-export default function GraphFrame({ children, zoom, onExpand, className, contentClassName, label = 'Graph', height: externalHeight }: Props) {
+// Room for a horizontal scrollbar under scrolling content, so it doesn't
+// cover the bottom of the graph.
+const SCROLLBAR_ALLOWANCE = 14
+
+export default function GraphFrame({ children, zoom, onExpand, className, contentClassName, label = 'Graph', height: externalHeight, scrollX, contentWidth, scrollRef }: Props) {
   const frameRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ scale: 1, x: 0, y: 0 })
@@ -136,7 +145,8 @@ export default function GraphFrame({ children, zoom, onExpand, className, conten
       className={`${styles.frame} ${external ? '' : styles.pannable} ${className ?? ''}`}
       style={
         !external && height !== null ? { height }
-          : external && externalHeight !== undefined ? { height: externalHeight, aspectRatio: 'auto' }
+          : external && externalHeight !== undefined
+            ? { height: externalHeight + (scrollX ? SCROLLBAR_ALLOWANCE : 0), aspectRatio: 'auto' }
             : undefined
       }
       role="group"
@@ -146,7 +156,11 @@ export default function GraphFrame({ children, zoom, onExpand, className, conten
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      {external ? (
+      {external && scrollX ? (
+        <div ref={scrollRef} className={styles.scrollX}>
+          <div className={styles.scrollContent} style={{ width: contentWidth ?? '100%', height: externalHeight ?? '100%' }}>{children}</div>
+        </div>
+      ) : external ? (
         <div className={styles.fill}>{children}</div>
       ) : (
         <div

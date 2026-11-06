@@ -6,11 +6,6 @@
    border and zoom controls). */
 .container {
   background: #fbfaf7;
-  cursor: grab;
-}
-
-.container:active {
-  cursor: grabbing;
 }
 
 .empty {

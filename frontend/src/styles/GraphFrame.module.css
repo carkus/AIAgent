@@ -36,6 +36,21 @@
   inset: 0;
 }
 
+/* External content wider than the frame (the horizontal trace graph):
+   scrolls sideways; the zoom controls stay put on the frame. */
+.scrollX {
+  position: absolute;
+  inset: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x;
+  cursor: grab;
+}
+
+.scrollContent {
+  position: relative;
+}
+
 .controls {
   position: absolute;
   top: 0.45rem;

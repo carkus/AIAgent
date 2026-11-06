@@ -957,6 +957,56 @@
   border-top: 1px solid var(--color-border);
 }
 
+/* Graph + written brief; holds the "Updating brief…" overlay while the
+   brief is being redrafted. */
+.briefBody {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 3rem;
+}
+
+.briefUpdating {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: rgba(242, 239, 233, 0.75);
+  border-radius: 8px;
+  color: #16324a;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.briefUpdatingSpinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #cfe3ea;
+  border-top-color: #1f6f73;
+  border-radius: 50%;
+  animation: briefSpin 0.8s linear infinite;
+}
+
+@keyframes briefSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .briefUpdatingSpinner { animation-duration: 2.4s; }
+}
+
+/* "Written brief for Agent": the prose brief, folded under the brief graph. */
+.writtenBrief {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
 /* Generated from the specialties/special-instructions above, not something
    typed directly into this field — no full border or inset shadow (those
    read as "editable"), just a quoted-output left rule so it's visually

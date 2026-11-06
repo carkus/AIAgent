@@ -82,6 +82,16 @@ export interface AgentBrief {
   warning?: string | null;
   // Media the model offers for this commission (brief.py); built only on click.
   relics?: RelicSuggestion[];
+  // The brief drawn as a flow (brief.py's _brief_map), shown as BriefGraph.
+  // Absent for a question, or when the model's map didn't parse.
+  map?: BriefMap | null;
+}
+
+export interface BriefMap {
+  ask: string;
+  understood: string[];
+  work: { label: string; detail: string }[];
+  result: string;
 }
 
 // The commission and the agent on board, sent with a Brief-sourced relic so
