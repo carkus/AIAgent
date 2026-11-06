@@ -144,7 +144,7 @@ def brief():
     provider = ((body.get("provider") or "").strip() or None)
     model = ((body.get("ollama_model") or "").strip() or None)
     if provider != "ollama":
-        rate_limit_error = rate_limit.check(rate_limit.client_ip(request))
+        rate_limit_error = rate_limit.check(rate_limit.client_ip(request), bucket="brief")
         if rate_limit_error:
             return jsonify({"error": rate_limit_error}), 429
     result = generate_brief(

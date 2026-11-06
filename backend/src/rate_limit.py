@@ -18,6 +18,8 @@ simultaneous requests from the same client can't both squeeze under the cap.
 Env vars:
   RATE_LIMIT_PER_MINUTE - burst cap per client IP (default 5)
   RATE_LIMIT_PER_DAY    - sustained cap per client IP (default 50)
+  BRIEF_RATE_LIMIT_PER_MINUTE / BRIEF_RATE_LIMIT_PER_DAY - the "brief" bucket
+                          (defaults 20 / 300), see check()'s `bucket`
 """
 import os
 import time
@@ -27,12 +29,28 @@ import db
 _PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "5"))
 _PER_DAY = int(os.environ.get("RATE_LIMIT_PER_DAY", "50"))
 
+# Separate, roomier budget for Setup's Brief: it redrafts on every field
+# change (one small call each), so sharing the 5/minute agent budget made a
+# few clicks 429 the brief and then starve bootstrap/chat for the day.
+_BUCKETS = {
+    "default": (_PER_MINUTE, _PER_DAY),
+    "brief": (
+        int(os.environ.get("BRIEF_RATE_LIMIT_PER_MINUTE", "20")),
+        int(os.environ.get("BRIEF_RATE_LIMIT_PER_DAY", "300")),
+    ),
+}
 
-def check(client_id: str) -> str | None:
+
+def check(client_id: str, bucket: str = "default") -> str | None:
     """
     Records one hit for `client_id` and returns None if it's within both
     limits, or an error message (safe to return to the caller) if not.
+    `bucket` picks a separately counted budget (_BUCKETS); hits are stored
+    under "<bucket>:<client>" for non-default buckets, so no schema change.
     """
+    per_minute, per_day = _BUCKETS[bucket]
+    if bucket != "default":
+        client_id = f"{bucket}:{client_id}"
     now = time.time()
     with db.write() as conn:
         conn.execute("DELETE FROM rate_limit_hits WHERE ts < ?", (now - 86400,))
@@ -41,10 +59,10 @@ def check(client_id: str) -> str | None:
             (now - 60, client_id),
         ).fetchone()
 
-        if (minute_count or 0) >= _PER_MINUTE:
-            return f"Rate limit exceeded: max {_PER_MINUTE} requests/minute per client. Try again shortly."
-        if day_count >= _PER_DAY:
-            return f"Daily limit exceeded: max {_PER_DAY} requests/day per client."
+        if (minute_count or 0) >= per_minute:
+            return f"Rate limit exceeded: max {per_minute} requests/minute per client. Try again shortly."
+        if day_count >= per_day:
+            return f"Daily limit exceeded: max {per_day} requests/day per client."
 
         conn.execute("INSERT INTO rate_limit_hits (client_id, ts) VALUES (?, ?)", (client_id, now))
         return None
