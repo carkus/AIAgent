@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import styles from '../styles/ImageViewer.module.css'
 
 interface Props {
@@ -99,8 +100,18 @@ export default function ImageViewer({ svg, src, onClose }: Props) {
     ? { width: baseSize.w * scale, height: baseSize.h * scale, maxWidth: 'none', maxHeight: 'none' }
     : undefined
 
-  return (
-    <div className={styles.overlay} onClick={onClose}>
+  // Portalled to <body>: rendered in place, any ancestor with a transform,
+  // filter or will-change (chat messages, graph frames) becomes the
+  // containing block for position: fixed, so the overlay and its controls
+  // scrolled with the chat instead of staying on the viewport.
+  return createPortal(
+    // React still bubbles portal events through the component tree, so
+    // stop them here or a click could toggle a card the viewer sits in.
+    <div
+      className={styles.overlay}
+      onClick={e => { e.stopPropagation(); onClose() }}
+      onPointerDown={e => e.stopPropagation()}
+    >
       {/* Close button and zoom badge are fixed to the viewport, as siblings
           of .page rather than children inside it — .page scrolls internally
           when the zoomed image outgrows it, and an absolutely-positioned
@@ -136,6 +147,7 @@ export default function ImageViewer({ svg, src, onClose }: Props) {
           />
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
