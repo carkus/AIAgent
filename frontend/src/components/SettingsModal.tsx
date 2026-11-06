@@ -8,7 +8,7 @@ import styles from '../styles/SettingsModal.module.css'
 // Mirrors backend/src/agent_stream.py's MAX_DELEGATIONS_PER_REQUEST — shown
 // as the placeholder/hint here, not enforced client-side; the backend clamps
 // for real.
-const DEFAULT_MAX_DELEGATIONS = 6
+const DEFAULT_MAX_DELEGATIONS = 3
 const DEFAULT_RESULTS_PER_PAGE = 20
 
 interface Props {

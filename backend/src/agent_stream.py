@@ -872,7 +872,7 @@ _DELEGATE_TOOL = {
     },
 }
 
-MAX_DELEGATIONS_PER_REQUEST = 6
+MAX_DELEGATIONS_PER_REQUEST = 3
 
 # Hard ceiling on total tool calls processed in a SINGLE assistant turn,
 # regardless of tool type. MAX_DELEGATIONS_PER_REQUEST only bounds how many

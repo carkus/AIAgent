@@ -228,7 +228,7 @@ function describeBehaviorEffect(toggle: BehaviorToggle, type: AgentTemplateId, k
 // backend/src/agent_stream.py's MAX_DELEGATIONS_PER_REQUEST. One worker is
 // delegated per specialty, capped per turn, so more specialties than this are
 // silently dropped/starved rather than all covered.
-const DEFAULT_MAX_DELEGATIONS = 6
+const DEFAULT_MAX_DELEGATIONS = 3
 
 // Hard UI-side cap, independent of DEFAULT_MAX_DELEGATIONS above (that one's
 // a soft delegation-capacity warning; this one actually blocks adding a 6th

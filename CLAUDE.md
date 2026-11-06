@@ -485,9 +485,12 @@ tool-usage basics:
   `delegate_to_worker` call per keyword — each worker independently searches
   and reports back on just its own keyword; the main agent must not research
   more than one keyword itself with its own tools when several are named.
-  `MAX_DELEGATIONS_PER_REQUEST` is `6` (raised from `3`) to match typical
+  `MAX_DELEGATIONS_PER_REQUEST` was raised from `3` to `6` to match typical
   keyword counts without silently falling back to doing everything in the
-  main agent's own tool calls. This was tightened twice: first from an
+  main agent's own tool calls, then set back to a default of `3`
+  (2026-11-06, user's choice: each worker is a bootstrap plus a full agent
+  loop, so cost and wait scale with it). Settings can still raise it per
+  browser (1-20). This was tightened twice: first from an
   exception-worded rule that produced zero delegations even for genuinely
   multi-part requests (the main agent just did all the work itself with
   `fetch_page`/`search_jobs`, which is why "agents employed" showed as
@@ -891,7 +894,7 @@ Eye-catching, lowest priority of the six.
 Five forward-looking directions for this project. Captured here as work to accomplish, not as current limitations of the single-agent design — each assumes the existing bootstrap/agent-loop architecture as a starting point rather than a replacement.
 
 ### 1. Multi-agent orchestration — first scaffold done, delegation guidance tightened
-`orchestrator.py`'s `run_worker()` + `agent_stream.py`'s `delegate_to_worker` tool implement the basic version: the main agent can spin up a worker agent (bootstrapped via the same `generate_agent_config` call, own name/personality/toolset, `is_worker=True`) to own one self-contained subtask and hand back its finished result — one level deep, synchronous, capped at `MAX_DELEGATIONS_PER_REQUEST` per turn (now `6`, raised from `3` — see `agent_stream.py`'s module docstring for the deliberate scope limits). The prompt wording now treats "one worker per named keyword/topic" as the normal way to handle a multi-part request, not a rare exception — see Backend Patterns' "Output style: diagrams over prose, and delegation defaults" above for why that changed. Not yet done: a planner agent that decomposes the task itself (today the *main* agent decides when/what to delegate via its own judgment, there's no separate planning phase), recursive sub-worker spawning, and a supervisor pattern beyond "main agent reads the worker's result and continues."
+`orchestrator.py`'s `run_worker()` + `agent_stream.py`'s `delegate_to_worker` tool implement the basic version: the main agent can spin up a worker agent (bootstrapped via the same `generate_agent_config` call, own name/personality/toolset, `is_worker=True`) to own one self-contained subtask and hand back its finished result — one level deep, synchronous, capped at `MAX_DELEGATIONS_PER_REQUEST` per turn (default `3`, overridable in Settings — see `agent_stream.py`'s module docstring for the deliberate scope limits). The prompt wording now treats "one worker per named keyword/topic" as the normal way to handle a multi-part request, not a rare exception — see Backend Patterns' "Output style: diagrams over prose, and delegation defaults" above for why that changed. Not yet done: a planner agent that decomposes the task itself (today the *main* agent decides when/what to delegate via its own judgment, there's no separate planning phase), recursive sub-worker spawning, and a supervisor pattern beyond "main agent reads the worker's result and continues."
 
 ### 2. A2A protocol
 AIAgent's dynamically-generated agents are a good target for making A2A-discoverable, since each one already has a defined role/tools. Two AIAgent-spawned agents negotiating a task over A2A instead of just sharing memory internally would be a clean proof-of-concept, and it's a step up from bolting A2A onto Jobfit's fixed three tools.
