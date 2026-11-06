@@ -29,6 +29,9 @@ interface Props {
   resumedMessages?: SavedChatMessage[]
   // Sends one of the recap's proposed directions as the user's next message.
   onDirection?: (direction: string) => void
+  // Fresh agent only: leave before the first run starts (Chat.tsx holds
+  // the auto-start until this modal closes).
+  onBackToSetup?: () => void
   onClose: () => void
 }
 
@@ -37,7 +40,7 @@ interface Props {
 // into an empty chat box with no idea what to ask. A resumed chat instead
 // opens like a new chapter: the agent tells the story so far and where things
 // stand (backend/src/recap.py), falling back to the mission text on failure.
-export default function AgentBriefingModal({ agentConfig, agentName, resumedMessages, onDirection, onClose }: Props) {
+export default function AgentBriefingModal({ agentConfig, agentName, resumedMessages, onDirection, onBackToSetup, onClose }: Props) {
   const startBtnRef = useRef<HTMLButtonElement>(null)
   const isRecap = !!resumedMessages && resumedMessages.length > 0
   const [recap, setRecap] = useState<string | null>(null)
@@ -139,6 +142,9 @@ export default function AgentBriefingModal({ agentConfig, agentName, resumedMess
         </div>
 
         <div className={styles.footer}>
+          {!isRecap && onBackToSetup && (
+            <button type="button" className={styles.dismissBtn} onClick={onBackToSetup}>Back to setup</button>
+          )}
           <button ref={startBtnRef} type="button" className={styles.retryBtn} onClick={close}>{showDirections ? "I'll type my own" : isRecap ? 'Pick up where we left off' : "Let's begin"}</button>
         </div>
       </div>

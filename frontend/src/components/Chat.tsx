@@ -456,9 +456,11 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   // pool. The pool itself (focusPool) is now the keyword source the
   // backend's delegation rule iterates over (see agent_stream.py's
   // _delegation_rule_body) — this message no longer needs to spell out
+  // Held until the briefing is dismissed: the user reads what the agent is
+  // about to do and can still go back to Setup before any work starts.
   // each keyword itself, just hand over a generic task.
   useEffect(() => {
-    if (autoSentRef.current) return
+    if (autoSentRef.current || showBriefing) return
     const kws = focusPool
     if (!kws?.length) return
     autoSentRef.current = true
@@ -479,7 +481,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
     const text = `Starting commission: research each of these focus topics and report what you find: ${kws.map(k => `"${k}"`).join(', ')}.`
     sendMessage(text, messages, undefined, text, true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [showBriefing])
 
   function buildSavedChat(): SavedChat {
     return {
@@ -1081,6 +1083,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           agentName={agentName}
           resumedMessages={initialMessages}
           onDirection={direction => sendMessage(direction, messages, undefined, undefined, true)}
+          onBackToSetup={onBackToSetup}
           onClose={() => setShowBriefing(false)}
         />
       )}
