@@ -22,7 +22,10 @@ deploy_backend() {
     echo "==> Syncing backend/ ..."
     # venv excluded: the droplet uses $REMOTE_BASE/venv, and a local (often
     # Windows) venv is large and useless there.
-    tar czf - --exclude='__pycache__' --exclude='*.pyc' --exclude='venv' -C backend . \
+    # agentone.db*/logs excluded: local runtime files (prod's database lives
+    # in DATA_DIR=/var/www/aiagent/data, not in the code folder).
+    tar czf - --exclude='__pycache__' --exclude='*.pyc' --exclude='venv' \
+        --exclude='agentone.db*' --exclude='*.log' --exclude='eval_runs' -C backend . \
         | ssh "${SSH_OPTS[@]}" "$HOST" "sudo -u aiagent tar xzf - -C $REMOTE_BASE/src/backend"
 
     echo "==> Installing any new/changed Python deps ..."
