@@ -209,16 +209,18 @@ def recap():
         rate_limit_error = rate_limit.check(rate_limit.client_ip(request))
         if rate_limit_error:
             return jsonify({"error": rate_limit_error}), 429
-    text = generate_recap(
+    keywords = agent_config.get("keywords")
+    result = generate_recap(
         messages=messages,
         system_prompt=agent_config.get("system_prompt") or "",
         agent_name=(body.get("agentName") or "").strip(),
         provider=provider,
         model=model,
+        keywords=keywords if isinstance(keywords, list) else None,
     )
-    if text is None:
+    if result is None:
         return jsonify({"error": "Could not generate a recap"}), 502
-    return jsonify({"text": text})
+    return jsonify(result)
 
 
 @app.route("/relic", methods=["POST", "OPTIONS"])

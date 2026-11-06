@@ -23,7 +23,7 @@ import { describeModel, describeModelFallback, describeServedModel, formatModelI
 import { normalizeInlineOrderedLists } from '../markdownFormat'
 import { formatDate, getDateFormat } from '../dateFormat'
 import { extractMermaidDiagrams } from '../mermaidExtract'
-import AgentBriefingModal, { briefingHidden } from './AgentBriefingModal'
+import AgentBriefingModal from './AgentBriefingModal'
 import ResultRating from './ResultRating'
 import styles from '../styles/Chat.module.css'
 import splashLogo from '../assets/favicon.png'
@@ -333,7 +333,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
   const [input, setInput] = useState('')
   // Fresh agent: mission briefing. Resumed chat (initialMessages): an
   // in-character "Previously…" recap of the story so far.
-  const [showBriefing, setShowBriefing] = useState(() => !briefingHidden())
+  const [showBriefing, setShowBriefing] = useState(true)
   const [thinking, setThinking] = useState(false)
   // What the backend says it's currently doing while `thinking` is true
   // (agent_stream.py's 'status' events) — shown in place of a bare "Working"
@@ -1079,6 +1079,7 @@ export default function Chat({ agentConfig, agentName, onReset, onBackToSetup, i
           agentConfig={agentConfig}
           agentName={agentName}
           resumedMessages={initialMessages}
+          onDirection={direction => sendMessage(direction, messages, undefined, undefined, true)}
           onClose={() => setShowBriefing(false)}
         />
       )}

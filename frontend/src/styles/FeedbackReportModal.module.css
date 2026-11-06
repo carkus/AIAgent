@@ -15,6 +15,9 @@
 
 .modal {
   position: relative;
+  /* Same typewriter face as the chat transcript (Chat.module.css); labels
+     and buttons keep their own Share Tech Mono. */
+  font-family: 'Courier Prime', 'Courier New', Courier, serif;
   background: var(--color-dossier);
   border: 1px solid var(--color-dossier-border);
   border-radius: 3px 10px 10px 10px;
@@ -62,7 +65,8 @@
 
 .title {
   color: var(--color-dossier-text);
-  font-family: 'Share Tech Mono', monospace;
+  /* Agent name: same sans-serif as the chat header's (Chat.module.css .headerTitle). */
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: var(--font-size-lg);
   font-weight: 400;
   letter-spacing: 0.08em;
@@ -183,4 +187,31 @@
 
 .retryBtn:hover {
   opacity: 0.9;
+}
+
+/* Recap's proposed directions (AgentBriefingModal): same look as the chat's
+   next-option buttons, each one sends itself as the next message. */
+.directions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.directionBtn {
+  composes: btn-base from global;
+  background: #ffffff;
+  border: 1px solid #ddd9cd;
+  color: #1f6f73;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  padding: 0.4rem 0.75rem;
+  text-align: left;
+  max-width: 100%;
+}
+
+.directionBtn:hover {
+  border-color: #1f6f73;
 }

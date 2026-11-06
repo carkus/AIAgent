@@ -4,20 +4,9 @@ import { fetchChatRecap } from '../api'
 // Same dossier chrome as the app's other modals — reused, not a new dialog style.
 import styles from '../styles/FeedbackReportModal.module.css'
 
-const HIDE_KEY = 'agentone_hide_agent_briefing'
-
-// Read/written defensively — localStorage can be unavailable (private mode,
-// blocked site data), in which case the briefing just always shows.
-export function briefingHidden(): boolean {
-  try { return localStorage.getItem(HIDE_KEY) === '1' } catch { return false }
-}
-
-function setBriefingHidden(hidden: boolean) {
-  try {
-    if (hidden) localStorage.setItem(HIDE_KEY, '1')
-    else localStorage.removeItem(HIDE_KEY)
-  } catch { /* ignore */ }
-}
+// The old "Don't show briefings or recaps" opt-out is gone (the recap now
+// carries directions to take next), so clear any flag a browser still holds.
+try { localStorage.removeItem('agentone_hide_agent_briefing') } catch { /* ignore */ }
 
 function toolLabel(name: string): string {
   const words = name.replace(/_/g, ' ').trim()
@@ -38,6 +27,8 @@ interface Props {
   // recap, told by the agent in character, instead of the first-meeting
   // mission briefing.
   resumedMessages?: SavedChatMessage[]
+  // Sends one of the recap's proposed directions as the user's next message.
+  onDirection?: (direction: string) => void
   onClose: () => void
 }
 
@@ -46,18 +37,18 @@ interface Props {
 // into an empty chat box with no idea what to ask. A resumed chat instead
 // opens like a new chapter: the agent tells the story so far and where things
 // stand (backend/src/recap.py), falling back to the mission text on failure.
-export default function AgentBriefingModal({ agentConfig, agentName, resumedMessages, onClose }: Props) {
+export default function AgentBriefingModal({ agentConfig, agentName, resumedMessages, onDirection, onClose }: Props) {
   const startBtnRef = useRef<HTMLButtonElement>(null)
-  const [dontShowAgain, setDontShowAgain] = useState(false)
   const isRecap = !!resumedMessages && resumedMessages.length > 0
   const [recap, setRecap] = useState<string | null>(null)
+  const [directions, setDirections] = useState<string[]>([])
   const [recapState, setRecapState] = useState<'loading' | 'done' | 'failed'>(isRecap ? 'loading' : 'done')
 
   useEffect(() => {
     if (!isRecap) return
     const ctrl = new AbortController()
     fetchChatRecap(resumedMessages!, agentConfig, agentName, ctrl.signal)
-      .then(text => { setRecap(text); setRecapState('done') })
+      .then(r => { setRecap(r.text); setDirections(r.directions); setRecapState('done') })
       .catch(() => { if (!ctrl.signal.aborted) setRecapState('failed') })
     return () => ctrl.abort()
     // Fetched once per open — the props don't change while the modal is up.
@@ -65,9 +56,15 @@ export default function AgentBriefingModal({ agentConfig, agentName, resumedMess
   }, [])
 
   function close() {
-    if (dontShowAgain) setBriefingHidden(true)
     onClose()
   }
+
+  function pickDirection(direction: string) {
+    close()
+    onDirection?.(direction)
+  }
+
+  const showDirections = isRecap && recapState === 'done' && directions.length > 0 && !!onDirection
 
   useEffect(() => {
     startBtnRef.current?.focus()
@@ -77,7 +74,7 @@ export default function AgentBriefingModal({ agentConfig, agentName, resumedMess
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dontShowAgain])
+  }, [])
 
   const intro = agentConfig.intro
     ?? "Reporting for duty. Tell me what you're after and I'll get to work — here's what I've got to work with."
@@ -115,6 +112,19 @@ export default function AgentBriefingModal({ agentConfig, agentName, resumedMess
             </section>
           )}
 
+          {showDirections && (
+            <section className={styles.section}>
+              <span className={styles.sectionLabel}>Where to next</span>
+              <div className={styles.directions} role="group" aria-label="Directions to take next">
+                {directions.map(d => (
+                  <button key={d} type="button" className={styles.directionBtn} onClick={() => pickDirection(d)}>
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           {!isRecap && tools.length > 0 && (
             <section className={styles.section}>
               <span className={styles.sectionLabel}>Equipment</span>
@@ -126,15 +136,10 @@ export default function AgentBriefingModal({ agentConfig, agentName, resumedMess
               ))}
             </section>
           )}
-
-          <label className={styles.value} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-            <input type="checkbox" checked={dontShowAgain} onChange={e => setDontShowAgain(e.target.checked)} />
-            Don't show briefings or recaps
-          </label>
         </div>
 
         <div className={styles.footer}>
-          <button ref={startBtnRef} type="button" className={styles.retryBtn} onClick={close}>{isRecap ? 'Pick up where we left off' : "Let's begin"}</button>
+          <button ref={startBtnRef} type="button" className={styles.retryBtn} onClick={close}>{showDirections ? "I'll type my own" : isRecap ? 'Pick up where we left off' : "Let's begin"}</button>
         </div>
       </div>
     </div>

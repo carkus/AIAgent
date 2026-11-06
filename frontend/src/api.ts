@@ -220,15 +220,21 @@ export async function fetchBriefMap(
 
 /**
  * In-character "Previously…" recap of a resumed saved chat
- * (backend/src/recap.py), shown in AgentBriefingModal. Throws on any
- * failure — the caller falls back to the plain mission briefing.
+ * (backend/src/recap.py), shown in AgentBriefingModal, plus the directions
+ * the agent proposes to take next (may be empty). Throws on any failure —
+ * the caller falls back to the plain mission briefing.
  */
+export interface ChatRecap {
+  text: string
+  directions: string[]
+}
+
 export async function fetchChatRecap(
   messages: SavedChatMessage[],
   agentConfig: AgentConfig,
   agentName: string,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<ChatRecap> {
   const res = await fetch(`${API_URL}/recap`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -245,7 +251,10 @@ export async function fetchChatRecap(
     throw new Error(err.error ?? 'Failed to generate recap');
   }
   const data = await res.json();
-  return data.text;
+  return {
+    text: data.text,
+    directions: Array.isArray(data.directions) ? data.directions.filter((d: unknown) => typeof d === 'string') : [],
+  };
 }
 
 /**
