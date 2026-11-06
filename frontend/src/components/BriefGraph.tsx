@@ -48,7 +48,7 @@ interface BriefNodeData extends Record<string, unknown> {
 function BriefNode({ data }: { data: BriefNodeData }) {
   return (
     <div className={`${styles.node} ${styles[`node_${data.variant}`]}`}>
-      {data.variant !== 'ask' && <Handle type="target" position={Position.Left} className={graph.handle} />}
+      {data.variant !== 'ask' && <Handle isConnectable={false} type="target" position={Position.Left} className={graph.handle} />}
       <div className={graph.nodeHeader}>
         <span className={graph.nodeIcon} aria-hidden="true">{data.icon}</span>
         <span className={styles.nodeTitle}>{data.title}</span>
@@ -59,7 +59,7 @@ function BriefNode({ data }: { data: BriefNodeData }) {
           {data.items.map((item, i) => <li key={i}>{item}</li>)}
         </ul>
       )}
-      {data.variant !== 'result' && <Handle type="source" position={Position.Right} className={graph.handle} />}
+      {data.variant !== 'result' && <Handle isConnectable={false} type="source" position={Position.Right} className={graph.handle} />}
     </div>
   )
 }
@@ -206,6 +206,7 @@ function BriefGraphInner({ map }: { map: BriefMap }) {
           proOptions={{ hideAttribution: true }}
           nodesDraggable={false}
           nodesConnectable={false}
+          connectOnClick={false}
           elementsSelectable={false}
           panOnDrag={false}
           panOnScroll={false}

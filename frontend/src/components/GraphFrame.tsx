@@ -43,6 +43,8 @@ const STEP = 1.25
 // Fixed inset (px) left around fitted content, rather than a percentage that
 // grew into a wide empty margin on a full-width frame.
 const FIT_PAD = 12
+// Space (px) between a fitted graph's right edge and the zoom controls.
+const CONTROLS_GAP = 8
 
 // Room for a horizontal scrollbar under scrolling content, so it doesn't
 // cover the bottom of the graph.
@@ -51,6 +53,7 @@ const SCROLLBAR_ALLOWANCE = 14
 export default function GraphFrame({ children, zoom, onExpand, className, contentClassName, label = 'Graph', height: externalHeight, scrollX, contentWidth, scrollRef }: Props) {
   const frameRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  const controlsRef = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ scale: 1, x: 0, y: 0 })
   // Own-zoom mode: the frame's height collapses to the fitted content
   // (null until first measured, when the CSS square applies).
@@ -65,6 +68,10 @@ export default function GraphFrame({ children, zoom, onExpand, className, conten
     const content = contentRef.current
     if (!frame || !content) return
     const fw = frame.clientWidth
+    // Width left of the zoom controls (plus a gap), so the fitted graph
+    // sits beside them instead of under them.
+    const controls = controlsRef.current
+    const aw = controls ? Math.max(0, controls.offsetLeft - CONTROLS_GAP) : fw
     const cw = content.offsetWidth
     const ch = content.offsetHeight
     if (!fw || !cw || !ch) return
@@ -72,10 +79,10 @@ export default function GraphFrame({ children, zoom, onExpand, className, conten
     // the frame exactly that tall so a wide diagram doesn't sit in a square
     // of empty space.
     const maxH = window.innerHeight * 0.85
-    const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((fw - 2 * FIT_PAD) / cw, (maxH - 2 * FIT_PAD) / ch)))
+    const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((aw - 2 * FIT_PAD) / cw, (maxH - 2 * FIT_PAD) / ch)))
     const fh = Math.min(maxH, ch * scale + 2 * FIT_PAD)
     setHeight(fh)
-    setView({ scale, x: (fw - cw * scale) / 2, y: (fh - ch * scale) / 2 })
+    setView({ scale, x: (aw - cw * scale) / 2, y: (fh - ch * scale) / 2 })
   }, [])
 
   const zoomBy = useCallback((factor: number) => {
@@ -171,7 +178,7 @@ export default function GraphFrame({ children, zoom, onExpand, className, conten
           {children}
         </div>
       )}
-      <div className={styles.controls}>
+      <div ref={controlsRef} className={styles.controls}>
         <button type="button" className={styles.controlBtn} onClick={doZoomIn} aria-label="Zoom in" title="Zoom in">+</button>
         <button type="button" className={styles.controlBtn} onClick={doZoomOut} aria-label="Zoom out" title="Zoom out">−</button>
         <button type="button" className={styles.controlBtn} onClick={doFit} aria-label="Fit to frame" title="Fit to frame">⤢</button>

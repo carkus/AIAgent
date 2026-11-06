@@ -178,7 +178,7 @@ function TraceNode({ data }: { data: TraceNodeData }) {
       tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onOpen(node) }}
     >
-      <Handle type="target" position={Position.Left} className={styles.handle} />
+      <Handle isConnectable={false} type="target" position={Position.Left} className={styles.handle} />
       <div className={styles.nodeHeader}>
         <span className={styles.nodeIcon} aria-hidden="true">{icon}</span>
         <span className={styles.nodeTitle}>{title}</span>
@@ -201,7 +201,7 @@ function TraceNode({ data }: { data: TraceNodeData }) {
       )}
       {run && runSummaryLine(run) && <p className={styles.nodeMeta}>{runSummaryLine(run)}</p>}
       {node.kind === 'done' && <span className={styles.nodeOpen}>Full reply and checks ›</span>}
-      <Handle type="source" position={Position.Right} className={styles.handle} />
+      <Handle isConnectable={false} type="source" position={Position.Right} className={styles.handle} />
     </div>
   )
 }
@@ -534,6 +534,7 @@ function GraphViewInner({ timeline, live = false, evalResults = [], trace = [] }
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}
+        connectOnClick={false}
         elementsSelectable={false}
         onNodeClick={(_, n) => setOpenNode((n.data as unknown as TraceNodeData).node)}
         panOnDrag={false}

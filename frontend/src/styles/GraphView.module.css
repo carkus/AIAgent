@@ -22,7 +22,7 @@
   background: #ffffff;
   border: 1px solid #ddd9cd;
   box-shadow: 0 1px 3px rgba(22, 50, 74, 0.08);
-  font-family: 'Inter', sans-serif;
+  font-family: 'Sora', 'Inter', sans-serif;
   cursor: pointer;
 }
 
@@ -125,11 +125,15 @@
   50% { opacity: 0.3; }
 }
 
+/* Edge anchor only: the graphs are read-only, and a click on the dot
+   started React Flow's connect gesture, scrolling and resizing the graph.
+   Ignoring the pointer lets the click land on the node instead. */
 .handle {
   width: 6px;
   height: 6px;
   background: #cfe3ea;
   border: none;
+  pointer-events: none;
 }
 
 .edge :global(.react-flow__edge-path) {

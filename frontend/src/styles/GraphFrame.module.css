@@ -2,6 +2,10 @@
    square but never past 85vh, so a wide column gives a wide rectangle
    rather than a box taller than the screen. */
 .frame {
+  /* Right-hand column kept clear for the zoom controls (1.8rem buttons at a
+     0.45rem inset), plus a small gap, so they sit beside the graph rather
+     than on top of it. */
+  --graph-controls-gutter: 2.75rem;
   position: relative;
   width: 100%;
   max-height: 85vh;
@@ -33,14 +37,14 @@
 
 .fill {
   position: absolute;
-  inset: 0;
+  inset: 0 var(--graph-controls-gutter) 0 0;
 }
 
 /* External content wider than the frame (the horizontal trace graph):
    scrolls sideways; the zoom controls stay put on the frame. */
 .scrollX {
   position: absolute;
-  inset: 0;
+  inset: 0 var(--graph-controls-gutter) 0 0;
   overflow-x: auto;
   overflow-y: hidden;
   touch-action: pan-x;
