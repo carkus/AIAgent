@@ -36,6 +36,7 @@ agent on board, not by restating this paragraph.
 """
 import json
 import logging
+import re
 from llm_client import create_chat_completion
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,47 @@ def _relic_suggestions(raw) -> list[dict]:
             suggestions.append({"kind": kind, "reason": reason[:200]})
     return suggestions[:2]
 
+def _topic_count_bullet(count: int, limit: int) -> str:
+    if count <= limit:
+        return ""
+    return (
+        f"- This one applies, so write about it first: the user added {count} focus topics "
+        f"and each research turn runs at most {limit} worker agents, so some topics will be "
+        "folded together or left for a follow-up turn rather than each getting its own worker "
+        "(they can trim topics or raise the worker limit in Settings).\n"
+    )
+
+
+# Notes phrased as what the agent won't/can't do (a disclaimer, not a read
+# of this case). Dropped in code because the prompt rule alone didn't hold.
+_DISCLAIMER_RE = re.compile(
+    r"\b(will not|won't|cannot|can't|can not|unable to|isn't able|is not able|"
+    r"not designed to|doesn't provide|does not provide|"
+    r"(?:rather than|instead of|not|never) (?:offer|offering|provide|providing|give|giving)|"
+    r"(?:legal|medical|financial|career) advice)\b",
+    re.IGNORECASE,
+)
+
+
+def _case_type_rule(agent_type: str | None) -> str:
+    """Job search is one special case type; every other brief stays neutral,
+    built only from the focus topics, traits and behaviors. Jobs, listings
+    and careers are never raised unless the case type is job_search, and the
+    brief never explains what a non-job agent can't do."""
+    if agent_type == "job_search":
+        return (
+            "This is a job search case: the agent searches live job listings for "
+            "the specialties and reports back on real postings.\n"
+        )
+    return (
+        "Stay neutral and work only from the specialties, traits and behaviors given. "
+        "Do not bring up jobs, job listings, job boards, careers or hiring unless a "
+        "specialty itself is about that, and even then treat it purely as a research "
+        "topic: never say what the agent cannot do or search, and never compare it to "
+        "other kinds of agent.\n"
+    )
+
+
 _BRIEF_PROMPT = """You are drafting the short "Brief" shown on an AI agent platform's Setup screen. It tells the user how the agent they're about to commission will interpret the specialties (keywords) they've added, before they actually launch it.
 
 Agent type: {agent_type}
@@ -92,8 +134,7 @@ Active personality traits: {traits}
 {prior_qa}
 Most of the time, just write the brief directly and confidently — you don't need the user's permission to interpret a reasonable set of specialties. Only when the specialties are genuinely ambiguous, sparse, or pulling in conflicting directions (e.g. a single very broad word with no other context, two contradictory domains, or a location need that isn't clear) should you ask the user ONE short, specific clarifying question instead of guessing — don't ask just because you *could* be more specific.
 
-If Agent type is not "job_search", the agent has no ability to search live job listings or job boards — even when a specialty sounds job-related (e.g. "jobs advertised", "job openings"), describe it as scouting for leads and pointing toward useful sources on that topic, never as finding, searching, or reporting back actual job postings/listings. That capability only exists for a "job_search" agent type.
-
+{case_type_rule}
 When writing the brief: third person, THREE short paragraphs separated by a blank line (written as \n\n inside the JSON string, never a raw line break), roughly 8-11 sentences in all. It should read as a considered write-up of this particular agent, not a one-liner.
 
 PARAGRAPH 1, the focuses: your analytical read of the combination, not the list. Open with what these specialties mean TOGETHER that none of them means alone: the intersection they define, the underlying goal they imply, or which one is load-bearing and which ones narrow or qualify it. Then analyse that combination: why it is more useful than covering each specialty separately, where they pull against each other or leave a gap, and one concrete, specific scenario where commissioning this agent would actually pay off (a real situation, not "this could be useful for various purposes"). Do NOT open by naming the keywords one after another, and never name more than two keywords in a single sentence; refer to them through what they combine into (e.g. "solar", "insurance", "farms" becomes "the risk side of putting solar on agricultural land", not "solar, insurance and farms"). If this paragraph would read the same with the keywords shuffled, or a reader could reconstruct it from the keyword list alone, it is a keyword walk: rewrite it.{location_rule}
@@ -104,12 +145,12 @@ PARAGRAPH 3, the work: what the agent will actually do and what it will report b
 
 Not enough to go on (should be RARE): only when the specialties together give you genuinely nothing to analyse (e.g. a single generic word, or terms you cannot place at all) and no single clarifying question would fix it, say so plainly in the brief instead of padding it out (it can be shorter than three paragraphs then, but still cover the selected traits and behaviors): one sentence on what you can infer, one on what is missing for a real read, and what kind of specialty the user could add. Do not use this to dodge a combination that just takes some thought; almost any set of two or more specific specialties has a direction worth stating.
 
-Separately from the ambiguity check above, also assess whether commissioning this agent as specified is likely to go badly, and if so add ONE short, specific warning (a plain sentence, no hedging disclaimer boilerplate). Flag it when you see:
-- More than {max_delegations} distinct specialties/topics — the platform delegates one worker per topic with a cap of {max_delegations} per turn, so extras will be dropped or starved rather than covered.
-- Specialties spanning clearly unrelated domains (e.g. "tax law" and "vintage motorcycles") — the agent's persona and searches will be diluted rather than focused.
-- A specialty that asks the agent to give binding legal, medical, financial, or safety advice as fact rather than to research/summarize the topic.
-- A specialty that is only meaningful with a location (e.g. "job openings", "weather", "local events") but no location was given.
-This is independent of the question/brief choice above — a warning can accompany either a brief or a question. Omit "warning" (or use null) when nothing is actually wrong; don't invent a warning just to have one.
+Separately from the ambiguity check above, also consider whether something about how this agent is set up will shape the results in a way the user should know before commissioning it. If so, add ONE "warning": an informative note shown as a tip under the brief, not an error message. Write it as 1-2 plain, friendly sentences addressed to the user ("you"): say what this means for THIS commission in practice (name the actual topics, keywords or gap involved) and what they could do about it if they want to. Never restate a situation below as a label or rule, and no alarm words ("warning", "error", "danger"). Situations worth a note:
+{topic_count_bullet}- Specialties spanning clearly unrelated domains (e.g. "tax law" and "vintage motorcycles"): the agent's persona and searches will be split between them rather than focused.
+- A specialty that explicitly asks for binding legal, medical, financial, or safety advice (e.g. "tell me which pills to take"): it will research and summarise the topic, not act as a professional adviser. Only when a specialty actually asks for that; never as a general disclaimer.
+- A specialty that is only meaningful with a location (e.g. "weather", "local events", "rental prices") but no location was given.
+If more than one situation applies, write about the one that changes the results most. Never mention the agent type's internal id. A note is never a disclaimer: never write about what the agent will not do, capabilities it lacks, or other kinds of agent it isn't.
+This is independent of the question/brief choice above: a note can accompany either a brief or a question. Omit "warning" (or use null) when nothing is worth pointing out; don't invent one just to have one.
 
 When you write a brief (not a question), also offer up to two pieces of media the user could take away from this commission before it runs, picked for what would genuinely help THIS case: "slides" (to pitch or present the commission), "pdf" (a polished case file to share), "docx" (an editable case file), "diagram" (how the work splits across the focus topics and any workers), "markdown" (a working brief to keep editing), "json" (one entry per line of inquiry, for tracking). Each reason is one short line naming what it would contain for this case specifically. Offer none ([]) when nothing would really add to the brief.
 
@@ -167,6 +208,10 @@ def generate_brief(
         location_clause=location_clause,
         prior_qa=prior_qa,
         max_delegations=max_delegations or 3,
+        case_type_rule=_case_type_rule(agent_type),
+        # Only listed when it's actually true: an always-present topic-count
+        # rule got applied to two-topic cases too.
+        topic_count_bullet=_topic_count_bullet(len(keywords), max_delegations or 3),
     )
 
     try:
@@ -193,6 +238,11 @@ def generate_brief(
         text = (data.get("text") or "").strip()
         kind = data.get("type") if data.get("type") in ("brief", "question") else "brief"
         warning = (data.get("warning") or "").strip() or None
+        if warning and _DISCLAIMER_RE.search(warning):
+            # A "will not / cannot" disclaimer isn't a note about this case;
+            # the prompt forbids it, but small models still write one.
+            logger.info("brief: dropped disclaimer note: %s", warning[:160])
+            warning = None
         if not text:
             return None
         relics = _relic_suggestions(data.get("relics")) if kind == "brief" else []

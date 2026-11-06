@@ -58,7 +58,7 @@ Execution environment for tool implementations:
 - Tool inputs are available as: `inputs` (dict), `input_data` (alias for `inputs`), or directly by name (e.g. if the tool has a `keyword` param, you can write `keyword` directly)
 
 {primitives_block}
-IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write `search_jobs(...)`, `fetch_page(...)`, `search_image(...)`, or `generate_image(...)` inside an `implementation` string. The same rule applies to every tool name in the "Vetted MCP tools" list below (e.g. `tavily_search`) — those are NOT Python functions either, in any implementation string. There is also no local HTTP service that runs or proxies these tools for you — never write `requests.get(...)`/`requests.post(...)` against `127.0.0.1`, `localhost`, or any local port to "call" a primitive or vetted MCP tool; nothing listens there and the request will simply fail. If a tool needs a primitive's or a vetted MCP tool's capability, don't generate a Python implementation for it at all — add the primitive by name to the system_prompt's instructions, or add the MCP tool using the exact `"source": "mcp"` object shape shown below, never a generated `implementation` that calls it like a function or proxies to it over HTTP.
+IMPORTANT: "always available to the agent" means the agent can call them as its own tool calls — it does NOT mean they exist as Python functions inside another generated tool's `implementation` string. Each `implementation` runs in its own isolated sandbox that only has `inputs`/`input_data`, `requests`, `json`, `os`, `re`, `math`, `datetime`, `collections`, `urllib`, and `TEMP_DIR` — never write {search_jobs_example}`fetch_page(...)`, `search_image(...)`, or `generate_image(...)` inside an `implementation` string. The same rule applies to every tool name in the "Vetted MCP tools" list below (e.g. `tavily_search`) — those are NOT Python functions either, in any implementation string. There is also no local HTTP service that runs or proxies these tools for you — never write `requests.get(...)`/`requests.post(...)` against `127.0.0.1`, `localhost`, or any local port to "call" a primitive or vetted MCP tool; nothing listens there and the request will simply fail. If a tool needs a primitive's or a vetted MCP tool's capability, don't generate a Python implementation for it at all — add the primitive by name to the system_prompt's instructions, or add the MCP tool using the exact `"source": "mcp"` object shape shown below, never a generated `implementation` that calls it like a function or proxies to it over HTTP.
 
 Vetted MCP tools (real, independently-maintained servers — prefer these over writing your own implementation when one already covers the need):
 {mcp_catalog}
@@ -663,8 +663,7 @@ def _build_prompt(
             f"{_image_primitive}"
             f"{_image_gen_primitive}\n"
             "Instruct the agent to call these directly rather than reinventing them. "
-            "Write the system_prompt about the purpose's own subject matter only; do not "
-            "frame it as job, career or hiring research unless the purpose says so."
+            "Write the system_prompt about the purpose's own subject matter only."
         )
         jobsearch_rule = ""
         jobsearch_pronoun_suffix = ""
@@ -715,6 +714,9 @@ def _build_prompt(
         mcp_catalog=_format_mcp_catalog(mcp_catalog),
         primitives_block=primitives_block,
         jobsearch_rule=jobsearch_rule,
+        # Only a job search case hears about search_jobs at all; every other
+        # case type's prompt stays neutral (no job wording to latch onto).
+        search_jobs_example="`search_jobs(...)`, " if agent_type == "job_search" else "",
         search_rule=search_rule,
     )
     return prompt, len(fewshot_entries)

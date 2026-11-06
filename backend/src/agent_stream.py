@@ -1135,7 +1135,9 @@ def _run_agent_stream(messages: list, agent_config: dict, allow_delegation: bool
     _location_note = (
         f"\n\nUser location: {_location}. Assume this location for anything "
         "genuinely location-dependent (local context, \"near me\"/\"nearby\" "
-        "phrasing, search_jobs' `where`, weather or time-of-day framing) "
+        "phrasing, "
+        + ("search_jobs' `where`, " if agent_config.get("template") == "job_search" else "")
+        + "weather or time-of-day framing) "
         "without asking the user to repeat it. "
         + ("Job, salary and job-market "
            "research is location-dependent: unless the user names another place, "
