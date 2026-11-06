@@ -187,6 +187,36 @@ function SectionHeader({ label, count, expanded, onToggle, help, right }: {
   )
 }
 
+// A folder-tab header for the setup card's two panels (Agent builder,
+// Brief), drawn like the Agent Dossier's tab but clickable: it collapses
+// the whole panel. Sections inside keep their own SectionHeader.
+function SetupPanel({ label, expanded, onToggle, help, className, children }: {
+  label: string
+  expanded: boolean
+  onToggle: () => void
+  help: string
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className={`${styles.setupPanelWrap} ${className ?? ''}`}>
+      <div
+        className={`${styles.setupPanelTab} ${expanded ? '' : styles.setupPanelTabClosed}`}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={onToggle}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
+      >
+        <span>{label}</span>
+        <HelpTip text={help} label={`${label} help`} />
+        <span className={styles.fieldLabelCaret} aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+      </div>
+      {expanded && <div className={styles.setupPanel}>{children}</div>}
+    </div>
+  )
+}
+
 // What a behavior toggle's effect is actually called for each agent type —
 // "findings" for research, "listings" for job search, plain "topics"
 // otherwise — so a toggle's help text can say what it does to THIS agent's
@@ -245,10 +275,10 @@ const MAX_SPECIALTIES = 5
 function buildDeterministicWarning(keywords: string[], agentType: AgentTemplateId, loc: string, maxDelegations: number | null): string | null {
   const limit = maxDelegations ?? DEFAULT_MAX_DELEGATIONS
   if (keywords.length > limit) {
-    return `${keywords.length} focus areas is more than the ${limit} the agent can delegate to in one turn — some will be dropped or under-covered.`
+    return `You've added ${keywords.length} focus topics, and the agent runs up to ${limit} worker agents per research turn, so some topics will be combined or picked up in a follow-up turn rather than each getting its own worker. Trim the list or raise the worker limit in Settings if each one needs its own.`
   }
   if (agentType === 'job_search' && !loc) {
-    return 'No location set — job listings will be searched without a geographic filter.'
+    return 'No location is set, so job listings will be searched everywhere rather than in one area. Add a location if you only want roles near you.'
   }
   return null
 }
@@ -522,6 +552,8 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const [briefOpen, setBriefOpen] = useState(true)
   // The prose brief under the brief graph; the graph is the at-a-glance view.
   const [writtenBriefOpen, setWrittenBriefOpen] = useState(false)
+  const [builderOpen, setBuilderOpen] = useState(true)
+  const [briefGraphOpen, setBriefGraphOpen] = useState(true)
   const [specialInstructionsOpen, setSpecialInstructionsOpen] = useState(false)
   const [activeToggles, setActiveToggles] = useState<string[]>([])
   function toggleBehavior(id: string) {
@@ -557,6 +589,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
   const bootstrapAbortRef = useRef<AbortController | null>(null)
   const briefDebounceRef = useRef<number | undefined>(undefined)
   const briefRequestIdRef = useRef(0)
+  // The agent-creator inputs the last brief was built from. The brief is
+  // only rebuilt when these actually change, not on every re-render that
+  // hands the effect a new (but equal) array.
+  const lastBriefInputsRef = useRef('')
 
   useEffect(() => {
     if (modelsLoaded) return
@@ -682,8 +718,14 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       })
   }
 
+  const briefInputsKey = JSON.stringify([
+    agentType, keywords, usedLocation, agentName, maxDelegations,
+    [...activeToggles].sort(), [...selectedTraits].sort(),
+  ])
+
   useEffect(() => {
     if (keywords.length === 0) {
+      lastBriefInputsRef.current = ''
       setAiBrief(null)
       setBriefMap(null)
       setBriefMapLoading(false)
@@ -691,11 +733,15 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
       return
     }
     window.clearTimeout(briefDebounceRef.current)
+    if (briefInputsKey === lastBriefInputsRef.current) return
     const requestId = ++briefRequestIdRef.current
     const behaviorLabels = BEHAVIOR_TOGGLES.filter(t => activeToggles.includes(t.id)).map(t => t.label)
     const traitLabels = (PERSONALITY_TRAITS[agentType] ?? PERSONALITY_TRAITS.research)
       .filter(t => selectedTraits.includes(t.id)).map(t => t.label)
     briefDebounceRef.current = window.setTimeout(() => {
+      // Recorded when the request actually goes out, so a change undone
+      // inside the debounce window doesn't count as built.
+      lastBriefInputsRef.current = briefInputsKey
       setBriefLoading(true)
       fetchAgentBrief(agentType, [...keywords], usedLocation, agentName, provider, ollamaModel, undefined, undefined, maxDelegations, behaviorLabels, traitLabels)
         .then(result => {
@@ -718,7 +764,7 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
     }, 700)
     return () => window.clearTimeout(briefDebounceRef.current)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentType, keywords, location, factorLocation, agentName, maxDelegations, activeToggles, selectedTraits])
+  }, [briefInputsKey])
 
   function handleBriefAnswerSubmit() {
     const answer = briefAnswer.trim()
@@ -1281,9 +1327,10 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
 
   const briefWarning = keywords.length === 0
     ? null
-    : aiBrief
-      ? aiBrief.warning ?? null
-      : buildDeterministicWarning(keywords, agentType, usedLocation, maxDelegations)
+    // The model's own note wins; with none (or a disclaimer the backend
+    // dropped) the code-checked facts — topic count over the worker limit,
+    // missing job-search location — still show.
+    : aiBrief?.warning ?? buildDeterministicWarning(keywords, agentType, usedLocation, maxDelegations)
 
   // The brief in prose. Under the brief graph it sits in its own collapsible
   // "Written brief for Agent" section; without a graph it shows as before.
@@ -1423,6 +1470,12 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
           </div>
 
           <div className={styles.agentCardBody}>
+          <SetupPanel
+            label="Agent builder"
+            expanded={builderOpen}
+            onToggle={() => setBuilderOpen(o => !o)}
+            help="Everything that makes up the agent: its personality, behavior and the Focus topics it works on. The Brief below is drawn from these."
+          >
           <div className={styles.agentCardScroll}>
             <div className={styles.personalityRow}>
               {(() => {
@@ -1637,20 +1690,20 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
             </div>
 
           </div>
+          </SetupPanel>
 
           {/* Brief lives in its own subsection, outside the editable-fields
               scroll list above — it's generated from Focus/Behavior,
               never typed into directly, so it reads as assembled output
               rather than another field to fill in. */}
-          <div className={styles.briefSection}>
-            <SectionHeader
-              label="Brief"
-              expanded={briefOpen}
-              onToggle={() => setBriefOpen(o => !o)}
-              help="The Brief is a live preview of what this agent has agreed to do, generated from its type, focus, behavior and personality. It's read-only — edit the fields above to change it."
-            />
-            {briefOpen && (
-              keywords.length === 0 ? (
+          <SetupPanel
+            className={styles.briefSection}
+            label="Brief"
+            expanded={briefOpen}
+            onToggle={() => setBriefOpen(o => !o)}
+            help="The Brief is a live preview of what this agent has agreed to do, generated from its type, focus, behavior and personality. It's read-only — edit the fields above to change it."
+          >
+            {keywords.length === 0 ? (
                 <p className={styles.briefPlaceholderText}>
                   <span className={styles.briefPlaceholderIcon} aria-hidden="true">✎</span>
                   Add Focus and behaviors to build this agent’s brief.
@@ -1679,20 +1732,30 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                     </div>
                   </div>
                   {briefWarning && (
-                    <div className={styles.briefWarningBox}>
-                      <p className={styles.briefWarningText}><span aria-hidden="true">⚠</span> {briefWarning}</p>
+                    <div className={styles.briefNoteBox} role="note">
+                      <p className={styles.briefNoteText}><span className={styles.briefNoteIcon} aria-hidden="true">ℹ</span> {briefWarning}</p>
                     </div>
                   )}
                 </>
               ) : (
                 <>
                   <div className={styles.briefBody} aria-busy={briefLoading}>
-                  {briefMap && <BriefGraph map={briefMap} />}
-                  {!briefMap && briefMapLoading && !briefLoading && (
-                    <p className={styles.briefMapDrawing} role="status">
-                      <span className={styles.briefUpdatingSpinner} aria-hidden="true" />
-                      <span>Drawing the brief graph…</span>
-                    </p>
+                  {(briefMap || briefMapLoading) && (
+                    <div className={styles.writtenBrief}>
+                      <SectionHeader
+                        label="Brief graph"
+                        expanded={briefGraphOpen}
+                        onToggle={() => setBriefGraphOpen(o => !o)}
+                        help="The brief drawn as a flow: what you asked for, how the agent understood it, the lines of work it will split into, and what it hands back."
+                      />
+                      {briefGraphOpen && briefMap && <BriefGraph map={briefMap} />}
+                      {briefGraphOpen && !briefMap && !briefLoading && (
+                        <p className={styles.briefMapDrawing} role="status">
+                          <span className={styles.briefUpdatingSpinner} aria-hidden="true" />
+                          <span>Drawing the brief graph…</span>
+                        </p>
+                      )}
+                    </div>
                   )}
                   {briefMap ? (
                     <div className={styles.writtenBrief}>
@@ -1716,17 +1779,16 @@ export default function Setup({ agentName, onAgentNameChange, onNewAgent, bootst
                   )}
                   </div>
                   {briefWarning && (
-                    <div className={styles.briefWarningBox}>
-                      <p className={styles.briefWarningText}><span aria-hidden="true">⚠</span> {briefWarning}</p>
+                    <div className={styles.briefNoteBox} role="note">
+                      <p className={styles.briefNoteText}><span className={styles.briefNoteIcon} aria-hidden="true">ℹ</span> {briefWarning}</p>
                     </div>
                   )}
                   {briefRelicError && !briefRelicPreview && (
                     <p className={styles.briefLoadingHint}>{briefRelicError}</p>
                   )}
                 </>
-              )
-            )}
-          </div>
+              )}
+          </SetupPanel>
           </div>
           </div>
 

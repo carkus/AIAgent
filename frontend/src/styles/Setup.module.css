@@ -949,12 +949,67 @@
    directly editable). A solid border and card-like inset mark this as a
    different kind of content: assembled/read-only, not another field. */
 .briefSection {
+  flex-shrink: 0;
+}
+
+/* The two containing panels on the setup card: "Agent builder"
+   (personality, behavior, focus) and "Brief". Each is a folder with a tab,
+   shaped like the Agent Dossier's (.dossierTab) but very light blue; the
+   tab collapses it. The
+   sections inside keep their own collapsible headers. */
+.setupPanelWrap {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
   flex-shrink: 0;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--color-border);
+}
+
+.setupPanelTab {
+  align-self: flex-start;
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: -1px;
+  background: #fbfdfe;
+  border: 1px solid #cfe3ea;
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+  color: #6b7785;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: var(--font-size-base);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.8rem 0.45rem;
+}
+
+.setupPanelTab:hover {
+  color: var(--color-text);
+}
+
+/* Collapsed: the tab is all that's left, so it closes its own bottom edge. */
+.setupPanelTabClosed {
+  margin-bottom: 0;
+  border-bottom: 1px solid #cfe3ea;
+  border-radius: 7px;
+}
+
+.setupPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem 0.75rem 0.7rem;
+  background: #fbfdfe;
+  border: 1px solid #cfe3ea;
+  border-radius: 3px 10px 10px 10px;
+}
+
+/* The first section in a panel sits right under the tab, so it drops the
+   dashed divider the sections use between each other. */
+.setupPanel > .agentCardScroll > :first-child {
+  border-top: none;
+  padding-top: 0;
 }
 
 /* Graph + written brief; holds the "Updating brief…" overlay while the
@@ -1133,21 +1188,26 @@
   cursor: default;
 }
 
-.briefWarningBox {
+/* A note about how the setup will shape the run (brief.py's "warning"):
+   informational, so steel-blue on pale blue, not error red. */
+.briefNoteBox {
   margin-top: 0.5rem;
-  background: #fdecea;
-  border: 1px solid #f2b8b5;
+  background: #eaf3f7;
   border-radius: 6px;
   padding: 0.55rem 0.75rem;
-  box-shadow: inset 0 1px 3px rgba(22, 50, 74, 0.08);
 }
 
-.briefWarningText {
+.briefNoteText {
   margin: 0;
-  color: #8f1414;
+  color: #33475a;
   font-family: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: var(--font-size-sm);
   line-height: 1.5;
+}
+
+.briefNoteIcon {
+  color: #3f7ea0;
+  font-weight: 600;
 }
 
 .specialInstructionsRow {
@@ -2279,7 +2339,7 @@
   margin: 0;
   overflow-y: auto;
   min-height: 0;
-  transition: flex-basis 0.35s ease, opacity 0.35s ease;
+  transition: flex-basis 0.35s ease, opacity 0.35s ease, margin 0.35s ease;
 }
 
 /* The setup card itself never scrolls — .agentCardBody (the middle section
@@ -2355,6 +2415,9 @@
 .panelCollapsed {
   flex: 0 0 auto;
   opacity: 0.55;
+  /* Width cue: the unselected panel is inset 8px each side, so the selected
+     one reads as wider. Symmetric margins shrink it in place, unlike the old
+     wider-than-container and scale() versions, which shifted it off-centre. */
   cursor: pointer;
   overflow: hidden;
 }
@@ -2648,4 +2711,10 @@
     font-size: var(--font-size-base);
     padding: 0.35rem 0.75rem;
   }
+}
+
+/* Beats .focusStack .agentCard/.form's margin: 0 (see .panelCollapsed). */
+.focusStack .agentCard.panelCollapsed,
+.focusStack .form.panelCollapsed {
+  margin-inline: 8px;
 }
